@@ -1,0 +1,31 @@
+{
+	"name": "create-gasoline",
+	"version": "0.0.0",
+	"description": "Create a new Gasoline project",
+	"type": "module",
+	"bin": {
+		"create-gasoline": "dist/index.create.js"
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"files": [
+		"dist/",
+		"LICENSE.md",
+		"README.md"
+	],
+	"homepage": "https://gasoline.dev",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/gasoline-dev/gasoline",
+		"directory": "packages/create-gasoline"
+	},
+	"scripts": {
+		"build": "tsup index.create.ts --format=esm --target=node18 --clean --config=tsconfig.json && tsc -p tsconfig.json --emitDeclarationOnly --declaration --removeComments --stripInternal",
+		"dev": "tsup index.create.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --onSuccess 'tsc -p tsconfig.json --emitDeclarationOnly --declaration --removeComments --stripInternal'"
+	},
+	"devDependencies": {
+		"@types/node": "^18.0.0"
+	}
+}
