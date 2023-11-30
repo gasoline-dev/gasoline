@@ -12,7 +12,8 @@
 	"files": [
 		"dist/",
 		"LICENSE.md",
-		"README.md"
+		"README.md",
+		"templates-*"
 	],
 	"homepage": "https://gasoline.dev",
 	"license": "MIT",
@@ -27,5 +28,9 @@
 	},
 	"devDependencies": {
 		"@types/node": "^18.0.0"
+	},
+	"dependencies": {
+		"inquirer": "^9.2.12",
+		"xstate": "^4.38.3"
 	}
 }
