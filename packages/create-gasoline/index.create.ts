@@ -36,15 +36,15 @@ function setInitMachine() {
 		{
 			predictableActionArguments: true,
 			id: 'create',
-			initial: 'showingInitDirPrompt',
+			initial: 'showingDirPrompt',
 			tsTypes: {} as import('./index.create.typegen.d.ts').Typegen0,
 			schema: {
-				context: {} as { initDir: string },
+				context: {} as { dir: string },
 				services: {} as {
 					copyTemplate: {
 						data: void;
 					};
-					initDirPrompt: {
+					dirPrompt: {
 						data: string;
 					};
 					installDependenciesPrompt: {
@@ -53,16 +53,16 @@ function setInitMachine() {
 				},
 			},
 			context: {
-				initDir: '',
+				dir: '',
 			},
 			states: {
-				showingInitDirPrompt: {
+				showingDirPrompt: {
 					invoke: {
-						id: 'initDirPrompt',
-						src: 'initDirPrompt',
+						id: 'dirPrompt',
+						src: 'dirPrompt',
 						onDone: {
 							target: 'copyingTemplate',
-							actions: ['setInitDir'],
+							actions: ['setDir'],
 						},
 						onError: {
 							target: 'err',
@@ -97,7 +97,7 @@ function setInitMachine() {
 										target: '#create.ok',
 										actions: log(
 											(context) =>
-												`cd into ${context.initDir} and run "npm install"`,
+												`cd into ${context.dir} and run "npm install"`,
 										),
 									},
 								],
@@ -132,8 +132,8 @@ function setInitMachine() {
 		},
 		{
 			actions: {
-				setInitDir: assign({
-					initDir: (context, event) => event.data,
+				setDir: assign({
+					dir: (context, event) => event.data,
 				}),
 			},
 			guards: {
@@ -152,11 +152,11 @@ function setInitMachine() {
 						'../..',
 						'templates/hello-world',
 					);
-					const dest = context.initDir;
+					const dest = context.dir;
 					await fsCopyDir(src, dest);
 					console.log('Copied template');
 				},
-				initDirPrompt: async () => {
+				dirPrompt: async () => {
 					const { dirPath } = await inquirer.prompt([
 						{
 							name: 'dirPath',
@@ -170,7 +170,7 @@ function setInitMachine() {
 					console.log('Installing dependencies');
 					const promisifiedExec = promisify(exec);
 					await promisifiedExec('npm install', {
-						cwd: path.resolve(context.initDir),
+						cwd: path.resolve(context.dir),
 					});
 					console.log('Installed dependencies');
 				},
