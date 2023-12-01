@@ -1,9 +1,11 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assign, createMachine, interpret } from 'xstate';
+import { assign, createMachine, interpret, log } from 'xstate';
 import { waitFor } from 'xstate/lib/waitFor.js';
 import fsPromises from 'fs/promises';
 import inquirer from 'inquirer';
+import { promisify } from 'node:util';
+import { exec } from 'node:child_process';
 
 await main();
 
@@ -45,6 +47,9 @@ function setInitMachine() {
 					initDirPrompt: {
 						data: string;
 					};
+					installDependenciesPrompt: {
+						data: 'yes' | 'no';
+					};
 				},
 			},
 			context: {
@@ -69,10 +74,51 @@ function setInitMachine() {
 						id: 'copyTemplate',
 						src: 'copyTemplate',
 						onDone: {
-							target: 'ok',
+							target: 'installDependenciesPrompt',
 						},
 						onError: {
 							target: 'err',
+						},
+					},
+				},
+				installDependenciesPrompt: {
+					initial: 'showingInstallDependenciesPrompt',
+					states: {
+						showingInstallDependenciesPrompt: {
+							invoke: {
+								id: 'installDependenciesPrompt',
+								src: 'installDependenciesPrompt',
+								onDone: [
+									{
+										target: 'installingDependencies',
+										cond: 'installDependencies',
+									},
+									{
+										target: '#create.ok',
+										actions: log(
+											(context) =>
+												`cd into ${context.initDir} and run "npm install"`,
+										),
+									},
+								],
+								onError: {
+									target: '#create.err',
+								},
+							},
+						},
+						installingDependencies: {
+							invoke: {
+								id: 'installDependencies',
+								src: 'installDependencies',
+								onDone: [
+									{
+										target: '#create.ok',
+									},
+								],
+								onError: {
+									target: '#create.err',
+								},
+							},
 						},
 					},
 				},
@@ -89,6 +135,14 @@ function setInitMachine() {
 				setInitDir: assign({
 					initDir: (context, event) => event.data,
 				}),
+			},
+			guards: {
+				installDependencies: (context, event) => {
+					if (event.data === 'yes') {
+						return true;
+					}
+					return false;
+				},
 			},
 			services: {
 				copyTemplate: async (context) => {
@@ -111,6 +165,25 @@ function setInitMachine() {
 						},
 					]);
 					return dirPath;
+				},
+				installDependencies: async (context) => {
+					console.log('Installing dependencies');
+					const promisifiedExec = promisify(exec);
+					await promisifiedExec('npm install', {
+						cwd: path.resolve(context.initDir),
+					});
+					console.log('Installed dependencies');
+				},
+				installDependenciesPrompt: async () => {
+					const { installDependencies } = await inquirer.prompt([
+						{
+							name: 'installDependencies',
+							message: 'Install npm dependencies?',
+							type: 'list',
+							choices: ['yes', 'no'],
+						},
+					]);
+					return installDependencies;
 				},
 			},
 		},
