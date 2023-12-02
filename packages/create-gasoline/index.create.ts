@@ -39,7 +39,7 @@ function setInitMachine() {
 			initial: 'showingDirPrompt',
 			tsTypes: {} as import('./index.create.typegen.d.ts').Typegen0,
 			schema: {
-				context: {} as { dir: string },
+				context: {} as { dir: string; workerName: string },
 				services: {} as {
 					copyTemplate: {
 						data: void;
@@ -50,10 +50,14 @@ function setInitMachine() {
 					installDependenciesPrompt: {
 						data: 'yes' | 'no';
 					};
+					workerNamePrompt: {
+						data: string;
+					};
 				},
 			},
 			context: {
 				dir: '',
+				workerName: '',
 			},
 			states: {
 				showingDirPrompt: {
@@ -61,8 +65,21 @@ function setInitMachine() {
 						id: 'dirPrompt',
 						src: 'dirPrompt',
 						onDone: {
-							target: 'copyingTemplate',
+							target: 'showingWorkerNamePrompt',
 							actions: ['setDir'],
+						},
+						onError: {
+							target: 'err',
+						},
+					},
+				},
+				showingWorkerNamePrompt: {
+					invoke: {
+						id: 'workerNamePrompt',
+						src: 'workerNamePrompt',
+						onDone: {
+							target: 'copyingTemplate',
+							actions: ['setWorkerName'],
 						},
 						onError: {
 							target: 'err',
@@ -94,7 +111,7 @@ function setInitMachine() {
 										cond: 'installDependencies',
 									},
 									{
-										target: '#create.ok',
+										target: '#create.updatingWranglerToml',
 										actions: log(
 											(context) =>
 												`cd into ${context.dir} and run "npm install"`,
@@ -112,13 +129,27 @@ function setInitMachine() {
 								src: 'installDependencies',
 								onDone: [
 									{
-										target: '#create.ok',
+										target: '#create.updatingWranglerToml',
 									},
 								],
 								onError: {
 									target: '#create.err',
 								},
 							},
+						},
+					},
+				},
+				updatingWranglerToml: {
+					invoke: {
+						id: 'updateWranglerToml',
+						src: 'updateWranglerToml',
+						onDone: [
+							{
+								target: 'ok',
+							},
+						],
+						onError: {
+							target: '#create.err',
 						},
 					},
 				},
@@ -134,6 +165,9 @@ function setInitMachine() {
 			actions: {
 				setDir: assign({
 					dir: (context, event) => event.data,
+				}),
+				setWorkerName: assign({
+					workerName: (context, event) => event.data,
 				}),
 			},
 			guards: {
@@ -184,6 +218,46 @@ function setInitMachine() {
 						},
 					]);
 					return installDependencies;
+				},
+				updateWranglerToml: async (context) => {
+					try {
+						console.log('Updating wrangler.toml');
+
+						const wranglerTomlPath = path.join(context.dir, './wrangler.toml');
+
+						let contents = await fsPromises.readFile(wranglerTomlPath, {
+							encoding: 'utf-8',
+						});
+
+						contents = contents.replace(/name\s*=\s*("[^"]*")/, () => {
+							return `name = "${context.workerName}"`;
+						});
+
+						contents = contents.replace(
+							/compatibility_date\s*=\s*("[^"]*")/,
+							() => {
+								const newDate = new Date().toISOString().split('T')[0];
+								return `compatibility_date = "${newDate}"`;
+							},
+						);
+
+						await fsPromises.writeFile(wranglerTomlPath, contents, 'utf-8');
+
+						console.log('Updated wrangler.toml');
+					} catch (error) {
+						console.error(error);
+						console.error('Error: Unable to update wrangler.toml');
+					}
+				},
+				workerNamePrompt: async () => {
+					const { workerName } = await inquirer.prompt([
+						{
+							name: 'workerName',
+							message: 'Worker name:',
+							default: 'hello-world',
+						},
+					]);
+					return workerName;
 				},
 			},
 		},
