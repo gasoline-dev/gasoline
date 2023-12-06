@@ -6,26 +6,61 @@ import fsPromises from 'fs/promises';
 import inquirer from 'inquirer';
 import { promisify } from 'node:util';
 import { exec } from 'node:child_process';
+import { parseArgs } from 'node:util';
 
 await main();
 
 async function main() {
 	try {
-		const initMachineService = interpret(setInitMachine()).start();
-
-		const finalState = await waitFor(
-			initMachineService,
-			(state) => state.matches('ok') || state.matches('err'),
-			{
-				timeout: 3600_000,
+		const options = {
+			package: {
+				type: 'string',
 			},
-		);
+			help: {
+				type: 'boolean',
+				short: 'h',
+			},
+		};
 
-		if (finalState.value === 'err') {
-			throw new Error('Unable to create project');
+		const parsedArgs = parseArgs({
+			allowPositionals: true,
+			options,
+		} as any);
+
+		// Initialize project (no args provided).
+		if (
+			parsedArgs.positionals.length === 0 &&
+			Object.keys(parsedArgs.values).length === 0
+		) {
+			const initMachineService = interpret(setInitMachine()).start();
+
+			const finalState = await waitFor(
+				initMachineService,
+				(state) => state.matches('ok') || state.matches('err'),
+				{
+					timeout: 3600_000,
+				},
+			);
+
+			if (finalState.value === 'err') {
+				throw new Error('Unable to create project');
+			}
+
+			console.log('Done!');
+			process.exit(0);
 		}
 
-		console.log('Done!');
+		// Initialize single repo package.
+		if (parsedArgs.positionals[0] === 'package') {
+			await runPackageCommand();
+			process.exit(0);
+		}
+
+		// Log help.
+		if (parsedArgs.values.help) {
+			logHelp();
+			process.exit(0);
+		}
 	} catch (error) {
 		console.error(error);
 	}
@@ -262,6 +297,89 @@ function setInitMachine() {
 			},
 		},
 	);
+}
+
+async function runPackageCommand() {
+	const { dirPath } = await inquirer.prompt([
+		{
+			name: 'dirPath',
+			message: 'Dir path:',
+			default: './example',
+		},
+	]);
+
+	const { packageName } = await inquirer.prompt([
+		{
+			name: 'packageName',
+			message: 'Package name:',
+			default: 'example-name',
+		},
+	]);
+
+	console.log('Copying template');
+	const src = path.resolve(
+		fileURLToPath(import.meta.url),
+		'../..',
+		'templates/package',
+	);
+	const dest = dirPath;
+	await fsCopyDir(src, dest);
+	console.log('Copied template');
+
+	const { installDependencies } = await inquirer.prompt([
+		{
+			name: 'installDependencies',
+			message: 'Install npm dependencies?',
+			type: 'list',
+			choices: ['yes', 'no'],
+		},
+	]);
+
+	if (installDependencies === 'yes') {
+		console.log('Installing dependencies');
+		const promisifiedExec = promisify(exec);
+		await promisifiedExec('npm install', {
+			cwd: path.resolve(dirPath),
+		});
+		console.log('Installed dependencies');
+	}
+
+	console.log('Updating package.json');
+
+	const packageJsonPath = path.join(dirPath, './package.json');
+
+	let contents = await fsPromises.readFile(packageJsonPath, {
+		encoding: 'utf-8',
+	});
+
+	const parsedContents = JSON.parse(contents);
+
+	parsedContents.name = packageName;
+
+	await fsPromises.writeFile(
+		packageJsonPath,
+		JSON.stringify(parsedContents, null, 2),
+		'utf-8',
+	);
+
+	console.log('Updated package.json');
+
+	console.log('Done!');
+}
+
+function logHelp() {
+	console.log(`Usage:
+create-gasoline -> Initalize project
+
+OR
+
+create-gasoline [command] -> Run command
+
+Commands:
+ package Initalize a single repo package for publishing to NPM
+
+Options:
+ --help, -h Print help`);
 }
 
 async function fsCopyDir(src: string, dest: string) {
