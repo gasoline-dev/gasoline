@@ -2,8 +2,15 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { assign, createMachine, interpret, log } from 'xstate';
-import { waitFor } from 'xstate/lib/waitFor.js';
+import {
+	assign,
+	createActor,
+	createMachine,
+	fromPromise,
+	log,
+	setup,
+	waitFor,
+} from 'xstate';
 import fsPromises from 'fs/promises';
 import inquirer from 'inquirer';
 import { promisify } from 'node:util';
@@ -34,17 +41,17 @@ async function main() {
 			parsedArgs.positionals.length === 0 &&
 			Object.keys(parsedArgs.values).length === 0
 		) {
-			const initMachineService = interpret(setInitMachine()).start();
+			const initMachineActor = createActor(setInitMachine()).start();
 
-			const finalState = await waitFor(
-				initMachineService,
-				(state) => state.matches('ok') || state.matches('err'),
+			const snapshot = await waitFor(
+				initMachineActor,
+				(snapshot) => snapshot.matches('ok') || snapshot.matches('err'),
 				{
 					timeout: 3600_000,
 				},
 			);
 
-			if (finalState.value === 'err') {
+			if (snapshot.value === 'err') {
 				throw new Error('Unable to create project');
 			}
 
@@ -69,245 +76,218 @@ async function main() {
 }
 
 function setInitMachine() {
-	return createMachine(
-		{
-			predictableActionArguments: true,
-			id: 'create',
-			initial: 'showingDirPrompt',
-			//tsTypes: {} as import('./index.create.typegen.d.ts').Typegen0,
-			schema: {
-				context: {} as { dir: string; workerName: string },
-				services: {} as {
-					copyTemplate: {
-						data: void;
-					};
-					dirPrompt: {
-						data: string;
-					};
-					installDependenciesPrompt: {
-						data: 'yes' | 'no';
-					};
-					workerNamePrompt: {
-						data: string;
-					};
-				},
+	const runSetDirPrompt = fromPromise(async () => {
+		const { directoryPath } = await inquirer.prompt([
+			{
+				name: 'directoryPath',
+				message: 'Directory path:',
+				default: './example',
 			},
-			context: {
-				dir: '',
-				workerName: '',
+		]);
+		return directoryPath;
+	});
+
+	const runSetWorkerNamePrompt = fromPromise(async () => {
+		const { workerName } = await inquirer.prompt([
+			{
+				name: 'workerName',
+				message: 'Worker name:',
+				default: 'hello-world',
 			},
-			states: {
-				showingDirPrompt: {
-					invoke: {
-						id: 'dirPrompt',
-						src: 'dirPrompt',
-						onDone: {
-							target: 'showingWorkerNamePrompt',
-							actions: ['setDir'],
-						},
-						onError: {
-							target: 'err',
-						},
-					},
-				},
-				showingWorkerNamePrompt: {
-					invoke: {
-						id: 'workerNamePrompt',
-						src: 'workerNamePrompt',
-						onDone: {
-							target: 'copyingTemplate',
-							actions: ['setWorkerName'],
-						},
-						onError: {
-							target: 'err',
-						},
-					},
-				},
-				copyingTemplate: {
-					invoke: {
-						id: 'copyTemplate',
-						src: 'copyTemplate',
-						onDone: {
-							target: 'installDependenciesPrompt',
-						},
-						onError: {
-							target: 'err',
-						},
-					},
-				},
-				installDependenciesPrompt: {
-					initial: 'showingInstallDependenciesPrompt',
-					states: {
-						showingInstallDependenciesPrompt: {
-							invoke: {
-								id: 'installDependenciesPrompt',
-								src: 'installDependenciesPrompt',
-								onDone: [
-									{
-										target: 'installingDependencies',
-										cond: 'installDependencies',
-									},
-									{
-										target: '#create.updatingWranglerToml',
-										actions: log(
-											(context) =>
-												`cd into ${context.dir} and run "npm install"`,
-										),
-									},
-								],
-								onError: {
-									target: '#create.err',
-								},
-							},
-						},
-						installingDependencies: {
-							invoke: {
-								id: 'installDependencies',
-								src: 'installDependencies',
-								onDone: [
-									{
-										target: '#create.updatingWranglerToml',
-									},
-								],
-								onError: {
-									target: '#create.err',
-								},
-							},
-						},
-					},
-				},
-				updatingWranglerToml: {
-					invoke: {
-						id: 'updateWranglerToml',
-						src: 'updateWranglerToml',
-						onDone: [
-							{
-								target: 'ok',
-							},
-						],
-						onError: {
-							target: '#create.err',
-						},
-					},
-				},
-				ok: {
-					type: 'final',
-				},
-				err: {
-					type: 'final',
-				},
-			},
-		},
-		{
-			actions: {
-				setDir: assign({
-					// @ts-ignore
-					dir: (context, event) => event.data,
-				}),
-				setWorkerName: assign({
-					// @ts-ignore
-					workerName: (context, event) => event.data,
-				}),
-			},
-			guards: {
-				installDependencies: (context, event) => {
-					if (event.data === 'yes') {
-						return true;
-					}
-					return false;
-				},
-			},
-			services: {
-				copyTemplate: async (context) => {
-					console.log('Copying template');
-					const src = path.resolve(
-						fileURLToPath(import.meta.url),
-						'../..',
-						'templates/hello-world',
-					);
-					const dest = context.dir;
-					await fsCopyDir(src, dest);
-					console.log('Copied template');
-				},
-				dirPrompt: async () => {
-					const { dirPath } = await inquirer.prompt([
-						{
-							name: 'dirPath',
-							message: 'Dir path:',
-							default: './example',
-						},
-					]);
-					return dirPath;
-				},
-				installDependencies: async (context) => {
-					console.log('Installing dependencies');
-					const promisifiedExec = promisify(exec);
-					await promisifiedExec('npm install', {
-						cwd: path.resolve(context.dir),
-					});
-					console.log('Installed dependencies');
-				},
-				installDependenciesPrompt: async () => {
-					const { installDependencies } = await inquirer.prompt([
-						{
-							name: 'installDependencies',
-							message: 'Install npm dependencies?',
-							type: 'list',
-							choices: ['yes', 'no'],
-						},
-					]);
-					return installDependencies;
-				},
-				updateWranglerToml: async (context) => {
-					try {
-						console.log('Updating wrangler.toml');
+		]);
+		return workerName;
+	});
 
-						const wranglerTomlPath = path.join(context.dir, './wrangler.toml');
-
-						let contents = await fsPromises.readFile(wranglerTomlPath, {
-							encoding: 'utf-8',
-						});
-
-						contents = contents.replace(/name\s*=\s*("[^"]*")/, () => {
-							return `name = "${context.workerName}"`;
-						});
-
-						contents = contents.replace(
-							/compatibility_date\s*=\s*("[^"]*")/,
-							() => {
-								const newDate = new Date().toISOString().split('T')[0];
-								return `compatibility_date = "${newDate}"`;
-							},
-						);
-
-						await fsPromises.writeFile(wranglerTomlPath, contents, 'utf-8');
-
-						console.log('Updated wrangler.toml');
-					} catch (error) {
-						console.error(error);
-						console.error('Error: Unable to update wrangler.toml');
-					}
-				},
-				workerNamePrompt: async () => {
-					const { workerName } = await inquirer.prompt([
-						{
-							name: 'workerName',
-							message: 'Worker name:',
-							default: 'hello-world',
-						},
-					]);
-					return workerName;
-				},
-			},
+	const copyTemplate = fromPromise(
+		async ({
+			input,
+		}: {
+			input: {
+				directory: string;
+			};
+		}) => {
+			console.log('Copying template');
+			const src = path.resolve(
+				fileURLToPath(import.meta.url),
+				'../..',
+				'templates/hello-world',
+			);
+			const dest = input.directory;
+			await fsCopyDirectory(src, dest);
+			console.log('Copied template');
 		},
 	);
+
+	const installDependencies = fromPromise(
+		async ({
+			input,
+		}: {
+			input: {
+				directory: string;
+			};
+		}) => {
+			console.log('Installing dependencies');
+			const promisifiedExec = promisify(exec);
+			await promisifiedExec('npm install', {
+				cwd: path.resolve(input.directory),
+			});
+			console.log('Installed dependencies');
+		},
+	);
+
+	const updateWranglerToml = fromPromise(
+		async ({
+			input,
+		}: {
+			input: {
+				directory: string;
+				workerName: string;
+			};
+		}) => {
+			try {
+				console.log('Updating wrangler.toml');
+
+				const wranglerTomlPath = path.join(input.directory, './wrangler.toml');
+
+				let contents = await fsPromises.readFile(wranglerTomlPath, {
+					encoding: 'utf-8',
+				});
+
+				contents = contents.replace(/name\s*=\s*("[^"]*")/, () => {
+					return `name = "${input.workerName}"`;
+				});
+
+				contents = contents.replace(
+					/compatibility_date\s*=\s*("[^"]*")/,
+					() => {
+						const newDate = new Date().toISOString().split('T')[0];
+						return `compatibility_date = "${newDate}"`;
+					},
+				);
+
+				await fsPromises.writeFile(wranglerTomlPath, contents, 'utf-8');
+
+				console.log('Updated wrangler.toml');
+			} catch (error) {
+				console.error(error);
+				console.error('Error: Unable to update wrangler.toml');
+			}
+		},
+	);
+
+	return setup({
+		actors: {
+			runSetDirPrompt,
+			runSetWorkerNamePrompt,
+			copyTemplate,
+			installDependencies,
+			updateWranglerToml,
+		},
+		types: {} as {
+			context: {
+				directory: string;
+				workerName: string;
+			};
+		},
+	}).createMachine({
+		id: 'create',
+		initial: 'runningSetDirPrompt',
+		context: {
+			directory: '',
+			workerName: '',
+		},
+		states: {
+			runningSetDirPrompt: {
+				invoke: {
+					id: 'runningSetDirPrompt',
+					src: 'runSetDirPrompt',
+					onDone: {
+						target: 'runningSetWorkerNamePrompt',
+						actions: assign({
+							directory: ({ event }) => event.output,
+						}),
+					},
+					onError: {
+						target: 'err',
+					},
+				},
+			},
+			runningSetWorkerNamePrompt: {
+				invoke: {
+					id: 'runningSetWorkerNamePrompt',
+					src: 'runSetWorkerNamePrompt',
+					onDone: {
+						target: 'copyingTemplate',
+						actions: assign({
+							workerName: ({ event }) => event.output,
+						}),
+					},
+					onError: {
+						target: 'err',
+					},
+				},
+			},
+			copyingTemplate: {
+				invoke: {
+					id: 'copyingTemplate',
+					src: 'copyTemplate',
+					input: ({ context }) => ({
+						directory: context.directory,
+					}),
+					onDone: {
+						target: 'installingDependencies',
+					},
+					onError: {
+						target: 'err',
+					},
+				},
+			},
+			installingDependencies: {
+				invoke: {
+					id: 'installingDependencies',
+					src: 'installDependencies',
+					input: ({ context }) => ({
+						directory: context.directory,
+					}),
+					onDone: {
+						target: 'updatingWranglerToml',
+					},
+					onError: {
+						target: 'err',
+					},
+				},
+			},
+			updatingWranglerToml: {
+				invoke: {
+					id: 'updatingWranglerToml',
+					src: 'updateWranglerToml',
+					input: ({ context }) => ({
+						directory: context.directory,
+						workerName: context.workerName,
+					}),
+					onDone: {
+						target: 'ok',
+					},
+					onError: {
+						target: 'err',
+					},
+				},
+			},
+			ok: {
+				type: 'final',
+			},
+			err: {
+				type: 'final',
+			},
+		},
+	});
 }
 
 async function runPackageCommand() {
-	const { dirPath } = await inquirer.prompt([
+	const { directoryPath } = await inquirer.prompt([
 		{
-			name: 'dirPath',
-			message: 'Dir path:',
+			name: 'directoryPath',
+			message: 'Directory path:',
 			default: './example',
 		},
 	]);
@@ -326,31 +306,20 @@ async function runPackageCommand() {
 		'../..',
 		'templates/package',
 	);
-	const dest = dirPath;
-	await fsCopyDir(src, dest);
+	const destination = directoryPath;
+	await fsCopyDirectory(src, destination);
 	console.log('Copied template');
 
-	const { installDependencies } = await inquirer.prompt([
-		{
-			name: 'installDependencies',
-			message: 'Install npm dependencies?',
-			type: 'list',
-			choices: ['yes', 'no'],
-		},
-	]);
-
-	if (installDependencies === 'yes') {
-		console.log('Installing dependencies');
-		const promisifiedExec = promisify(exec);
-		await promisifiedExec('npm install', {
-			cwd: path.resolve(dirPath),
-		});
-		console.log('Installed dependencies');
-	}
+	console.log('Installing dependencies');
+	const promisifiedExec = promisify(exec);
+	await promisifiedExec('npm install', {
+		cwd: path.resolve(directoryPath),
+	});
+	console.log('Installed dependencies');
 
 	console.log('Updating package.json');
 
-	const packageJsonPath = path.join(dirPath, './package.json');
+	const packageJsonPath = path.join(directoryPath, './package.json');
 
 	let contents = await fsPromises.readFile(packageJsonPath, {
 		encoding: 'utf-8',
@@ -386,7 +355,7 @@ Options:
  --help, -h Print help`);
 }
 
-async function fsCopyDir(src: string, dest: string) {
+async function fsCopyDirectory(src: string, dest: string) {
 	try {
 		await fsPromises.cp(src, dest, {
 			recursive: true,

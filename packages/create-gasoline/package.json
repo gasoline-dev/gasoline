@@ -30,6 +30,6 @@
 	},
 	"dependencies": {
 		"inquirer": "^9.2.12",
-		"xstate": "^4.38.3"
+		"xstate": "^5.5.1"
 	}
 }

@@ -33,8 +33,8 @@ importers:
         specifier: ^9.2.12
         version: 9.2.12
       xstate:
-        specifier: ^4.38.3
-        version: 4.38.3
+        specifier: ^5.5.1
+        version: 5.5.1
     devDependencies:
       '@types/node':
         specifier: ^18.0.0
@@ -5125,8 +5125,8 @@ packages:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
     dev: true
 
-  /xstate@4.38.3:
-    resolution: {integrity: sha512-SH7nAaaPQx57dx6qvfcIgqKRXIh4L0A1iYEqim4s1u7c9VoCgzZc+63FY90AKU4ZzOC2cfJzTnpO4zK7fCUzzw==}
+  /xstate@5.5.1:
+    resolution: {integrity: sha512-12Was43pPJKg3JWoelOREtTNYgFz6tRlNrMaRuqOibEe3pn8/uOWiP8ySMfOynyIjHUxd4BU7wV9O54Ma3FM6g==}
     dev: false
 
   /y18n@4.0.3:

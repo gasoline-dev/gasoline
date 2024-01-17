@@ -61,7 +61,3 @@ Thumbs.db
 
 .dev.vars
 .wrangler/
-
-# XState
-
-*.*.typegen.d.ts
