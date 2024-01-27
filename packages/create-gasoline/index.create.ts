@@ -41,22 +41,7 @@ async function main() {
 			parsedArgs.positionals.length === 0 &&
 			Object.keys(parsedArgs.values).length === 0
 		) {
-			const initMachineActor = createActor(setInitMachine()).start();
-
-			const snapshot = await waitFor(
-				initMachineActor,
-				(snapshot) => snapshot.matches('ok') || snapshot.matches('err'),
-				{
-					timeout: 3600_000,
-				},
-			);
-
-			if (snapshot.value === 'err') {
-				throw new Error('Unable to create project');
-			}
-
-			console.log('Done!');
-			process.exit(0);
+			await runInitMachine();
 		}
 
 		// Initialize single repo package.
@@ -75,7 +60,7 @@ async function main() {
 	}
 }
 
-function setInitMachine() {
+async function runInitMachine() {
 	const runSetDirPrompt = fromPromise(async () => {
 		const { directoryPath } = await inquirer.prompt([
 			{
@@ -175,7 +160,7 @@ function setInitMachine() {
 		},
 	);
 
-	return setup({
+	const machine = setup({
 		actors: {
 			runSetDirPrompt,
 			runSetWorkerNamePrompt,
@@ -281,6 +266,24 @@ function setInitMachine() {
 			},
 		},
 	});
+
+	const actor = createActor(machine).start();
+
+	const snapshot = await waitFor(
+		actor,
+		(snapshot) => snapshot.matches('ok') || snapshot.matches('err'),
+		{
+			timeout: 3600_000,
+		},
+	);
+
+	if (snapshot.value === 'err') {
+		throw new Error('Unable to create project');
+	}
+
+	console.log('Done!');
+
+	process.exit(0);
 }
 
 async function runPackageCommand() {
