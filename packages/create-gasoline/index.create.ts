@@ -103,19 +103,45 @@ async function runInitMachine() {
 		},
 	);
 
+	const runSetPackageManagerPrompt = fromPromise(async () => {
+		const { packageManager } = await inquirer.prompt([
+			{
+				type: 'list',
+				name: 'packageManager',
+				message: 'Package manager:',
+				choices: ['npm', 'pnpm'],
+				default: 'npm',
+			},
+		]);
+		return packageManager;
+	});
+
 	const installDependencies = fromPromise(
 		async ({
 			input,
 		}: {
 			input: {
 				directory: string;
+				packageManager: 'npm' | 'pnpm';
 			};
 		}) => {
 			console.log('Installing dependencies');
 			const promisifiedExec = promisify(exec);
-			await promisifiedExec('npm install', {
-				cwd: path.resolve(input.directory),
-			});
+			switch (input.packageManager) {
+				case 'npm':
+					await promisifiedExec('npm install', {
+						cwd: path.resolve(input.directory),
+					});
+					break;
+				case 'pnpm':
+					await promisifiedExec('pnpm install', {
+						cwd: path.resolve(input.directory),
+					});
+					break;
+				default:
+					const never: never = input.packageManager;
+					throw new Error('Error: Unknown package manager ->' + never);
+			}
 			console.log('Installed dependencies');
 		},
 	);
@@ -166,11 +192,13 @@ async function runInitMachine() {
 			runSetWorkerNamePrompt,
 			copyTemplate,
 			installDependencies,
+			runSetPackageManagerPrompt,
 			updateWranglerToml,
 		},
 		types: {} as {
 			context: {
 				directory: string;
+				packageManager: 'npm' | 'pnpm';
 				workerName: string;
 			};
 		},
@@ -179,6 +207,7 @@ async function runInitMachine() {
 		initial: 'runningSetDirPrompt',
 		context: {
 			directory: '',
+			packageManager: 'npm',
 			workerName: '',
 		},
 		states: {
@@ -220,7 +249,22 @@ async function runInitMachine() {
 						directory: context.directory,
 					}),
 					onDone: {
+						target: 'runningSetPackageManagerPrompt',
+					},
+					onError: {
+						target: 'err',
+					},
+				},
+			},
+			runningSetPackageManagerPrompt: {
+				invoke: {
+					id: 'runningSetPackageManagerPrompt',
+					src: 'runSetPackageManagerPrompt',
+					onDone: {
 						target: 'installingDependencies',
+						actions: assign({
+							packageManager: ({ event }) => event.output,
+						}),
 					},
 					onError: {
 						target: 'err',
@@ -233,6 +277,7 @@ async function runInitMachine() {
 					src: 'installDependencies',
 					input: ({ context }) => ({
 						directory: context.directory,
+						packageManager: context.packageManager,
 					}),
 					onDone: {
 						target: 'updatingWranglerToml',
