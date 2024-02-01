@@ -5,6 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"build": "nx run-many -t build",
+		"build:create-gasoline": "nx run create-gasoline:build",
+		"dev:create-gasoline": "nx run create-gasoline:dev",
 		"release": "pnpm run build && changeset publish"
 	},
 	"devDependencies": {
