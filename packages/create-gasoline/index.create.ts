@@ -1,16 +1,7 @@
 #!/usr/bin/env node
-
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-	assign,
-	createActor,
-	createMachine,
-	fromPromise,
-	log,
-	setup,
-	waitFor,
-} from 'xstate';
+import { assign, createActor, fromPromise, setup, waitFor } from 'xstate';
 import fsPromises from 'fs/promises';
 import inquirer from 'inquirer';
 import { promisify } from 'node:util';
@@ -62,26 +53,35 @@ async function main() {
 
 async function runInitMachine() {
 	const runSetDirPrompt = fromPromise(async () => {
-		const { directoryPath } = await inquirer.prompt([
-			{
-				name: 'directoryPath',
-				message: 'Directory path:',
-				default: './example',
-			},
-		]);
-		return directoryPath;
+		try {
+			const { directoryPath } = await inquirer.prompt([
+				{
+					name: 'directoryPath',
+					message: 'Directory path:',
+					default: './example',
+				},
+			]);
+			return directoryPath;
+		} catch (error) {
+			console.error(error);
+			throw new Error('Unable to set directory path');
+		}
 	});
 
 	const checkIfDirIsPresent = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
 			console.log('Checking if directory is present');
 			try {
-				await fsPromises.access(input.directory);
+				const isDirPresent = await fsIsDirPresent(input.directory);
+				if (!isDirPresent) {
+					console.log('Directory is not present');
+					return false;
+				}
 				console.log('Directory is present');
 				return true;
 			} catch (error) {
-				console.log('Directory is not present');
-				return false;
+				console.error(error);
+				throw new Error('Unable to check if directory is present');
 			}
 		},
 	);
@@ -92,10 +92,15 @@ async function runInitMachine() {
 
 	const getDirContents = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
-			console.log('Getting directory contents');
-			const contents = await fsPromises.readdir(input.directory);
-			console.log('Got directory contents');
-			return contents;
+			try {
+				console.log('Getting directory contents');
+				const contents = await fsPromises.readdir(input.directory);
+				console.log('Got directory contents');
+				return contents;
+			} catch (error) {
+				console.error(error);
+				throw new Error('Unable to get directory contents');
+			}
 		},
 	);
 
@@ -104,15 +109,20 @@ async function runInitMachine() {
 	};
 
 	const runEmptyDirContentsConfirmPrompt = fromPromise(async () => {
-		const { confirm } = await inquirer.prompt([
-			{
-				type: 'confirm',
-				name: 'confirm',
-				message: 'Directory is not empty. Empty it?',
-				default: false,
-			},
-		]);
-		return confirm;
+		try {
+			const { confirm } = await inquirer.prompt([
+				{
+					type: 'confirm',
+					name: 'confirm',
+					message: 'Directory is not empty. Empty it?',
+					default: false,
+				},
+			]);
+			return confirm;
+		} catch (error) {
+			console.error(error);
+			throw new Error('Unable to confirm if directory should be emptied');
+		}
 	});
 
 	const isConfirmedToEmptyDir = (_, params: { confirm: boolean }) => {
@@ -121,16 +131,21 @@ async function runInitMachine() {
 
 	const emptyDirContents = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
-			console.log('Emptying directory contents');
-			const contents = await fsPromises.readdir(input.directory);
-			await Promise.all(
-				contents.map((file) => {
-					return fsPromises.rm(path.join(input.directory, file), {
-						recursive: true,
-					});
-				}),
-			);
-			console.log('Emptied directory contents');
+			try {
+				console.log('Emptying directory contents');
+				const contents = await fsPromises.readdir(input.directory);
+				await Promise.all(
+					contents.map((file) => {
+						return fsPromises.rm(path.join(input.directory, file), {
+							recursive: true,
+						});
+					}),
+				);
+				console.log('Emptied directory contents');
+			} catch (error) {
+				console.error(error);
+				throw new Error('Unable to empty directory contents');
+			}
 		},
 	);
 
@@ -141,14 +156,19 @@ async function runInitMachine() {
 	}
 
 	const runSetWorkerNamePrompt = fromPromise(async () => {
-		const { workerName } = await inquirer.prompt([
-			{
-				name: 'workerName',
-				message: 'Worker name:',
-				default: 'hello-world',
-			},
-		]);
-		return workerName;
+		try {
+			const { workerName } = await inquirer.prompt([
+				{
+					name: 'workerName',
+					message: 'Worker name:',
+					default: 'hello-world',
+				},
+			]);
+			return workerName;
+		} catch (error) {
+			console.error(error);
+			throw new Error('Unable to set worker name');
+		}
 	});
 
 	const copyTemplate = fromPromise(
@@ -159,29 +179,39 @@ async function runInitMachine() {
 				directory: string;
 			};
 		}) => {
-			console.log('Copying template');
-			const src = path.resolve(
-				fileURLToPath(import.meta.url),
-				'../..',
-				'templates/hello-world',
-			);
-			const dest = input.directory;
-			await fsCopyDirectory(src, dest);
-			console.log('Copied template');
+			try {
+				console.log('Copying template');
+				const src = path.resolve(
+					fileURLToPath(import.meta.url),
+					'../..',
+					'templates/hello-world',
+				);
+				const dest = input.directory;
+				await fsCopyDir(src, dest);
+				console.log('Copied template');
+			} catch (error) {
+				console.error(error);
+				throw new Error('Unable to copy template');
+			}
 		},
 	);
 
 	const runSetPackageManagerPrompt = fromPromise(async () => {
-		const { packageManager } = await inquirer.prompt([
-			{
-				type: 'list',
-				name: 'packageManager',
-				message: 'Package manager:',
-				choices: ['npm', 'pnpm'],
-				default: 'npm',
-			},
-		]);
-		return packageManager;
+		try {
+			const { packageManager } = await inquirer.prompt([
+				{
+					type: 'list',
+					name: 'packageManager',
+					message: 'Package manager:',
+					choices: ['npm', 'pnpm'],
+					default: 'npm',
+				},
+			]);
+			return packageManager;
+		} catch (error) {
+			console.error(error);
+			throw new Error('Unable to set package manager');
+		}
 	});
 
 	const installDependencies = fromPromise(
@@ -193,24 +223,29 @@ async function runInitMachine() {
 				packageManager: 'npm' | 'pnpm';
 			};
 		}) => {
-			console.log('Installing dependencies');
-			const promisifiedExec = promisify(exec);
-			switch (input.packageManager) {
-				case 'npm':
-					await promisifiedExec('npm install', {
-						cwd: path.resolve(input.directory),
-					});
-					break;
-				case 'pnpm':
-					await promisifiedExec('pnpm install', {
-						cwd: path.resolve(input.directory),
-					});
-					break;
-				default:
-					const never: never = input.packageManager;
-					throw new Error('Error: Unknown package manager ->' + never);
+			try {
+				console.log('Installing dependencies');
+				const promisifiedExec = promisify(exec);
+				switch (input.packageManager) {
+					case 'npm':
+						await promisifiedExec('npm install', {
+							cwd: path.resolve(input.directory),
+						});
+						break;
+					case 'pnpm':
+						await promisifiedExec('pnpm install', {
+							cwd: path.resolve(input.directory),
+						});
+						break;
+					default:
+						const never: never = input.packageManager;
+						throw new Error('Error: Unknown package manager ->' + never);
+				}
+				console.log('Installed dependencies');
+			} catch (error) {
+				console.error(error);
+				throw new Error('Unable to install dependencies');
 			}
-			console.log('Installed dependencies');
 		},
 	);
 
@@ -225,17 +260,13 @@ async function runInitMachine() {
 		}) => {
 			try {
 				console.log('Updating wrangler.toml');
-
 				const wranglerTomlPath = path.join(input.directory, './wrangler.toml');
-
 				let contents = await fsPromises.readFile(wranglerTomlPath, {
 					encoding: 'utf-8',
 				});
-
 				contents = contents.replace(/name\s*=\s*("[^"]*")/, () => {
 					return `name = "${input.workerName}"`;
 				});
-
 				contents = contents.replace(
 					/compatibility_date\s*=\s*("[^"]*")/,
 					() => {
@@ -243,13 +274,11 @@ async function runInitMachine() {
 						return `compatibility_date = "${newDate}"`;
 					},
 				);
-
 				await fsPromises.writeFile(wranglerTomlPath, contents, 'utf-8');
-
 				console.log('Updated wrangler.toml');
 			} catch (error) {
 				console.error(error);
-				console.error('Error: Unable to update wrangler.toml');
+				throw new Error('Unable to update wrangler.toml');
 			}
 		},
 	);
@@ -314,6 +343,7 @@ async function runInitMachine() {
 					},
 					onError: {
 						target: 'err',
+						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
@@ -340,6 +370,7 @@ async function runInitMachine() {
 					],
 					onError: {
 						target: '#create.err',
+						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
@@ -370,6 +401,7 @@ async function runInitMachine() {
 							],
 							onError: {
 								target: '#create.err',
+								actions: ({ context, event }) => console.error(event),
 							},
 						},
 					},
@@ -396,6 +428,7 @@ async function runInitMachine() {
 							],
 							onError: {
 								target: '#create.err',
+								actions: ({ context, event }) => console.error(event),
 							},
 						},
 					},
@@ -411,6 +444,7 @@ async function runInitMachine() {
 							},
 							onError: {
 								target: '#create.err',
+								actions: ({ context, event }) => console.error(event),
 							},
 						},
 					},
@@ -436,6 +470,7 @@ async function runInitMachine() {
 					},
 					onError: {
 						target: 'err',
+						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
@@ -451,6 +486,7 @@ async function runInitMachine() {
 					},
 					onError: {
 						target: 'err',
+						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
@@ -466,6 +502,7 @@ async function runInitMachine() {
 					},
 					onError: {
 						target: 'err',
+						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
@@ -482,6 +519,7 @@ async function runInitMachine() {
 					},
 					onError: {
 						target: 'err',
+						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
@@ -498,6 +536,7 @@ async function runInitMachine() {
 					},
 					onError: {
 						target: 'err',
+						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
@@ -551,7 +590,7 @@ async function runPackageCommand() {
 		'templates/package',
 	);
 	const destination = directoryPath;
-	await fsCopyDirectory(src, destination);
+	await fsCopyDir(src, destination);
 	console.log('Copied template');
 
 	console.log('Installing dependencies');
@@ -599,7 +638,7 @@ Options:
  --help, -h Print help`);
 }
 
-async function fsCopyDirectory(src: string, dest: string) {
+async function fsCopyDir(src: string, dest: string) {
 	try {
 		await fsPromises.cp(src, dest, {
 			recursive: true,
@@ -607,5 +646,14 @@ async function fsCopyDirectory(src: string, dest: string) {
 	} catch (error) {
 		console.error(error);
 		throw error;
+	}
+}
+
+async function fsIsDirPresent(directory: string) {
+	try {
+		await fsPromises.access(directory);
+		return true;
+	} catch (error) {
+		return false;
 	}
 }

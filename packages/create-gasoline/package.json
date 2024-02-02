@@ -22,8 +22,8 @@
 		"directory": "packages/create-gasoline"
 	},
 	"scripts": {
-		"build": "tsup index.create.ts --format=esm --target=node18 --clean --config=tsconfig.json",
-		"dev": "tsup index.create.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json"
+		"build": "tsup index.create.ts --format=esm --target=node18 --clean --config=tsconfig.json --sourcemap",
+		"dev": "tsup index.create.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --sourcemap"
 	},
 	"devDependencies": {
 		"@types/node": "^18.0.0"
