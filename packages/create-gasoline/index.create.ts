@@ -72,6 +72,74 @@ async function runInitMachine() {
 		return directoryPath;
 	});
 
+	const checkIfDirIsPresent = fromPromise(
+		async ({ input }: { input: { directory: string } }) => {
+			console.log('Checking if directory is present');
+			try {
+				await fsPromises.access(input.directory);
+				console.log('Directory is present');
+				return true;
+			} catch (error) {
+				console.log('Directory is not present');
+				return false;
+			}
+		},
+	);
+
+	const isDirPresent = (_, params: { isPresent: boolean }) => {
+		return params.isPresent;
+	};
+
+	const getDirContents = fromPromise(
+		async ({ input }: { input: { directory: string } }) => {
+			console.log('Getting directory contents');
+			const contents = await fsPromises.readdir(input.directory);
+			console.log('Got directory contents');
+			return contents;
+		},
+	);
+
+	const isDirEmpty = (_, params: { contents: string[] }) => {
+		return params.contents.length === 0;
+	};
+
+	const runEmptyDirContentsConfirmPrompt = fromPromise(async () => {
+		const { confirm } = await inquirer.prompt([
+			{
+				type: 'confirm',
+				name: 'confirm',
+				message: 'Directory is not empty. Empty it?',
+				default: false,
+			},
+		]);
+		return confirm;
+	});
+
+	const isConfirmedToEmptyDir = (_, params: { confirm: boolean }) => {
+		return params.confirm;
+	};
+
+	const emptyDirContents = fromPromise(
+		async ({ input }: { input: { directory: string } }) => {
+			console.log('Emptying directory contents');
+			const contents = await fsPromises.readdir(input.directory);
+			await Promise.all(
+				contents.map((file) => {
+					return fsPromises.rm(path.join(input.directory, file), {
+						recursive: true,
+					});
+				}),
+			);
+			console.log('Emptied directory contents');
+		},
+	);
+
+	function logEmptyDirIsRequiredMessage() {
+		console.log(
+			'create-gasoline is for new projects and requires an empty directory',
+		);
+	}
+
 	const runSetWorkerNamePrompt = fromPromise(async () => {
 		const { workerName } = await inquirer.prompt([
 			{
@@ -187,20 +255,43 @@ async function runInitMachine() {
 	);
 
 	const machine = setup({
+		actions: {
+			logEmptyDirIsRequiredMessage,
+		},
 		actors: {
 			runSetDirPrompt,
+			checkIfDirIsPresent,
+			getDirContents,
+			runEmptyDirContentsConfirmPrompt,
+			emptyDirContents,
 			runSetWorkerNamePrompt,
 			copyTemplate,
 			installDependencies,
 			runSetPackageManagerPrompt,
 			updateWranglerToml,
 		},
+		guards: {
+			isDirPresent,
+			isDirEmpty,
+			isConfirmedToEmptyDir,
+		},
 		types: {} as {
+			actions: {
+				type: 'logEmptyDirIsRequiredMessage';
+			};
 			context: {
 				directory: string;
 				packageManager: 'npm' | 'pnpm';
 				workerName: string;
 			};
+			guards:
+				| { type: 'isDirPresent' }
+				| {
+						type: 'isDirEmpty';
+				  }
+				| {
+						type: 'isConfirmedToEmptyDir';
+				  };
 		},
 	}).createMachine({
 		id: 'create',
@@ -216,13 +307,120 @@ async function runInitMachine() {
 					id: 'runningSetDirPrompt',
 					src: 'runSetDirPrompt',
 					onDone: {
-						target: 'runningSetWorkerNamePrompt',
+						target: 'checkingIfDirIsPresent',
 						actions: assign({
 							directory: ({ event }) => event.output,
 						}),
 					},
 					onError: {
 						target: 'err',
+					},
+				},
+			},
+			checkingIfDirIsPresent: {
+				invoke: {
+					id: 'checkingIfDirIsPresent',
+					src: 'checkIfDirIsPresent',
+					input: ({ context }) => ({
+						directory: context.directory,
+					}),
+					onDone: [
+						{
+							target: '#processingDirContents',
+							guard: {
+								type: 'isDirPresent',
+								params: ({ event }) => ({
+									isPresent: event.output,
+								}),
+							},
+						},
+						{
+							target: 'runningSetWorkerNamePrompt',
+						},
+					],
+					onError: {
+						target: '#create.err',
+					},
+				},
+			},
+			processingDirContents: {
+				id: 'processingDirContents',
+				initial: 'gettingDirContents',
+				states: {
+					gettingDirContents: {
+						invoke: {
+							id: 'gettingDirContents',
+							src: 'getDirContents',
+							input: ({ context }) => ({
+								directory: context.directory,
+							}),
+							onDone: [
+								{
+									target: '#create.runningSetWorkerNamePrompt',
+									guard: {
+										type: 'isDirEmpty',
+										params: ({ context, event }) => ({
+											contents: event.output,
+										}),
+									},
+								},
+								{
+									target: 'runningEmptyDirContentsConfirmPrompt',
+								},
+							],
+							onError: {
+								target: '#create.err',
+							},
+						},
+					},
+					runningEmptyDirContentsConfirmPrompt: {
+						invoke: {
+							id: 'runningEmptyDirContentsConfirmPrompt',
+							src: 'runEmptyDirContentsConfirmPrompt',
+							input: ({ context }) => ({
+								directory: context.directory,
+							}),
+							onDone: [
+								{
+									target: 'emptyingDirContents',
+									guard: {
+										type: 'isConfirmedToEmptyDir',
+										params: ({ event }) => ({
+											confirm: event.output,
+										}),
+									},
+								},
+								{
+									target: 'emptyDirRequired',
+								},
+							],
+							onError: {
+								target: '#create.err',
+							},
+						},
+					},
+					emptyingDirContents: {
+						invoke: {
+							id: 'emptyingDirContents',
+							src: 'emptyDirContents',
+							input: ({ context }) => ({
+								directory: context.directory,
+							}),
+							onDone: {
+								target: '#create.runningSetWorkerNamePrompt',
+							},
+							onError: {
+								target: '#create.err',
+							},
+						},
+					},
+					emptyDirRequired: {
+						entry: {
+							type: 'logEmptyDirIsRequiredMessage',
+						},
+						always: {
+							target: '#create.ok',
+						},
 					},
 				},
 			},
@@ -325,8 +523,6 @@ async function runInitMachine() {
 	if (snapshot.value === 'err') {
 		throw new Error('Unable to create project');
 	}
-
-	console.log('Done!');
 
 	process.exit(0);
 }
