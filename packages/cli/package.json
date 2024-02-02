@@ -1,0 +1,35 @@
+{
+	"name": "@gasoline-dev/cli",
+	"version": "0.0.0",
+	"description": "CLI for interacting with Gasoline projects",
+	"type": "module",
+	"bin": {
+		"gasoline": "dist/index.cli.js",
+		"gas": "dist/index.cli.js"
+	},
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"files": [
+		"dist/",
+		"LICENSE.md"
+	],
+	"homepage": "https://gasoline.dev",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/gasoline-dev/gasoline",
+		"directory": "packages/cli"
+	},
+	"scripts": {
+		"build": "tsup index.cli.ts --format=esm --target=node18 --clean --config=tsconfig.json --sourcemap",
+		"dev": "tsup index.cli.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --sourcemap"
+	},
+	"devDependencies": {
+		"@types/node": "^18.0.0"
+	},
+	"dependencies": {
+		"inquirer": "^9.2.12",
+		"xstate": "^5.5.1"
+	}
+}

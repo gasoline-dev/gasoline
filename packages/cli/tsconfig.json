@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"allowSyntheticDefaultImports": true,
+		"declaration": true,
+		"declarationMap": true,
+		"lib": ["ES2022"],
+		"module": "nodenext",
+		"outDir": "dist",
+		"target": "ES2022",
+		"strictNullChecks": true
+	},
+	"include": ["index.cli.ts", "index.cli.d.ts"]
+}
