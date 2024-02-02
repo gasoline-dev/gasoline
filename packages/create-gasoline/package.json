@@ -11,8 +11,7 @@
 	},
 	"files": [
 		"dist/",
-		"LICENSE.md",
-		"templates-*"
+		"LICENSE.md"
 	],
 	"homepage": "https://gasoline.dev",
 	"license": "MIT",

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { assign, createActor, fromPromise, setup, waitFor } from 'xstate';
 import fsPromises from 'fs/promises';
 import inquirer from 'inquirer';
@@ -28,22 +27,12 @@ async function main() {
 			options,
 		} as any);
 
-		// Initialize project (no args provided).
 		if (
 			parsedArgs.positionals.length === 0 &&
 			Object.keys(parsedArgs.values).length === 0
 		) {
 			await runInitMachine();
-		}
-
-		// Initialize single repo package.
-		if (parsedArgs.positionals[0] === 'package') {
-			await runPackageCommand();
-			process.exit(0);
-		}
-
-		// Log help.
-		if (parsedArgs.values.help) {
+		} else {
 			logHelp();
 			process.exit(0);
 		}
@@ -566,87 +555,12 @@ async function runInitMachine() {
 	process.exit(0);
 }
 
-async function runPackageCommand() {
-	const { directoryPath } = await inquirer.prompt([
-		{
-			name: 'directoryPath',
-			message: 'Directory path:',
-			default: './example',
-		},
-	]);
-
-	const { packageName } = await inquirer.prompt([
-		{
-			name: 'packageName',
-			message: 'Package name:',
-			default: 'example-name',
-		},
-	]);
-
-	console.log('Copying template');
-	const src = path.resolve(
-		fileURLToPath(import.meta.url),
-		'../..',
-		'templates/package',
-	);
-	const destination = directoryPath;
-	await fsCopyDir(src, destination);
-	console.log('Copied template');
-
-	console.log('Installing dependencies');
-	const promisifiedExec = promisify(exec);
-	await promisifiedExec('npm install', {
-		cwd: path.resolve(directoryPath),
-	});
-	console.log('Installed dependencies');
-
-	console.log('Updating package.json');
-
-	const packageJsonPath = path.join(directoryPath, './package.json');
-
-	let contents = await fsPromises.readFile(packageJsonPath, {
-		encoding: 'utf-8',
-	});
-
-	const parsedContents = JSON.parse(contents);
-
-	parsedContents.name = packageName;
-
-	await fsPromises.writeFile(
-		packageJsonPath,
-		JSON.stringify(parsedContents, null, 2),
-		'utf-8',
-	);
-
-	console.log('Updated package.json');
-
-	console.log('Done!');
-}
-
 function logHelp() {
 	console.log(`Usage:
 create-gasoline -> Initalize project
 
-OR
-
-create-gasoline [command] -> Run command
-
-Commands:
- package Initalize a single repo package for publishing to NPM
-
 Options:
  --help, -h Print help`);
-}
-
-async function fsCopyDir(src: string, dest: string) {
-	try {
-		await fsPromises.cp(src, dest, {
-			recursive: true,
-		});
-	} catch (error) {
-		console.error(error);
-		throw error;
-	}
 }
 
 async function fsIsDirPresent(directory: string) {
