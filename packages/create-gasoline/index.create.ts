@@ -7,6 +7,7 @@ import inquirer from 'inquirer';
 import { promisify } from 'node:util';
 import { exec } from 'node:child_process';
 import { parseArgs } from 'node:util';
+import { downloadTemplate } from 'giget';
 
 await main();
 
@@ -171,7 +172,7 @@ async function runInitMachine() {
 		}
 	});
 
-	const copyTemplate = fromPromise(
+	const getTemplate = fromPromise(
 		async ({
 			input,
 		}: {
@@ -180,18 +181,17 @@ async function runInitMachine() {
 			};
 		}) => {
 			try {
-				console.log('Copying template');
-				const src = path.resolve(
-					fileURLToPath(import.meta.url),
-					'../..',
-					'templates/hello-world',
+				console.log('Getting template');
+				await downloadTemplate(
+					'github:gasoline-dev/gasoline/templates/hello-world',
+					{
+						dir: input.directory,
+					},
 				);
-				const dest = input.directory;
-				await fsCopyDir(src, dest);
-				console.log('Copied template');
+				console.log('Got template');
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to copy template');
+				throw new Error('Unable to get template');
 			}
 		},
 	);
@@ -294,7 +294,7 @@ async function runInitMachine() {
 			runEmptyDirContentsConfirmPrompt,
 			emptyDirContents,
 			runSetWorkerNamePrompt,
-			copyTemplate,
+			getTemplate,
 			installDependencies,
 			runSetPackageManagerPrompt,
 			updateWranglerToml,
@@ -463,7 +463,7 @@ async function runInitMachine() {
 					id: 'runningSetWorkerNamePrompt',
 					src: 'runSetWorkerNamePrompt',
 					onDone: {
-						target: 'copyingTemplate',
+						target: 'gettingTemplate',
 						actions: assign({
 							workerName: ({ event }) => event.output,
 						}),
@@ -474,10 +474,10 @@ async function runInitMachine() {
 					},
 				},
 			},
-			copyingTemplate: {
+			gettingTemplate: {
 				invoke: {
-					id: 'copyingTemplate',
-					src: 'copyTemplate',
+					id: 'gettingTemplate',
+					src: 'getTemplate',
 					input: ({ context }) => ({
 						directory: context.directory,
 					}),

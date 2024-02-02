@@ -29,6 +29,7 @@
 		"@types/node": "^18.0.0"
 	},
 	"dependencies": {
+		"giget": "^1.2.1",
 		"inquirer": "^9.2.12",
 		"xstate": "^5.5.1"
 	}
