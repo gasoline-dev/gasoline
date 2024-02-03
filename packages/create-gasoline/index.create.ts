@@ -145,46 +145,6 @@ async function runInitMachine() {
 		);
 	}
 
-	const runSetWorkerNamePrompt = fromPromise(async () => {
-		try {
-			const { workerName } = await inquirer.prompt([
-				{
-					name: 'workerName',
-					message: 'Worker name:',
-					default: 'hello-world',
-				},
-			]);
-			return workerName;
-		} catch (error) {
-			console.error(error);
-			throw new Error('Unable to set worker name');
-		}
-	});
-
-	const getTemplate = fromPromise(
-		async ({
-			input,
-		}: {
-			input: {
-				directory: string;
-			};
-		}) => {
-			try {
-				console.log('Getting template');
-				await downloadTemplate(
-					'github:gasoline-dev/gasoline/templates/hello-world',
-					{
-						dir: input.directory,
-					},
-				);
-				console.log('Got template');
-			} catch (error) {
-				console.error(error);
-				throw new Error('Unable to get template');
-			}
-		},
-	);
-
 	const runSetPackageManagerPrompt = fromPromise(async () => {
 		try {
 			const { packageManager } = await inquirer.prompt([
@@ -203,71 +163,77 @@ async function runInitMachine() {
 		}
 	});
 
-	const installDependencies = fromPromise(
-		async ({
-			input,
-		}: {
-			input: {
-				directory: string;
-				packageManager: 'npm' | 'pnpm';
-			};
-		}) => {
+	const isPackageManagerPnpm = (
+		_,
+		params: { packageManager: 'npm' | 'pnpm' },
+	) => {
+		return params.packageManager === 'pnpm';
+	};
+
+	const downloadMonorepoPnpmTemplate = fromPromise(
+		async ({ input }: { input: { directory: string } }) => {
 			try {
-				console.log('Installing dependencies');
-				const promisifiedExec = promisify(exec);
-				switch (input.packageManager) {
-					case 'npm':
-						await promisifiedExec('npm install', {
-							cwd: path.resolve(input.directory),
-						});
-						break;
-					case 'pnpm':
-						await promisifiedExec('pnpm install', {
-							cwd: path.resolve(input.directory),
-						});
-						break;
-					default:
-						const never: never = input.packageManager;
-						throw new Error('Error: Unknown package manager ->' + never);
-				}
-				console.log('Installed dependencies');
+				console.log('Downloading monorepo pnpm template');
+				await downloadTemplate(
+					'github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-pnpm',
+					{
+						dir: input.directory,
+					},
+				);
+				console.log('Downloaded monorepo pnpm template');
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to install dependencies');
+				throw new Error('Unable to download monorepo pnpm template');
 			}
 		},
 	);
 
-	const updateWranglerToml = fromPromise(
-		async ({
-			input,
-		}: {
-			input: {
-				directory: string;
-				workerName: string;
-			};
-		}) => {
+	const installPnpmDependencies = fromPromise(
+		async ({ input }: { input: { directory: string } }) => {
 			try {
-				console.log('Updating wrangler.toml');
-				const wranglerTomlPath = path.join(input.directory, './wrangler.toml');
-				let contents = await fsPromises.readFile(wranglerTomlPath, {
-					encoding: 'utf-8',
+				console.log('Installing pnpm dependencies');
+				const promisifiedExec = promisify(exec);
+				await promisifiedExec('pnpm install', {
+					cwd: path.resolve(input.directory),
 				});
-				contents = contents.replace(/name\s*=\s*("[^"]*")/, () => {
-					return `name = "${input.workerName}"`;
-				});
-				contents = contents.replace(
-					/compatibility_date\s*=\s*("[^"]*")/,
-					() => {
-						const newDate = new Date().toISOString().split('T')[0];
-						return `compatibility_date = "${newDate}"`;
-					},
-				);
-				await fsPromises.writeFile(wranglerTomlPath, contents, 'utf-8');
-				console.log('Updated wrangler.toml');
+				console.log('Installed pnpm dependencies');
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to update wrangler.toml');
+				throw new Error('Unable to install pnpm dependencies');
+			}
+		},
+	);
+
+	const downloadMonorepoNpmTemplate = fromPromise(
+		async ({ input }: { input: { directory: string } }) => {
+			try {
+				console.log('Downloading monorepo npm template');
+				await downloadTemplate(
+					'github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-npm',
+					{
+						dir: input.directory,
+					},
+				);
+				console.log('Downloaded monorepo npm template');
+			} catch (error) {
+				console.error(error);
+				throw new Error('Unable to download monorepo npm template');
+			}
+		},
+	);
+
+	const installNpmDependencies = fromPromise(
+		async ({ input }: { input: { directory: string } }) => {
+			try {
+				console.log('Installing npm dependencies');
+				const promisifiedExec = promisify(exec);
+				await promisifiedExec('npm install', {
+					cwd: path.resolve(input.directory),
+				});
+				console.log('Installed npm dependencies');
+			} catch (error) {
+				console.error(error);
+				throw new Error('Unable to install npm dependencies');
 			}
 		},
 	);
@@ -282,16 +248,17 @@ async function runInitMachine() {
 			getDirContents,
 			runEmptyDirContentsConfirmPrompt,
 			emptyDirContents,
-			runSetWorkerNamePrompt,
-			getTemplate,
-			installDependencies,
 			runSetPackageManagerPrompt,
-			updateWranglerToml,
+			downloadMonorepoPnpmTemplate,
+			installPnpmDependencies,
+			downloadMonorepoNpmTemplate,
+			installNpmDependencies,
 		},
 		guards: {
 			isDirPresent,
 			isDirEmpty,
 			isConfirmedToEmptyDir,
+			isPackageManagerPnpm,
 		},
 		types: {} as {
 			actions: {
@@ -300,7 +267,6 @@ async function runInitMachine() {
 			context: {
 				directory: string;
 				packageManager: 'npm' | 'pnpm';
-				workerName: string;
 			};
 			guards:
 				| { type: 'isDirPresent' }
@@ -309,6 +275,9 @@ async function runInitMachine() {
 				  }
 				| {
 						type: 'isConfirmedToEmptyDir';
+				  }
+				| {
+						type: 'isPackageManagerPnpm';
 				  };
 		},
 	}).createMachine({
@@ -317,7 +286,6 @@ async function runInitMachine() {
 		context: {
 			directory: '',
 			packageManager: 'npm',
-			workerName: '',
 		},
 		states: {
 			runningSetDirPrompt: {
@@ -354,7 +322,7 @@ async function runInitMachine() {
 							},
 						},
 						{
-							target: 'runningSetWorkerNamePrompt',
+							target: 'runningSetPackageManagerPrompt',
 						},
 					],
 					onError: {
@@ -376,7 +344,7 @@ async function runInitMachine() {
 							}),
 							onDone: [
 								{
-									target: '#create.runningSetWorkerNamePrompt',
+									target: '#create.runningSetPackageManagerPrompt',
 									guard: {
 										type: 'isDirEmpty',
 										params: ({ context, event }) => ({
@@ -429,7 +397,7 @@ async function runInitMachine() {
 								directory: context.directory,
 							}),
 							onDone: {
-								target: '#create.runningSetWorkerNamePrompt',
+								target: '#create.runningSetPackageManagerPrompt',
 							},
 							onError: {
 								target: '#create.err',
@@ -447,85 +415,103 @@ async function runInitMachine() {
 					},
 				},
 			},
-			runningSetWorkerNamePrompt: {
-				invoke: {
-					id: 'runningSetWorkerNamePrompt',
-					src: 'runSetWorkerNamePrompt',
-					onDone: {
-						target: 'gettingTemplate',
-						actions: assign({
-							workerName: ({ event }) => event.output,
-						}),
-					},
-					onError: {
-						target: 'err',
-						actions: ({ context, event }) => console.error(event),
-					},
-				},
-			},
-			gettingTemplate: {
-				invoke: {
-					id: 'gettingTemplate',
-					src: 'getTemplate',
-					input: ({ context }) => ({
-						directory: context.directory,
-					}),
-					onDone: {
-						target: 'runningSetPackageManagerPrompt',
-					},
-					onError: {
-						target: 'err',
-						actions: ({ context, event }) => console.error(event),
-					},
-				},
-			},
 			runningSetPackageManagerPrompt: {
 				invoke: {
 					id: 'runningSetPackageManagerPrompt',
 					src: 'runSetPackageManagerPrompt',
-					onDone: {
-						target: 'installingDependencies',
-						actions: assign({
-							packageManager: ({ event }) => event.output,
-						}),
-					},
+					onDone: [
+						{
+							target: '#processingMonorepoPnpmTemplate',
+							guard: {
+								type: 'isPackageManagerPnpm',
+								params: ({ event }) => ({
+									packageManager: event.output,
+								}),
+							},
+						},
+						{
+							target: '#processingMonorepoNpmTemplate',
+						},
+					],
 					onError: {
 						target: 'err',
 						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
-			installingDependencies: {
-				invoke: {
-					id: 'installingDependencies',
-					src: 'installDependencies',
-					input: ({ context }) => ({
-						directory: context.directory,
-						packageManager: context.packageManager,
-					}),
-					onDone: {
-						target: 'updatingWranglerToml',
+			processingMonorepoPnpmTemplate: {
+				id: 'processingMonorepoPnpmTemplate',
+				initial: 'downloadingMonorepoPnpmTemplate',
+				states: {
+					downloadingMonorepoPnpmTemplate: {
+						invoke: {
+							id: 'downloadingMonorepoPnpmTemplate',
+							src: 'downloadMonorepoPnpmTemplate',
+							input: ({ context }) => ({
+								directory: context.directory,
+							}),
+							onDone: {
+								target: 'installingPnpmDependencies',
+							},
+							onError: {
+								target: '#create.err',
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
 					},
-					onError: {
-						target: 'err',
-						actions: ({ context, event }) => console.error(event),
+					installingPnpmDependencies: {
+						invoke: {
+							id: 'installingPnpmDependencies',
+							src: 'installPnpmDependencies',
+							input: ({ context }) => ({
+								directory: context.directory,
+							}),
+							onDone: {
+								target: '#create.ok',
+							},
+							onError: {
+								target: '#create.err',
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
 					},
 				},
 			},
-			updatingWranglerToml: {
-				invoke: {
-					id: 'updatingWranglerToml',
-					src: 'updateWranglerToml',
-					input: ({ context }) => ({
-						directory: context.directory,
-						workerName: context.workerName,
-					}),
-					onDone: {
-						target: 'ok',
+			processingMonorepoNpmTemplate: {
+				id: 'processingMonorepoNpmTemplate',
+				initial: 'downloadingMonorepoNpmTemplate',
+				states: {
+					downloadingMonorepoNpmTemplate: {
+						invoke: {
+							id: 'downloadingMonorepoNpmTemplate',
+							src: 'downloadMonorepoNpmTemplate',
+							input: ({ context }) => ({
+								directory: context.directory,
+							}),
+							onDone: {
+								target: 'installingNpmDependencies',
+							},
+							onError: {
+								target: '#create.err',
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
 					},
-					onError: {
-						target: 'err',
-						actions: ({ context, event }) => console.error(event),
+					installingNpmDependencies: {
+						invoke: {
+							id: 'installingNpmDependencies',
+							src: 'installNpmDependencies',
+							input: ({ context }) => ({
+								directory: context.directory,
+							}),
+							onDone: {
+								target: '#create.ok',
+							},
+							onError: {
+								target: '#create.err',
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
 					},
 				},
 			},
