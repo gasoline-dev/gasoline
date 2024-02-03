@@ -13,9 +13,6 @@ await main();
 async function main() {
 	try {
 		const options = {
-			package: {
-				type: 'string',
-			},
 			help: {
 				type: 'boolean',
 				short: 'h',
