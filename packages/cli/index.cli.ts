@@ -47,40 +47,49 @@ async function main() {
 }
 
 async function runAddCommandMachine(commandUsed: string) {
+	const localTemplatesDirectory = './gasoline/.store/templates';
+
 	const checkIfHiddenGasolineDirExists = fromPromise(async () => {
 		try {
-			console.log('Checking if ./.gasoline/templates directory exists');
-			const isHiddenGasolineDirPresent = await fsIsDirPresent(
-				'.gasoline/templates',
+			console.log(
+				'Checking if ' + localTemplatesDirectory + ' directory exists',
 			);
-			if (!isHiddenGasolineDirPresent) {
-				console.log('./.gasoline/templates directory is not present');
+			const isGasolineStoreTemplatesDirPresent = await fsIsDirPresent(
+				localTemplatesDirectory,
+			);
+			if (!isGasolineStoreTemplatesDirPresent) {
+				console.log(localTemplatesDirectory + ' directory is not present');
 				return false;
 			}
-			console.log('./.gasoline/templates directory is present');
+			console.log(localTemplatesDirectory + ' directory is present');
 			return true;
 		} catch (error) {
 			console.error(error);
 			throw new Error(
-				'Unable to check if ./.gasoline/templates directory exists',
+				'Unable to check if ' + localTemplatesDirectory + ' directory exists',
 			);
 		}
 	});
 
-	const createHiddenGasolineDir = fromPromise(async () => {
+	const createGasolineStoreTemplatesDir = fromPromise(async () => {
 		try {
-			console.log('Creating ./.gasoline/templates directory');
-			await fsPromises.mkdir('.gasoline/templates', {
+			console.log('Creating ' + localTemplatesDirectory + ' directory');
+			await fsPromises.mkdir(localTemplatesDirectory, {
 				recursive: true,
 			});
-			console.log('Created ./.gasoline/templates directory');
+			console.log('Created ' + localTemplatesDirectory + ' directory');
 		} catch (error) {
 			console.error(error);
-			throw new Error('Unable to create ./.gasoline/templates directory');
+			throw new Error(
+				'Unable to create' + localTemplatesDirectory + ' directory',
+			);
 		}
 	});
 
-	const isHiddenGasolineDirPresent = (_, params: { isPresent: boolean }) => {
+	const isGasolineStoreTemplatesDirPresent = (
+		_,
+		params: { isPresent: boolean },
+	) => {
 		return params.isPresent;
 	};
 
@@ -94,7 +103,7 @@ async function runAddCommandMachine(commandUsed: string) {
 					'github:gasoline-dev/gasoline/templates/' + templateName;
 				console.log('Downloading provided template ' + templateSource);
 				await downloadTemplate(templateSource, {
-					dir: './.gasoline/templates/' + templateName,
+					dir: localTemplatesDirectory + '/' + templateName,
 					forceClean: true,
 				});
 				console.log('Downloaded provided template ' + templateSource);
@@ -108,11 +117,11 @@ async function runAddCommandMachine(commandUsed: string) {
 	const machine = setup({
 		actors: {
 			checkIfHiddenGasolineDirExists,
-			createHiddenGasolineDir,
+			createGasolineStoreTemplatesDir,
 			downloadProvidedTemplate,
 		},
 		guards: {
-			isHiddenGasolineDirPresent,
+			isGasolineStoreTemplatesDirPresent,
 		},
 	}).createMachine({
 		id: 'addCommand',
@@ -129,14 +138,14 @@ async function runAddCommandMachine(commandUsed: string) {
 						{
 							target: 'downloadingTemplate',
 							guard: {
-								type: 'isHiddenGasolineDirPresent',
+								type: 'isGasolineStoreTemplatesDirPresent',
 								params: ({ event }) => ({
 									isPresent: event.output,
 								}),
 							},
 						},
 						{
-							target: 'creatingHiddenGasolineDir',
+							target: 'creatingGasolineStoreTemplatesDir',
 						},
 					],
 					onError: {
@@ -145,10 +154,10 @@ async function runAddCommandMachine(commandUsed: string) {
 					},
 				},
 			},
-			creatingHiddenGasolineDir: {
+			creatingGasolineStoreTemplatesDir: {
 				invoke: {
-					id: 'creatingHiddenGasolineDir',
-					src: 'createHiddenGasolineDir',
+					id: 'creatingGasolineStoreTemplatesDir',
+					src: 'createGasolineStoreTemplatesDir',
 					onDone: {
 						target: 'downloadingTemplate',
 					},
