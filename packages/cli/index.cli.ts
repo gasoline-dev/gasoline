@@ -94,7 +94,7 @@ async function runAddCommandMachine(commandUsed: string) {
 					'github:gasoline-dev/gasoline/templates/' + templateName;
 				console.log('Downloading provided template ' + templateSource);
 				await downloadTemplate(templateSource, {
-					dir: input.commandUsed,
+					dir: './.gasoline/templates/' + templateName,
 					forceClean: true,
 				});
 				console.log('Downloaded provided template ' + templateSource);
