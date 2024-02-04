@@ -49,7 +49,7 @@ async function main() {
 async function runAddCommandMachine(commandUsed: string) {
 	const localTemplatesDirectory = './gasoline/.store/templates';
 
-	const checkIfHiddenGasolineDirExists = fromPromise(async () => {
+	const checkIfGasolineStoreTemplatesDirExists = fromPromise(async () => {
 		try {
 			console.log(
 				'Checking if ' + localTemplatesDirectory + ' directory exists',
@@ -116,7 +116,7 @@ async function runAddCommandMachine(commandUsed: string) {
 
 	const machine = setup({
 		actors: {
-			checkIfHiddenGasolineDirExists,
+			checkIfGasolineStoreTemplatesDirExists,
 			createGasolineStoreTemplatesDir,
 			downloadProvidedTemplate,
 		},
@@ -125,15 +125,15 @@ async function runAddCommandMachine(commandUsed: string) {
 		},
 	}).createMachine({
 		id: 'addCommand',
-		initial: 'checkingIfHiddenGasolineDirExists',
+		initial: 'checkingIfGasolineStoreTemplatesDirExists',
 		context: {
 			commandUsed,
 		},
 		states: {
-			checkingIfHiddenGasolineDirExists: {
+			checkingIfGasolineStoreTemplatesDirExists: {
 				invoke: {
-					id: 'checkingIfHiddenGasolineDirExists',
-					src: 'checkIfHiddenGasolineDirExists',
+					id: 'checkingIfGasolineStoreTemplatesDirExists',
+					src: 'checkIfGasolineStoreTemplatesDirExists',
 					onDone: [
 						{
 							target: 'downloadingTemplate',
