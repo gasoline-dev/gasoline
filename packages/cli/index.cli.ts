@@ -90,7 +90,8 @@ async function runAddCommandMachine(commandUsed: string) {
 				const templateName = input.commandUsed
 					.replace('add:', '')
 					.replace(/:/g, '-');
-				const templateSource = 'github:gasoline-dev/templates/' + templateName;
+				const templateSource =
+					'github:gasoline-dev/gasoline/templates/' + templateName;
 				console.log('Downloading provided template ' + templateSource);
 				await downloadTemplate(templateSource, {
 					dir: input.commandUsed,
