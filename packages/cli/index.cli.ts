@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import inquirer from 'inquirer';
-import { createActor, fromPromise, setup, waitFor } from 'xstate';
+import { assign, createActor, fromPromise, setup, waitFor } from 'xstate';
 import fsPromises from 'fs/promises';
 import { downloadTemplate } from 'giget';
+import path from 'node:path';
 
 await main();
 
@@ -47,7 +48,11 @@ async function main() {
 }
 
 async function runAddCommandMachine(commandUsed: string) {
+	const gasolineDirectory = './gasoline';
 	const localTemplatesDirectory = './gasoline/.store/templates';
+	const templateName = commandUsed.replace('add:', '').replace(/:/g, '-');
+	const templateSource =
+		'github:gasoline-dev/gasoline/templates/' + templateName;
 
 	const checkIfGasolineStoreTemplatesDirExists = fromPromise(async () => {
 		try {
@@ -93,23 +98,78 @@ async function runAddCommandMachine(commandUsed: string) {
 		return params.isPresent;
 	};
 
-	const downloadProvidedTemplate = fromPromise(
-		async ({ input }: { input: { commandUsed: string } }) => {
-			try {
-				const templateName = input.commandUsed
-					.replace('add:', '')
-					.replace(/:/g, '-');
-				const templateSource =
-					'github:gasoline-dev/gasoline/templates/' + templateName;
-				console.log('Downloading provided template ' + templateSource);
-				await downloadTemplate(templateSource, {
-					dir: localTemplatesDirectory + '/' + templateName,
-					forceClean: true,
-				});
-				console.log('Downloaded provided template ' + templateSource);
-			} catch (error) {
-				console.error(error);
-				throw new Error('Unable to download provided template');
+	const downloadProvidedTemplate = fromPromise(async () => {
+		try {
+			console.log('Downloading provided template ' + templateSource);
+			await downloadTemplate(templateSource, {
+				dir: localTemplatesDirectory + '/' + templateName,
+				forceClean: true,
+			});
+			console.log('Downloaded provided template ' + templateSource);
+		} catch (error) {
+			console.error(error);
+			throw new Error('Unable to download provided template');
+		}
+	});
+
+	const getDownloadedTemplatePackageJson = fromPromise(async () => {
+		try {
+			console.log('Getting downloaded template package.json');
+			const packageJson = await fsPromises
+				.readFile(
+					path.join(localTemplatesDirectory, templateName, 'package.json'),
+					'utf-8',
+				)
+				.then(JSON.parse);
+			console.log('Got downloaded template package.json');
+			return packageJson;
+		} catch (error) {
+			console.error(error);
+			throw new Error('Unable to get downloaded template package.json');
+		}
+	});
+
+	const getGasolineDirPackageJson = fromPromise(async () => {
+		try {
+			console.log('Getting gasoline directory package.json');
+			const packageJson = await fsPromises
+				.readFile(path.join(gasolineDirectory, 'package.json'), 'utf-8')
+				.then(JSON.parse);
+			console.log('Got gasoline directory package.json');
+			return packageJson;
+		} catch (error) {
+			console.error(error);
+			throw new Error('Unable to get gasoline directory package.json');
+		}
+	});
+
+	const comparePackageJsonVersions = fromPromise(
+		async ({
+			input,
+		}: {
+			input: {
+				downloadedTemplatePackageJson: any;
+				gasolineDirPackageJson: any;
+			};
+		}) => {
+			if (
+				input.downloadedTemplatePackageJson.dependencies &&
+				Object.keys(input.downloadedTemplatePackageJson.dependencies).length >
+					0 &&
+				input.gasolineDirPackageJson.dependencies &&
+				Object.keys(input.gasolineDirPackageJson.dependencies).length > 0
+			) {
+				for (const [key, value] of Object.entries(
+					input.downloadedTemplatePackageJson.dependencies,
+				)) {
+					if (
+						input.gasolineDirPackageJson.dependencies[key] &&
+						input.gasolineDirPackageJson.dependencies[key].split('.')[0] !==
+							value.split('.')[0]
+					) {
+						console.log('different major version of package found');
+					}
+				}
 			}
 		},
 	);
@@ -119,6 +179,8 @@ async function runAddCommandMachine(commandUsed: string) {
 			checkIfGasolineStoreTemplatesDirExists,
 			createGasolineStoreTemplatesDir,
 			downloadProvidedTemplate,
+			getDownloadedTemplatePackageJson,
+			getGasolineDirPackageJson,
 		},
 		guards: {
 			isGasolineStoreTemplatesDirPresent,
@@ -128,6 +190,8 @@ async function runAddCommandMachine(commandUsed: string) {
 		initial: 'checkingIfGasolineStoreTemplatesDirExists',
 		context: {
 			commandUsed,
+			downloadedTemplatePackageJson: undefined,
+			gasolineDirPackageJson: undefined,
 		},
 		states: {
 			checkingIfGasolineStoreTemplatesDirExists: {
@@ -171,11 +235,8 @@ async function runAddCommandMachine(commandUsed: string) {
 				invoke: {
 					id: 'downloadingTemplate',
 					src: 'downloadProvidedTemplate',
-					input: ({ context }) => ({
-						commandUsed: context.commandUsed,
-					}),
 					onDone: {
-						target: 'ok',
+						target: 'processingPackageJsons',
 					},
 					onError: {
 						target: 'err',
@@ -183,6 +244,64 @@ async function runAddCommandMachine(commandUsed: string) {
 					},
 				},
 			},
+			processingPackageJsons: {
+				type: 'parallel',
+				states: {
+					processingDownloadedTemplatePackageJson: {
+						initial: 'gettingPackageJson',
+						states: {
+							gettingPackageJson: {
+								invoke: {
+									id: 'gettingDownloadedTemplatePackageJson',
+									src: 'getDownloadedTemplatePackageJson',
+									onDone: {
+										target: 'gotPackageJson',
+										actions: assign({
+											downloadedTemplatePackageJson: ({ event }) =>
+												event.output,
+										}),
+									},
+									onError: {
+										target: '#addCommand.err',
+										actions: ({ context, event }) => console.error(event),
+									},
+								},
+							},
+							gotPackageJson: {
+								type: 'final',
+							},
+						},
+					},
+					processingGasolineDirPackageJson: {
+						initial: 'gettingPackageJson',
+						states: {
+							gettingPackageJson: {
+								invoke: {
+									id: 'gettingGasolineDirPackageJson',
+									src: 'getGasolineDirPackageJson',
+									onDone: {
+										target: 'gotPackageJson',
+										actions: assign({
+											gasolineDirPackageJson: ({ event }) => event.output,
+										}),
+									},
+									onError: {
+										target: '#addCommand.err',
+										actions: ({ context, event }) => console.error(event),
+									},
+								},
+							},
+							gotPackageJson: {
+								type: 'final',
+							},
+						},
+					},
+				},
+				onDone: {
+					target: 'ok',
+				},
+			},
+			processingPackageJsonVersions: {},
 			ok: {
 				type: 'final',
 			},
