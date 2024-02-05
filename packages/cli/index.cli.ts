@@ -30,7 +30,10 @@ async function main() {
 
 			const isAddCommand = command.includes('add:') ? true : false;
 
-			const availableAddCommands = ['add:cloudflare:worker:api:empty'];
+			const availableAddCommands = [
+				'add:cloudflare:worker:api:empty',
+				'add:cloudflare:worker:api:hono',
+			];
 
 			if (isAddCommand) {
 				if (availableAddCommands.includes(command)) {
@@ -143,7 +146,7 @@ async function runAddCommandMachine(commandUsed: string) {
 		}
 	});
 
-	const comparePackageJsonVersions = fromPromise(
+	const setPackagesWithMajorVersionConflicts = fromPromise(
 		async ({
 			input,
 		}: {
@@ -152,6 +155,7 @@ async function runAddCommandMachine(commandUsed: string) {
 				gasolineDirPackageJson: any;
 			};
 		}) => {
+			const result: string[] = [];
 			if (
 				input.downloadedTemplatePackageJson.dependencies &&
 				Object.keys(input.downloadedTemplatePackageJson.dependencies).length >
@@ -159,20 +163,55 @@ async function runAddCommandMachine(commandUsed: string) {
 				input.gasolineDirPackageJson.dependencies &&
 				Object.keys(input.gasolineDirPackageJson.dependencies).length > 0
 			) {
-				for (const [key, value] of Object.entries(
-					input.downloadedTemplatePackageJson.dependencies,
-				)) {
+				for (const downloadedTemplateDep in input.downloadedTemplatePackageJson
+					.dependencies) {
 					if (
-						input.gasolineDirPackageJson.dependencies[key] &&
-						input.gasolineDirPackageJson.dependencies[key].split('.')[0] !==
-							value.split('.')[0]
+						input.gasolineDirPackageJson.dependencies[downloadedTemplateDep] &&
+						input.gasolineDirPackageJson.dependencies[
+							downloadedTemplateDep
+						].split('.')[0] !== downloadedTemplateDep.split('.')[0]
 					) {
-						console.log('different major version of package found');
+						result.push(downloadedTemplateDep);
 					}
 				}
 			}
+			return result;
 		},
 	);
+
+	const isThereAMajorVersionPackageConflict = (
+		_,
+		params: { packagesWithMajorVersionConflicts: string[] },
+	) => {
+		return params.packagesWithMajorVersionConflicts.length > 0;
+	};
+
+	const runResolveMajorVersionPackageConflictPrompt = fromPromise(async () => {
+		const answers = await inquirer.prompt([
+			{
+				type: 'list',
+				name: 'resolveMajorVersionPackageConflict',
+				message:
+					'There are major version package conflicts. What would you like to do?',
+				choices: ['Resolve', 'Use Alias', 'Cancel'],
+				default: 'Cancel',
+			},
+		]);
+
+		switch (answers.resolveMajorVersionPackageConflict) {
+			case 'Resolve':
+				console.log('Resolving major version package conflicts');
+				break;
+			case 'Use Alias':
+				console.log('Using alias to resolve major version package conflicts');
+				break;
+			default:
+				console.log('Not resolving major version package conflicts');
+				break;
+		}
+
+		return answers.resolveMajorVersionPackageConflict;
+	});
 
 	const machine = setup({
 		actors: {
@@ -181,9 +220,12 @@ async function runAddCommandMachine(commandUsed: string) {
 			downloadProvidedTemplate,
 			getDownloadedTemplatePackageJson,
 			getGasolineDirPackageJson,
+			setPackagesWithMajorVersionConflicts,
+			runResolveMajorVersionPackageConflictPrompt,
 		},
 		guards: {
 			isGasolineStoreTemplatesDirPresent,
+			isThereAMajorVersionPackageConflict,
 		},
 	}).createMachine({
 		id: 'addCommand',
@@ -192,6 +234,7 @@ async function runAddCommandMachine(commandUsed: string) {
 			commandUsed,
 			downloadedTemplatePackageJson: undefined,
 			gasolineDirPackageJson: undefined,
+			packagesWithMajorVersionConflicts: [],
 		},
 		states: {
 			checkingIfGasolineStoreTemplatesDirExists: {
@@ -298,10 +341,56 @@ async function runAddCommandMachine(commandUsed: string) {
 					},
 				},
 				onDone: {
-					target: 'ok',
+					target: 'processingPackageJsonVersions',
 				},
 			},
-			processingPackageJsonVersions: {},
+			processingPackageJsonVersions: {
+				initial: 'settingPackagesWithMajorVersionConflicts',
+				states: {
+					settingPackagesWithMajorVersionConflicts: {
+						invoke: {
+							id: 'settingPackagesWithMajorVersionConflicts',
+							src: 'setPackagesWithMajorVersionConflicts',
+							input: ({ context }) => ({
+								downloadedTemplatePackageJson:
+									context.downloadedTemplatePackageJson,
+								gasolineDirPackageJson: context.gasolineDirPackageJson,
+							}),
+							onDone: [
+								{
+									target: 'runResolveMajorVersionPackageConflictPrompt',
+									guard: {
+										type: 'isThereAMajorVersionPackageConflict',
+										params: ({ event }) => ({
+											packagesWithMajorVersionConflicts: event.output,
+										}),
+									},
+								},
+								{
+									target: '#addCommand.ok',
+								},
+							],
+							onError: {
+								target: '#addCommand.err',
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
+					},
+					runResolveMajorVersionPackageConflictPrompt: {
+						invoke: {
+							id: 'runResolveMajorVersionPackageConflictPrompt',
+							src: 'runResolveMajorVersionPackageConflictPrompt',
+							onDone: {
+								target: '#addCommand.ok',
+							},
+							onError: {
+								target: '#addCommand.err',
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
+					},
+				},
+			},
 			ok: {
 				type: 'final',
 			},
