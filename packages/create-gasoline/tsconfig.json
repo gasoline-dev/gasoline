@@ -7,8 +7,9 @@
 		"module": "nodenext",
 		"noImplicitAny": true,
 		"outDir": "dist",
+		"skipLibCheck": true,
+		"strictNullChecks": true,
 		"target": "ES2022",
-		"strictNullChecks": true
 	},
 	"include": ["index.create.ts", "index.create.d.ts"]
 }

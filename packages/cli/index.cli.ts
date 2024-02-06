@@ -147,16 +147,16 @@ async function runAddCommandMachine(commandUsed: string) {
 			input,
 		}: {
 			input: {
-				downloadedTemplatePackageJson: any;
-				gasolineDirPackageJson: any;
+				downloadedTemplatePackageJson: Context["downloadedTemplatePackageJson"];
+				gasolineDirPackageJson: Context["gasolineDirPackageJson"];
 			};
 		}) => {
 			const result: string[] = [];
 			if (
-				input.downloadedTemplatePackageJson.dependencies &&
+				input.downloadedTemplatePackageJson?.dependencies &&
 				Object.keys(input.downloadedTemplatePackageJson.dependencies).length >
 					0 &&
-				input.gasolineDirPackageJson.dependencies &&
+				input.gasolineDirPackageJson?.dependencies &&
 				Object.keys(input.gasolineDirPackageJson.dependencies).length > 0
 			) {
 				for (const downloadedTemplateDep in input.downloadedTemplatePackageJson
@@ -210,6 +210,18 @@ async function runAddCommandMachine(commandUsed: string) {
 		return answers.resolveMajorVersionPackageConflict;
 	});
 
+	type Context = {
+		commandUsed: string;
+		downloadedTemplatePackageJson: undefined | PackageJson;
+		gasolineDirPackageJson: undefined | PackageJson;
+		packagesWithMajorVersionConflicts: string[];
+	};
+
+	type PackageJson = {
+		dependencies?: { [key: string]: string };
+		devDependencies?: { [key: string]: string };
+	};
+
 	const machine = setup({
 		actors: {
 			checkIfGasolineStoreTemplatesDirExists,
@@ -224,8 +236,18 @@ async function runAddCommandMachine(commandUsed: string) {
 			isGasolineStoreTemplatesDirPresent,
 			isThereAMajorVersionPackageConflict,
 		},
+		types: {} as {
+			context: Context;
+			guards:
+				| {
+						type: "isGasolineStoreTemplatesDirPresent";
+				  }
+				| {
+						type: "isThereAMajorVersionPackageConflict";
+				  };
+		},
 	}).createMachine({
-		id: "addCommand",
+		id: "root",
 		initial: "checkingIfGasolineStoreTemplatesDirExists",
 		context: {
 			commandUsed,
@@ -302,7 +324,7 @@ async function runAddCommandMachine(commandUsed: string) {
 										}),
 									},
 									onError: {
-										target: "#addCommand.err",
+										target: "#root.err",
 										actions: ({ context, event }) => console.error(event),
 									},
 								},
@@ -326,7 +348,7 @@ async function runAddCommandMachine(commandUsed: string) {
 										}),
 									},
 									onError: {
-										target: "#addCommand.err",
+										target: "#root.err",
 										actions: ({ context, event }) => console.error(event),
 									},
 								},
@@ -364,11 +386,11 @@ async function runAddCommandMachine(commandUsed: string) {
 									},
 								},
 								{
-									target: "#addCommand.ok",
+									target: "#root.ok",
 								},
 							],
 							onError: {
-								target: "#addCommand.err",
+								target: "#root.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
@@ -378,10 +400,10 @@ async function runAddCommandMachine(commandUsed: string) {
 							id: "runResolveMajorVersionPackageConflictPrompt",
 							src: "runResolveMajorVersionPackageConflictPrompt",
 							onDone: {
-								target: "#addCommand.ok",
+								target: "#root.ok",
 							},
 							onError: {
-								target: "#addCommand.err",
+								target: "#root.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},

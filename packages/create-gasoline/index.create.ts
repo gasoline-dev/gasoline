@@ -28,7 +28,7 @@ async function main() {
 			parsedArgs.positionals.length === 0 &&
 			Object.keys(parsedArgs.values).length === 0
 		) {
-			await runInitMachine();
+			await createProject();
 		} else {
 			logHelp();
 			process.exit(0);
@@ -38,17 +38,17 @@ async function main() {
 	}
 }
 
-async function runInitMachine() {
+async function createProject() {
 	const runSetDirPrompt = fromPromise(async () => {
 		try {
-			const { directoryPath } = await inquirer.prompt([
+			const { dirPath } = await inquirer.prompt([
 				{
-					name: "directoryPath",
+					name: "dirPath",
 					message: "Directory path:",
 					default: "./example",
 				},
 			]);
-			return directoryPath;
+			return dirPath;
 		} catch (error) {
 			console.error(error);
 			throw new Error("Unable to set directory path");
@@ -120,7 +120,7 @@ async function runInitMachine() {
 	};
 
 	const emptyDirContents = fromPromise(
-		async ({ input }: { input: { directory: string } }) => {
+		async ({ input }: { input: { directory: Context["directory"] } }) => {
 			try {
 				console.log("Emptying directory contents");
 				const contents = await fsPromises.readdir(input.directory);
@@ -166,13 +166,13 @@ async function runInitMachine() {
 	const isPackageManagerPnpm = (
 		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		_: any,
-		params: { packageManager: "npm" | "pnpm" },
+		params: { packageManager: Context["packageManager"] },
 	) => {
 		return params.packageManager === "pnpm";
 	};
 
 	const downloadMonorepoPnpmTemplate = fromPromise(
-		async ({ input }: { input: { directory: string } }) => {
+		async ({ input }: { input: { directory: Context["directory"] } }) => {
 			try {
 				console.log("Downloading monorepo pnpm template");
 				await downloadTemplate(
@@ -190,7 +190,7 @@ async function runInitMachine() {
 	);
 
 	const installPnpmDependencies = fromPromise(
-		async ({ input }: { input: { directory: string } }) => {
+		async ({ input }: { input: { directory: Context["directory"] } }) => {
 			try {
 				console.log("Installing pnpm dependencies");
 				const promisifiedExec = promisify(exec);
@@ -206,7 +206,7 @@ async function runInitMachine() {
 	);
 
 	const downloadMonorepoNpmTemplate = fromPromise(
-		async ({ input }: { input: { directory: string } }) => {
+		async ({ input }: { input: { directory: Context["directory"] } }) => {
 			try {
 				console.log("Downloading monorepo npm template");
 				await downloadTemplate(
@@ -224,7 +224,7 @@ async function runInitMachine() {
 	);
 
 	const installNpmDependencies = fromPromise(
-		async ({ input }: { input: { directory: string } }) => {
+		async ({ input }: { input: { directory: Context["directory"] } }) => {
 			try {
 				console.log("Installing npm dependencies");
 				const promisifiedExec = promisify(exec);
@@ -238,6 +238,11 @@ async function runInitMachine() {
 			}
 		},
 	);
+
+	type Context = {
+		directory: string;
+		packageManager: "npm" | "pnpm";
+	};
 
 	const machine = setup({
 		actions: {
@@ -265,10 +270,7 @@ async function runInitMachine() {
 			actions: {
 				type: "logEmptyDirIsRequiredMessage";
 			};
-			context: {
-				directory: string;
-				packageManager: "npm" | "pnpm";
-			};
+			context: Context;
 			guards:
 				| { type: "isDirPresent" }
 				| {
@@ -282,7 +284,7 @@ async function runInitMachine() {
 				  };
 		},
 	}).createMachine({
-		id: "create",
+		id: "root",
 		initial: "runningSetDirPrompt",
 		context: {
 			directory: "",
@@ -327,7 +329,7 @@ async function runInitMachine() {
 						},
 					],
 					onError: {
-						target: "#create.err",
+						target: "#root.err",
 						actions: ({ context, event }) => console.error(event),
 					},
 				},
@@ -345,7 +347,7 @@ async function runInitMachine() {
 							}),
 							onDone: [
 								{
-									target: "#create.runningSetPackageManagerPrompt",
+									target: "#root.runningSetPackageManagerPrompt",
 									guard: {
 										type: "isDirEmpty",
 										params: ({ context, event }) => ({
@@ -358,7 +360,7 @@ async function runInitMachine() {
 								},
 							],
 							onError: {
-								target: "#create.err",
+								target: "#root.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
@@ -385,7 +387,7 @@ async function runInitMachine() {
 								},
 							],
 							onError: {
-								target: "#create.err",
+								target: "#root.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
@@ -398,10 +400,10 @@ async function runInitMachine() {
 								directory: context.directory,
 							}),
 							onDone: {
-								target: "#create.runningSetPackageManagerPrompt",
+								target: "#root.runningSetPackageManagerPrompt",
 							},
 							onError: {
-								target: "#create.err",
+								target: "#root.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
@@ -411,7 +413,7 @@ async function runInitMachine() {
 							type: "logEmptyDirIsRequiredMessage",
 						},
 						always: {
-							target: "#create.ok",
+							target: "#root.ok",
 						},
 					},
 				},
@@ -455,7 +457,7 @@ async function runInitMachine() {
 								target: "installingPnpmDependencies",
 							},
 							onError: {
-								target: "#create.err",
+								target: "#root.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
@@ -468,10 +470,10 @@ async function runInitMachine() {
 								directory: context.directory,
 							}),
 							onDone: {
-								target: "#create.ok",
+								target: "#root.ok",
 							},
 							onError: {
-								target: "#create.err",
+								target: "#root.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
@@ -493,7 +495,7 @@ async function runInitMachine() {
 								target: "installingNpmDependencies",
 							},
 							onError: {
-								target: "#create.err",
+								target: "#root.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
@@ -506,10 +508,10 @@ async function runInitMachine() {
 								directory: context.directory,
 							}),
 							onDone: {
-								target: "#create.ok",
+								target: "#root.ok",
 							},
 							onError: {
-								target: "#create.err",
+								target: "#root.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
