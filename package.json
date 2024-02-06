@@ -13,10 +13,10 @@
 		"release": "pnpm run build && changeset publish"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "1.5.3",
 		"@changesets/cli": "^2.27.1",
 		"@nx/js": "^17.2.8",
 		"nx": "^17.2.8",
-		"prettier": "^3.1.0",
 		"tsup": "^8.0.1",
 		"typescript": "^5.3.2"
 	}
