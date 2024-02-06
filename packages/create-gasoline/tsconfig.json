@@ -5,6 +5,7 @@
 		"declarationMap": true,
 		"lib": ["ES2022"],
 		"module": "nodenext",
+		"noImplicitAny": true,
 		"outDir": "dist",
 		"target": "ES2022",
 		"strictNullChecks": true
