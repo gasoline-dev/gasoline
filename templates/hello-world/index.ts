@@ -32,6 +32,6 @@ export default {
 		env: Env,
 		ctx: ExecutionContext,
 	): Promise<Response> {
-		return new Response('Hello, World!');
+		return new Response("Hello, World!");
 	},
 };

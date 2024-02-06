@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import path from 'node:path';
-import { assign, createActor, fromPromise, setup, waitFor } from 'xstate';
-import fsPromises from 'fs/promises';
-import inquirer from 'inquirer';
-import { promisify } from 'node:util';
-import { exec } from 'node:child_process';
-import { parseArgs } from 'node:util';
-import { downloadTemplate } from 'giget';
+import path from "node:path";
+import { assign, createActor, fromPromise, setup, waitFor } from "xstate";
+import fsPromises from "fs/promises";
+import inquirer from "inquirer";
+import { promisify } from "node:util";
+import { exec } from "node:child_process";
+import { parseArgs } from "node:util";
+import { downloadTemplate } from "giget";
 
 await main();
 
@@ -14,8 +14,8 @@ async function main() {
 	try {
 		const options = {
 			help: {
-				type: 'boolean',
-				short: 'h',
+				type: "boolean",
+				short: "h",
 			},
 		};
 
@@ -43,32 +43,32 @@ async function runInitMachine() {
 		try {
 			const { directoryPath } = await inquirer.prompt([
 				{
-					name: 'directoryPath',
-					message: 'Directory path:',
-					default: './example',
+					name: "directoryPath",
+					message: "Directory path:",
+					default: "./example",
 				},
 			]);
 			return directoryPath;
 		} catch (error) {
 			console.error(error);
-			throw new Error('Unable to set directory path');
+			throw new Error("Unable to set directory path");
 		}
 	});
 
 	const checkIfDirIsPresent = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
-			console.log('Checking if directory is present');
+			console.log("Checking if directory is present");
 			try {
 				const isDirPresent = await fsIsDirPresent(input.directory);
 				if (!isDirPresent) {
-					console.log('Directory is not present');
+					console.log("Directory is not present");
 					return false;
 				}
-				console.log('Directory is present');
+				console.log("Directory is present");
 				return true;
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to check if directory is present');
+				throw new Error("Unable to check if directory is present");
 			}
 		},
 	);
@@ -80,13 +80,13 @@ async function runInitMachine() {
 	const getDirContents = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
 			try {
-				console.log('Getting directory contents');
+				console.log("Getting directory contents");
 				const contents = await fsPromises.readdir(input.directory);
-				console.log('Got directory contents');
+				console.log("Got directory contents");
 				return contents;
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to get directory contents');
+				throw new Error("Unable to get directory contents");
 			}
 		},
 	);
@@ -99,16 +99,16 @@ async function runInitMachine() {
 		try {
 			const { confirm } = await inquirer.prompt([
 				{
-					type: 'confirm',
-					name: 'confirm',
-					message: 'Directory is not empty. Empty it?',
+					type: "confirm",
+					name: "confirm",
+					message: "Directory is not empty. Empty it?",
 					default: false,
 				},
 			]);
 			return confirm;
 		} catch (error) {
 			console.error(error);
-			throw new Error('Unable to confirm if directory should be emptied');
+			throw new Error("Unable to confirm if directory should be emptied");
 		}
 	});
 
@@ -119,7 +119,7 @@ async function runInitMachine() {
 	const emptyDirContents = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
 			try {
-				console.log('Emptying directory contents');
+				console.log("Emptying directory contents");
 				const contents = await fsPromises.readdir(input.directory);
 				await Promise.all(
 					contents.map((file) => {
@@ -128,17 +128,17 @@ async function runInitMachine() {
 						});
 					}),
 				);
-				console.log('Emptied directory contents');
+				console.log("Emptied directory contents");
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to empty directory contents');
+				throw new Error("Unable to empty directory contents");
 			}
 		},
 	);
 
 	function logEmptyDirIsRequiredMessage() {
 		console.log(
-			'create-gasoline is for new projects and requires an empty directory',
+			"create-gasoline is for new projects and requires an empty directory",
 		);
 	}
 
@@ -146,41 +146,41 @@ async function runInitMachine() {
 		try {
 			const { packageManager } = await inquirer.prompt([
 				{
-					type: 'list',
-					name: 'packageManager',
-					message: 'Package manager:',
-					choices: ['npm', 'pnpm'],
-					default: 'npm',
+					type: "list",
+					name: "packageManager",
+					message: "Package manager:",
+					choices: ["npm", "pnpm"],
+					default: "npm",
 				},
 			]);
 			return packageManager;
 		} catch (error) {
 			console.error(error);
-			throw new Error('Unable to set package manager');
+			throw new Error("Unable to set package manager");
 		}
 	});
 
 	const isPackageManagerPnpm = (
 		_,
-		params: { packageManager: 'npm' | 'pnpm' },
+		params: { packageManager: "npm" | "pnpm" },
 	) => {
-		return params.packageManager === 'pnpm';
+		return params.packageManager === "pnpm";
 	};
 
 	const downloadMonorepoPnpmTemplate = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
 			try {
-				console.log('Downloading monorepo pnpm template');
+				console.log("Downloading monorepo pnpm template");
 				await downloadTemplate(
-					'github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-pnpm',
+					"github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-pnpm",
 					{
 						dir: input.directory,
 					},
 				);
-				console.log('Downloaded monorepo pnpm template');
+				console.log("Downloaded monorepo pnpm template");
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to download monorepo pnpm template');
+				throw new Error("Unable to download monorepo pnpm template");
 			}
 		},
 	);
@@ -188,15 +188,15 @@ async function runInitMachine() {
 	const installPnpmDependencies = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
 			try {
-				console.log('Installing pnpm dependencies');
+				console.log("Installing pnpm dependencies");
 				const promisifiedExec = promisify(exec);
-				await promisifiedExec('pnpm install', {
+				await promisifiedExec("pnpm install", {
 					cwd: path.resolve(input.directory),
 				});
-				console.log('Installed pnpm dependencies');
+				console.log("Installed pnpm dependencies");
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to install pnpm dependencies');
+				throw new Error("Unable to install pnpm dependencies");
 			}
 		},
 	);
@@ -204,17 +204,17 @@ async function runInitMachine() {
 	const downloadMonorepoNpmTemplate = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
 			try {
-				console.log('Downloading monorepo npm template');
+				console.log("Downloading monorepo npm template");
 				await downloadTemplate(
-					'github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-npm',
+					"github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-npm",
 					{
 						dir: input.directory,
 					},
 				);
-				console.log('Downloaded monorepo npm template');
+				console.log("Downloaded monorepo npm template");
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to download monorepo npm template');
+				throw new Error("Unable to download monorepo npm template");
 			}
 		},
 	);
@@ -222,15 +222,15 @@ async function runInitMachine() {
 	const installNpmDependencies = fromPromise(
 		async ({ input }: { input: { directory: string } }) => {
 			try {
-				console.log('Installing npm dependencies');
+				console.log("Installing npm dependencies");
 				const promisifiedExec = promisify(exec);
-				await promisifiedExec('npm install', {
+				await promisifiedExec("npm install", {
 					cwd: path.resolve(input.directory),
 				});
-				console.log('Installed npm dependencies');
+				console.log("Installed npm dependencies");
 			} catch (error) {
 				console.error(error);
-				throw new Error('Unable to install npm dependencies');
+				throw new Error("Unable to install npm dependencies");
 			}
 		},
 	);
@@ -259,215 +259,215 @@ async function runInitMachine() {
 		},
 		types: {} as {
 			actions: {
-				type: 'logEmptyDirIsRequiredMessage';
+				type: "logEmptyDirIsRequiredMessage";
 			};
 			context: {
 				directory: string;
-				packageManager: 'npm' | 'pnpm';
+				packageManager: "npm" | "pnpm";
 			};
 			guards:
-				| { type: 'isDirPresent' }
+				| { type: "isDirPresent" }
 				| {
-						type: 'isDirEmpty';
+						type: "isDirEmpty";
 				  }
 				| {
-						type: 'isConfirmedToEmptyDir';
+						type: "isConfirmedToEmptyDir";
 				  }
 				| {
-						type: 'isPackageManagerPnpm';
+						type: "isPackageManagerPnpm";
 				  };
 		},
 	}).createMachine({
-		id: 'create',
-		initial: 'runningSetDirPrompt',
+		id: "create",
+		initial: "runningSetDirPrompt",
 		context: {
-			directory: '',
-			packageManager: 'npm',
+			directory: "",
+			packageManager: "npm",
 		},
 		states: {
 			runningSetDirPrompt: {
 				invoke: {
-					id: 'runningSetDirPrompt',
-					src: 'runSetDirPrompt',
+					id: "runningSetDirPrompt",
+					src: "runSetDirPrompt",
 					onDone: {
-						target: 'checkingIfDirIsPresent',
+						target: "checkingIfDirIsPresent",
 						actions: assign({
 							directory: ({ event }) => event.output,
 						}),
 					},
 					onError: {
-						target: 'err',
+						target: "err",
 						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
 			checkingIfDirIsPresent: {
 				invoke: {
-					id: 'checkingIfDirIsPresent',
-					src: 'checkIfDirIsPresent',
+					id: "checkingIfDirIsPresent",
+					src: "checkIfDirIsPresent",
 					input: ({ context }) => ({
 						directory: context.directory,
 					}),
 					onDone: [
 						{
-							target: '#processingDirContents',
+							target: "#processingDirContents",
 							guard: {
-								type: 'isDirPresent',
+								type: "isDirPresent",
 								params: ({ event }) => ({
 									isPresent: event.output,
 								}),
 							},
 						},
 						{
-							target: 'runningSetPackageManagerPrompt',
+							target: "runningSetPackageManagerPrompt",
 						},
 					],
 					onError: {
-						target: '#create.err',
+						target: "#create.err",
 						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
 			processingDirContents: {
-				id: 'processingDirContents',
-				initial: 'gettingDirContents',
+				id: "processingDirContents",
+				initial: "gettingDirContents",
 				states: {
 					gettingDirContents: {
 						invoke: {
-							id: 'gettingDirContents',
-							src: 'getDirContents',
+							id: "gettingDirContents",
+							src: "getDirContents",
 							input: ({ context }) => ({
 								directory: context.directory,
 							}),
 							onDone: [
 								{
-									target: '#create.runningSetPackageManagerPrompt',
+									target: "#create.runningSetPackageManagerPrompt",
 									guard: {
-										type: 'isDirEmpty',
+										type: "isDirEmpty",
 										params: ({ context, event }) => ({
 											contents: event.output,
 										}),
 									},
 								},
 								{
-									target: 'runningEmptyDirContentsConfirmPrompt',
+									target: "runningEmptyDirContentsConfirmPrompt",
 								},
 							],
 							onError: {
-								target: '#create.err',
+								target: "#create.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
 					},
 					runningEmptyDirContentsConfirmPrompt: {
 						invoke: {
-							id: 'runningEmptyDirContentsConfirmPrompt',
-							src: 'runEmptyDirContentsConfirmPrompt',
+							id: "runningEmptyDirContentsConfirmPrompt",
+							src: "runEmptyDirContentsConfirmPrompt",
 							input: ({ context }) => ({
 								directory: context.directory,
 							}),
 							onDone: [
 								{
-									target: 'emptyingDirContents',
+									target: "emptyingDirContents",
 									guard: {
-										type: 'isConfirmedToEmptyDir',
+										type: "isConfirmedToEmptyDir",
 										params: ({ event }) => ({
 											confirm: event.output,
 										}),
 									},
 								},
 								{
-									target: 'emptyDirRequired',
+									target: "emptyDirRequired",
 								},
 							],
 							onError: {
-								target: '#create.err',
+								target: "#create.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
 					},
 					emptyingDirContents: {
 						invoke: {
-							id: 'emptyingDirContents',
-							src: 'emptyDirContents',
+							id: "emptyingDirContents",
+							src: "emptyDirContents",
 							input: ({ context }) => ({
 								directory: context.directory,
 							}),
 							onDone: {
-								target: '#create.runningSetPackageManagerPrompt',
+								target: "#create.runningSetPackageManagerPrompt",
 							},
 							onError: {
-								target: '#create.err',
+								target: "#create.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
 					},
 					emptyDirRequired: {
 						entry: {
-							type: 'logEmptyDirIsRequiredMessage',
+							type: "logEmptyDirIsRequiredMessage",
 						},
 						always: {
-							target: '#create.ok',
+							target: "#create.ok",
 						},
 					},
 				},
 			},
 			runningSetPackageManagerPrompt: {
 				invoke: {
-					id: 'runningSetPackageManagerPrompt',
-					src: 'runSetPackageManagerPrompt',
+					id: "runningSetPackageManagerPrompt",
+					src: "runSetPackageManagerPrompt",
 					onDone: [
 						{
-							target: '#processingMonorepoPnpmTemplate',
+							target: "#processingMonorepoPnpmTemplate",
 							guard: {
-								type: 'isPackageManagerPnpm',
+								type: "isPackageManagerPnpm",
 								params: ({ event }) => ({
 									packageManager: event.output,
 								}),
 							},
 						},
 						{
-							target: '#processingMonorepoNpmTemplate',
+							target: "#processingMonorepoNpmTemplate",
 						},
 					],
 					onError: {
-						target: 'err',
+						target: "err",
 						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
 			processingMonorepoPnpmTemplate: {
-				id: 'processingMonorepoPnpmTemplate',
-				initial: 'downloadingMonorepoPnpmTemplate',
+				id: "processingMonorepoPnpmTemplate",
+				initial: "downloadingMonorepoPnpmTemplate",
 				states: {
 					downloadingMonorepoPnpmTemplate: {
 						invoke: {
-							id: 'downloadingMonorepoPnpmTemplate',
-							src: 'downloadMonorepoPnpmTemplate',
+							id: "downloadingMonorepoPnpmTemplate",
+							src: "downloadMonorepoPnpmTemplate",
 							input: ({ context }) => ({
 								directory: context.directory,
 							}),
 							onDone: {
-								target: 'installingPnpmDependencies',
+								target: "installingPnpmDependencies",
 							},
 							onError: {
-								target: '#create.err',
+								target: "#create.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
 					},
 					installingPnpmDependencies: {
 						invoke: {
-							id: 'installingPnpmDependencies',
-							src: 'installPnpmDependencies',
+							id: "installingPnpmDependencies",
+							src: "installPnpmDependencies",
 							input: ({ context }) => ({
 								directory: context.directory,
 							}),
 							onDone: {
-								target: '#create.ok',
+								target: "#create.ok",
 							},
 							onError: {
-								target: '#create.err',
+								target: "#create.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
@@ -475,37 +475,37 @@ async function runInitMachine() {
 				},
 			},
 			processingMonorepoNpmTemplate: {
-				id: 'processingMonorepoNpmTemplate',
-				initial: 'downloadingMonorepoNpmTemplate',
+				id: "processingMonorepoNpmTemplate",
+				initial: "downloadingMonorepoNpmTemplate",
 				states: {
 					downloadingMonorepoNpmTemplate: {
 						invoke: {
-							id: 'downloadingMonorepoNpmTemplate',
-							src: 'downloadMonorepoNpmTemplate',
+							id: "downloadingMonorepoNpmTemplate",
+							src: "downloadMonorepoNpmTemplate",
 							input: ({ context }) => ({
 								directory: context.directory,
 							}),
 							onDone: {
-								target: 'installingNpmDependencies',
+								target: "installingNpmDependencies",
 							},
 							onError: {
-								target: '#create.err',
+								target: "#create.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
 					},
 					installingNpmDependencies: {
 						invoke: {
-							id: 'installingNpmDependencies',
-							src: 'installNpmDependencies',
+							id: "installingNpmDependencies",
+							src: "installNpmDependencies",
 							input: ({ context }) => ({
 								directory: context.directory,
 							}),
 							onDone: {
-								target: '#create.ok',
+								target: "#create.ok",
 							},
 							onError: {
-								target: '#create.err',
+								target: "#create.err",
 								actions: ({ context, event }) => console.error(event),
 							},
 						},
@@ -513,10 +513,10 @@ async function runInitMachine() {
 				},
 			},
 			ok: {
-				type: 'final',
+				type: "final",
 			},
 			err: {
-				type: 'final',
+				type: "final",
 			},
 		},
 	});
@@ -525,14 +525,14 @@ async function runInitMachine() {
 
 	const snapshot = await waitFor(
 		actor,
-		(snapshot) => snapshot.matches('ok') || snapshot.matches('err'),
+		(snapshot) => snapshot.matches("ok") || snapshot.matches("err"),
 		{
 			timeout: 3600_000,
 		},
 	);
 
-	if (snapshot.value === 'err') {
-		throw new Error('Unable to create project');
+	if (snapshot.value === "err") {
+		throw new Error("Unable to create project");
 	}
 
 	process.exit(0);
