@@ -26,6 +26,7 @@
 		"dev": "tsup index.cli.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --sourcemap"
 	},
 	"devDependencies": {
+		"@types/inquirer": "^9.0.7",
 		"@types/node": "^18.0.0"
 	},
 	"dependencies": {

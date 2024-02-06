@@ -17,12 +17,12 @@ async function main() {
 				type: "boolean",
 				short: "h",
 			},
-		};
+		} as const;
 
 		const parsedArgs = parseArgs({
 			allowPositionals: true,
 			options,
-		} as any);
+		});
 
 		if (
 			parsedArgs.positionals.length === 0 &&
@@ -73,7 +73,8 @@ async function runInitMachine() {
 		},
 	);
 
-	const isDirPresent = (_, params: { isPresent: boolean }) => {
+	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+	const isDirPresent = (_: any, params: { isPresent: boolean }) => {
 		return params.isPresent;
 	};
 
@@ -91,7 +92,8 @@ async function runInitMachine() {
 		},
 	);
 
-	const isDirEmpty = (_, params: { contents: string[] }) => {
+	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+	const isDirEmpty = (_: any, params: { contents: string[] }) => {
 		return params.contents.length === 0;
 	};
 
@@ -112,7 +114,8 @@ async function runInitMachine() {
 		}
 	});
 
-	const isConfirmedToEmptyDir = (_, params: { confirm: boolean }) => {
+	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+	const isConfirmedToEmptyDir = (_: any, params: { confirm: boolean }) => {
 		return params.confirm;
 	};
 
@@ -161,7 +164,8 @@ async function runInitMachine() {
 	});
 
 	const isPackageManagerPnpm = (
-		_,
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		_: any,
 		params: { packageManager: "npm" | "pnpm" },
 	) => {
 		return params.packageManager === "pnpm";
