@@ -18,14 +18,14 @@ async function main() {
 				type: "boolean",
 				short: "h",
 			},
-		};
+		} as const;
 
 		const parsedArgs = parseArgs({
 			allowPositionals: true,
 			options,
-		} as any);
+		});
 
-		if (parsedArgs.positionals && parsedArgs.positionals[0]) {
+		if (parsedArgs.positionals?.[0]) {
 			const command = parsedArgs.positionals[0];
 
 			const isAddCommand = command.includes("add:") ? true : false;
@@ -39,7 +39,7 @@ async function main() {
 				if (availableAddCommands.includes(command)) {
 					await runAddCommandMachine(command);
 				} else {
-					console.log("Command " + command + " not found");
+					console.log(`Command ${command} not found`);
 				}
 			}
 		} else {
@@ -54,48 +54,44 @@ async function runAddCommandMachine(commandUsed: string) {
 	const gasolineDirectory = "./gasoline";
 	const localTemplatesDirectory = "./gasoline/.store/templates";
 	const templateName = commandUsed.replace("add:", "").replace(/:/g, "-");
-	const templateSource =
-		"github:gasoline-dev/gasoline/templates/" + templateName;
+	const templateSource = `github:gasoline-dev/gasoline/templates/${templateName}`;
 
 	const checkIfGasolineStoreTemplatesDirExists = fromPromise(async () => {
 		try {
-			console.log(
-				"Checking if " + localTemplatesDirectory + " directory exists",
-			);
+			console.log(`Checking if ${localTemplatesDirectory} directory exists`);
 			const isGasolineStoreTemplatesDirPresent = await fsIsDirPresent(
 				localTemplatesDirectory,
 			);
 			if (!isGasolineStoreTemplatesDirPresent) {
-				console.log(localTemplatesDirectory + " directory is not present");
+				console.log(`${localTemplatesDirectory} directory is not present`);
 				return false;
 			}
-			console.log(localTemplatesDirectory + " directory is present");
+			console.log(`${localTemplatesDirectory} directory is present`);
 			return true;
 		} catch (error) {
 			console.error(error);
 			throw new Error(
-				"Unable to check if " + localTemplatesDirectory + " directory exists",
+				`Unable to check if ${localTemplatesDirectory} directory exists`,
 			);
 		}
 	});
 
 	const createGasolineStoreTemplatesDir = fromPromise(async () => {
 		try {
-			console.log("Creating " + localTemplatesDirectory + " directory");
+			console.log(`Creating ${localTemplatesDirectory} directory`);
 			await fsPromises.mkdir(localTemplatesDirectory, {
 				recursive: true,
 			});
-			console.log("Created " + localTemplatesDirectory + " directory");
+			console.log(`Created ${localTemplatesDirectory} directory`);
 		} catch (error) {
 			console.error(error);
-			throw new Error(
-				"Unable to create" + localTemplatesDirectory + " directory",
-			);
+			throw new Error(`Unable to create${localTemplatesDirectory} directory`);
 		}
 	});
 
 	const isGasolineStoreTemplatesDirPresent = (
-		_,
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		_: any,
 		params: { isPresent: boolean },
 	) => {
 		return params.isPresent;
@@ -103,12 +99,12 @@ async function runAddCommandMachine(commandUsed: string) {
 
 	const downloadProvidedTemplate = fromPromise(async () => {
 		try {
-			console.log("Downloading provided template " + templateSource);
+			console.log(`Downloading provided template ${templateSource}`);
 			await downloadTemplate(templateSource, {
-				dir: localTemplatesDirectory + "/" + templateName,
+				dir: `${localTemplatesDirectory}/${templateName}`,
 				forceClean: true,
 			});
-			console.log("Downloaded provided template " + templateSource);
+			console.log(`Downloaded provided template ${templateSource}`);
 		} catch (error) {
 			console.error(error);
 			throw new Error("Unable to download provided template");
@@ -180,7 +176,8 @@ async function runAddCommandMachine(commandUsed: string) {
 	);
 
 	const isThereAMajorVersionPackageConflict = (
-		_,
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		_: any,
 		params: { packagesWithMajorVersionConflicts: string[] },
 	) => {
 		return params.packagesWithMajorVersionConflicts.length > 0;
