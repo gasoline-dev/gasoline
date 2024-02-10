@@ -37,7 +37,7 @@ async function main() {
 
 			if (isAddCommand) {
 				if (availableAddCommands.includes(command)) {
-					await runAddCommandMachine(command);
+					await runAddCommand(command);
 				} else {
 					console.log(`Command ${command} not found`);
 				}
@@ -50,7 +50,7 @@ async function main() {
 	}
 }
 
-async function runAddCommandMachine(commandUsed: string) {
+async function runAddCommand(commandUsed: string) {
 	const gasolineDirectory = "./gasoline";
 	const localTemplatesDirectory = "./gasoline/.store/templates";
 	const templateName = commandUsed.replace("add:", "").replace(/:/g, "-");
@@ -142,6 +142,39 @@ async function runAddCommandMachine(commandUsed: string) {
 		}
 	});
 
+	const setPackagesWithoutMajorVersionConflicts = fromPromise(
+		async ({
+			input,
+		}: {
+			input: {
+				downloadedTemplatePackageJson: Context["downloadedTemplatePackageJson"];
+				gasolineDirPackageJson: Context["gasolineDirPackageJson"];
+			};
+		}) => {
+			const result: string[] = [];
+			if (
+				input.downloadedTemplatePackageJson?.dependencies &&
+				Object.keys(input.downloadedTemplatePackageJson.dependencies).length >
+					0 &&
+				input.gasolineDirPackageJson?.dependencies &&
+				Object.keys(input.gasolineDirPackageJson.dependencies).length > 0
+			) {
+				for (const downloadedTemplateDep in input.downloadedTemplatePackageJson
+					.dependencies) {
+					if (
+						input.gasolineDirPackageJson.dependencies[downloadedTemplateDep] &&
+						input.gasolineDirPackageJson.dependencies[
+							downloadedTemplateDep
+						].split(".")[0] === downloadedTemplateDep.split(".")[0]
+					) {
+						result.push(downloadedTemplateDep);
+					}
+				}
+			}
+			return result;
+		},
+	);
+
 	const setPackagesWithMajorVersionConflicts = fromPromise(
 		async ({
 			input,
@@ -183,38 +216,154 @@ async function runAddCommandMachine(commandUsed: string) {
 		return params.packagesWithMajorVersionConflicts.length > 0;
 	};
 
-	const runResolveMajorVersionPackageConflictPrompt = fromPromise(async () => {
-		const answers = await inquirer.prompt([
-			{
-				type: "list",
-				name: "resolveMajorVersionPackageConflict",
-				message:
-					"There are major version package conflicts. What would you like to do?",
-				choices: ["Resolve", "Use Alias", "Cancel"],
-				default: "Cancel",
-			},
-		]);
+	type HowToResolveMajorVersionPackageConflictResult = {
+		resolveMajorVersionPackageConflict: HowToResolveMajorVersionPackageConflictPromptAnswer;
+	};
 
-		switch (answers.resolveMajorVersionPackageConflict) {
-			case "Resolve":
-				console.log("Resolving major version package conflicts");
-				break;
-			case "Use Alias":
-				console.log("Using alias to resolve major version package conflicts");
-				break;
-			default:
-				console.log("Not resolving major version package conflicts");
-				break;
+	type HowToResolveMajorVersionPackageConflictPromptAnswer =
+		| undefined
+		| "Update outdated"
+		| "Use aliases"
+		| "Cancel";
+
+	const runHowToResolveMajorVersionPackageConflictPrompt = fromPromise(
+		async () => {
+			const { resolveMajorVersionPackageConflict } =
+				await inquirer.prompt<HowToResolveMajorVersionPackageConflictResult>([
+					{
+						type: "list",
+						name: "resolveMajorVersionPackageConflict",
+						message:
+							"There are major version package conflicts. What would you like to do?",
+						choices: [
+							"Update outdated",
+							"Use aliases",
+							"Cancel",
+						] satisfies Array<HowToResolveMajorVersionPackageConflictPromptAnswer>,
+						default: "Cancel",
+					},
+				]);
+
+			return resolveMajorVersionPackageConflict;
+		},
+	);
+
+	const isHowToResolveMajorVersionPackageConflictAnswerUpdate = (
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		_: any,
+		params: {
+			howToResolveMajorVersionPackageConflictAnswer: HowToResolveMajorVersionPackageConflictPromptAnswer;
+		},
+	) => {
+		return (
+			params.howToResolveMajorVersionPackageConflictAnswer === "Update outdated"
+		);
+	};
+
+	const isHowToResolveMajorVersionPackageConflictAnswerAliases = (
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		_: any,
+		params: {
+			howToResolveMajorVersionPackageConflictAnswer: HowToResolveMajorVersionPackageConflictPromptAnswer;
+		},
+	) => {
+		return (
+			params.howToResolveMajorVersionPackageConflictAnswer === "Use aliases"
+		);
+	};
+
+	const isHowToResolveMajorVersionPackageConflictAnswerCancel = (
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		_: any,
+		params: {
+			howToResolveMajorVersionPackageConflictAnswer: HowToResolveMajorVersionPackageConflictPromptAnswer;
+		},
+	) => {
+		return params.howToResolveMajorVersionPackageConflictAnswer === "Cancel";
+	};
+
+	const getProjectPackageManager = fromPromise(async () => {
+		console.log("Getting project package manager");
+		const isRootPackageJsonPresent = await fsPromises
+			.access("package.json")
+			.then(
+				() => true,
+				() => false,
+			);
+
+		if (isRootPackageJsonPresent) {
+			const packageJson = JSON.parse(
+				await fsPromises.readFile("package.json", "utf8"),
+			);
+			if ("workspaces" in packageJson) {
+				return "npm";
+			}
 		}
 
-		return answers.resolveMajorVersionPackageConflict;
+		const isPnpm = await fsPromises.access("./pnpm-workspace.yaml").then(
+			() => true,
+			() => false,
+		);
+
+		if (isPnpm) return "pnpm";
+
+		throw new Error("Unable to get project package manager");
 	});
+
+	const addPackagesToGasolinePackageJson = fromPromise(
+		async ({
+			input,
+		}: {
+			input: {
+				downloadedTemplatePackageJson: Context["downloadedTemplatePackageJson"];
+				gasolineDirPackageJson: Context["gasolineDirPackageJson"];
+				packageManager: Context["packageManager"];
+				packagesWithMajorVersionConflicts: Context["packagesWithMajorVersionConflicts"];
+				packagesWithoutMajorVersionConflicts: Context["packagesWithoutMajorVersionConflicts"];
+			};
+		}) => {
+			for (const packagesWithoutMajorVersionConflicts of input.packagesWithoutMajorVersionConflicts) {
+				// add package to gasoline package json
+			}
+
+			for (const packageWithMajorVersionConflict of input.packagesWithMajorVersionConflicts) {
+				console.log("package in conflict");
+				console.log(packageWithMajorVersionConflict);
+				console.log(
+					"current version: " +
+						input.gasolineDirPackageJson?.dependencies[
+							packageWithMajorVersionConflict
+						],
+				);
+				console.log(
+					"new version:" +
+						input.downloadedTemplatePackageJson?.dependencies[
+							packageWithMajorVersionConflict
+						],
+				);
+				// add package to gasoline package json
+				// with alias
+			}
+
+			//if (input.packageManager === "npm") {
+			// npm install --save-dev <package>@<version>
+			// npm install --save <package>@<version>
+			//}
+
+			//if (input.packageManager === "pnpm") {
+			// pnpm add --save-dev <package>@<version>
+			// pnpm add --save <package>@<version>
+			//}
+		},
+	);
 
 	type Context = {
 		commandUsed: string;
 		downloadedTemplatePackageJson: undefined | PackageJson;
 		gasolineDirPackageJson: undefined | PackageJson;
+		packagesWithoutMajorVersionConflicts: string[];
 		packagesWithMajorVersionConflicts: string[];
+		packageManager: undefined | "npm" | "pnpm";
 	};
 
 	type PackageJson = {
@@ -229,12 +378,18 @@ async function runAddCommandMachine(commandUsed: string) {
 			downloadProvidedTemplate,
 			getDownloadedTemplatePackageJson,
 			getGasolineDirPackageJson,
+			setPackagesWithoutMajorVersionConflicts,
 			setPackagesWithMajorVersionConflicts,
-			runResolveMajorVersionPackageConflictPrompt,
+			runHowToResolveMajorVersionPackageConflictPrompt,
+			getProjectPackageManager,
+			addPackagesToGasolinePackageJson,
 		},
 		guards: {
 			isGasolineStoreTemplatesDirPresent,
 			isThereAMajorVersionPackageConflict,
+			isHowToResolveMajorVersionPackageConflictAnswerUpdate,
+			isHowToResolveMajorVersionPackageConflictAnswerAliases,
+			isHowToResolveMajorVersionPackageConflictAnswerCancel,
 		},
 		types: {} as {
 			context: Context;
@@ -253,7 +408,9 @@ async function runAddCommandMachine(commandUsed: string) {
 			commandUsed,
 			downloadedTemplatePackageJson: undefined,
 			gasolineDirPackageJson: undefined,
+			packagesWithoutMajorVersionConflicts: [],
 			packagesWithMajorVersionConflicts: [],
+			packageManager: undefined,
 		},
 		states: {
 			checkingIfGasolineStoreTemplatesDirExists: {
@@ -298,7 +455,7 @@ async function runAddCommandMachine(commandUsed: string) {
 					id: "downloadingTemplate",
 					src: "downloadProvidedTemplate",
 					onDone: {
-						target: "processingPackageJsons",
+						target: "gettingDownloadedTemplatePackageJson",
 					},
 					onError: {
 						target: "err",
@@ -306,82 +463,107 @@ async function runAddCommandMachine(commandUsed: string) {
 					},
 				},
 			},
-			processingPackageJsons: {
-				type: "parallel",
-				states: {
-					processingDownloadedTemplatePackageJson: {
-						initial: "gettingPackageJson",
-						states: {
-							gettingPackageJson: {
-								invoke: {
-									id: "gettingDownloadedTemplatePackageJson",
-									src: "getDownloadedTemplatePackageJson",
-									onDone: {
-										target: "gotPackageJson",
-										actions: assign({
-											downloadedTemplatePackageJson: ({ event }) =>
-												event.output,
-										}),
-									},
-									onError: {
-										target: "#root.err",
-										actions: ({ context, event }) => console.error(event),
-									},
-								},
-							},
-							gotPackageJson: {
-								type: "final",
-							},
-						},
+			gettingDownloadedTemplatePackageJson: {
+				invoke: {
+					id: "gettingDownloadedTemplatePackageJson",
+					src: "getDownloadedTemplatePackageJson",
+					onDone: {
+						target: "gettingGasolineDirPackageJson",
+						actions: assign({
+							downloadedTemplatePackageJson: ({ event }) => event.output,
+						}),
 					},
-					processingGasolineDirPackageJson: {
-						initial: "gettingPackageJson",
-						states: {
-							gettingPackageJson: {
-								invoke: {
-									id: "gettingGasolineDirPackageJson",
-									src: "getGasolineDirPackageJson",
-									onDone: {
-										target: "gotPackageJson",
-										actions: assign({
-											gasolineDirPackageJson: ({ event }) => event.output,
-										}),
-									},
-									onError: {
-										target: "#root.err",
-										actions: ({ context, event }) => console.error(event),
-									},
-								},
-							},
-							gotPackageJson: {
-								type: "final",
-							},
-						},
+					onError: {
+						target: "err",
+						actions: ({ context, event }) => console.error(event),
 					},
-				},
-				onDone: {
-					target: "processingPackageJsonVersions",
 				},
 			},
-			processingPackageJsonVersions: {
-				initial: "settingPackagesWithMajorVersionConflicts",
-				states: {
-					settingPackagesWithMajorVersionConflicts: {
-						invoke: {
-							id: "settingPackagesWithMajorVersionConflicts",
-							src: "setPackagesWithMajorVersionConflicts",
-							input: ({ context }) => ({
-								downloadedTemplatePackageJson:
-									context.downloadedTemplatePackageJson,
-								gasolineDirPackageJson: context.gasolineDirPackageJson,
+			gettingGasolineDirPackageJson: {
+				invoke: {
+					id: "gettingGasolineDirPackageJson",
+					src: "getGasolineDirPackageJson",
+					onDone: {
+						target: "settingPackagesWithoutMajorVersionConflicts",
+						actions: assign({
+							gasolineDirPackageJson: ({ event }) => event.output,
+						}),
+					},
+					onError: {
+						target: "err",
+						actions: ({ context, event }) => console.error(event),
+					},
+				},
+			},
+			settingPackagesWithoutMajorVersionConflicts: {
+				invoke: {
+					id: "settingPackagesWithoutMajorVersionConflicts",
+					src: "setPackagesWithoutMajorVersionConflicts",
+					input: ({ context }) => ({
+						downloadedTemplatePackageJson:
+							context.downloadedTemplatePackageJson,
+						gasolineDirPackageJson: context.gasolineDirPackageJson,
+					}),
+					onDone: {
+						target: "settingPackagesWithMajorVersionConflicts",
+						actions: assign({
+							packagesWithoutMajorVersionConflicts: ({ event }) => event.output,
+						}),
+					},
+					onError: {
+						target: "err",
+						actions: ({ context, event }) => console.error(event),
+					},
+				},
+			},
+			settingPackagesWithMajorVersionConflicts: {
+				invoke: {
+					id: "settingPackagesWithMajorVersionConflicts",
+					src: "setPackagesWithMajorVersionConflicts",
+					input: ({ context }) => ({
+						downloadedTemplatePackageJson:
+							context.downloadedTemplatePackageJson,
+						gasolineDirPackageJson: context.gasolineDirPackageJson,
+					}),
+					onDone: [
+						{
+							target: "processingPackagesWithMajorVersionConflicts",
+							guard: {
+								type: "isThereAMajorVersionPackageConflict",
+								params: ({ event }) => ({
+									packagesWithMajorVersionConflicts: event.output,
+								}),
+							},
+							actions: assign({
+								packagesWithMajorVersionConflicts: ({ event }) => event.output,
 							}),
+						},
+						{
+							target: "ok",
+						},
+					],
+					onError: {
+						target: "err",
+						actions: ({ context, event }) => console.error(event),
+					},
+				},
+			},
+			processingPackagesWithMajorVersionConflicts: {
+				id: "processingPackagesWithMajorVersionConflicts",
+				initial: "runHowToResolvePrompt",
+				states: {
+					runHowToResolvePrompt: {
+						invoke: {
+							id: "runningHowToResolvePrompt",
+							src: "runHowToResolveMajorVersionPackageConflictPrompt",
 							onDone: [
 								{
-									target: "runResolveMajorVersionPackageConflictPrompt",
+									target: "processingResolutionWithAliases",
 									guard: {
-										type: "isThereAMajorVersionPackageConflict",
+										type: "isHowToResolveMajorVersionPackageConflictAnswerAliases",
 										params: ({ event }) => ({
-											packagesWithMajorVersionConflicts: event.output,
+											howToResolveMajorVersionPackageConflictAnswer:
+												event.output,
 										}),
 									},
 								},
@@ -395,16 +577,65 @@ async function runAddCommandMachine(commandUsed: string) {
 							},
 						},
 					},
-					runResolveMajorVersionPackageConflictPrompt: {
-						invoke: {
-							id: "runResolveMajorVersionPackageConflictPrompt",
-							src: "runResolveMajorVersionPackageConflictPrompt",
-							onDone: {
-								target: "#root.ok",
+					processingResolutionWithAliases: {
+						id: "processingWithAlias",
+						initial: "gettingProjectPackageManager",
+						states: {
+							gettingProjectPackageManager: {
+								invoke: {
+									id: "gettingProjectPackageManager",
+									src: "getProjectPackageManager",
+									onDone: {
+										target: "addingPackagesToGasolinePackageJson",
+										actions: assign({
+											packageManager: ({ event }) => event.output,
+										}),
+									},
+									onError: {
+										target: "#root.err",
+										actions: ({ context, event }) => console.error(event),
+									},
+								},
 							},
-							onError: {
-								target: "#root.err",
-								actions: ({ context, event }) => console.error(event),
+							addingPackagesToGasolinePackageJson: {
+								// loop over packages that are in conflict
+								// get their versions from template p json
+								// install/add to gasoline package json
+								// ->
+								// loop over packages not in conflict
+								// install add to gasoline package json
+								// ->
+								// transition to updating code with aliases
+								// copy code to gasoline dir
+								entry: [
+									({ context, event }) => {
+										console.log("ADDING ALIASES");
+										console.log(context.packageManager);
+										console.log(context.packagesWithMajorVersionConflicts);
+										console.log(context.packagesWithoutMajorVersionConflicts);
+									},
+								],
+								invoke: {
+									id: "addingPackagesToGasolinePackageJson",
+									src: "addPackagesToGasolinePackageJson",
+									input: ({ context }) => ({
+										downloadedTemplatePackageJson:
+											context.downloadedTemplatePackageJson,
+										gasolineDirPackageJson: context.gasolineDirPackageJson,
+										packageManager: context.packageManager,
+										packagesWithMajorVersionConflicts:
+											context.packagesWithMajorVersionConflicts,
+										packagesWithoutMajorVersionConflicts:
+											context.packagesWithoutMajorVersionConflicts,
+									}),
+									onDone: {
+										target: "#root.ok",
+									},
+									onError: {
+										target: "#root.err",
+										actions: ({ context, event }) => console.error(event),
+									},
+								},
 							},
 						},
 					},
