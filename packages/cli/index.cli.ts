@@ -221,10 +221,7 @@ async function runAddCommand(commandUsed: string) {
 	};
 
 	type HowToResolveMajorVersionPackageConflictPromptAnswer =
-		| undefined
-		| "Update outdated"
-		| "Use aliases"
-		| "Cancel";
+		Context["howToResolveMajorVersionPackageConflictPromptAnswer"];
 
 	const runHowToResolveMajorVersionPackageConflictPrompt = fromPromise(
 		async () => {
@@ -310,7 +307,7 @@ async function runAddCommand(commandUsed: string) {
 		throw new Error("Unable to get project package manager");
 	});
 
-	const addPackagesToGasolinePackageJson = fromPromise(
+	const installGasolinePackageJsonPackagesWithAliases = fromPromise(
 		async ({
 			input,
 		}: {
@@ -322,34 +319,39 @@ async function runAddCommand(commandUsed: string) {
 				packagesWithoutMajorVersionConflicts: Context["packagesWithoutMajorVersionConflicts"];
 			};
 		}) => {
-			for (const packagesWithoutMajorVersionConflicts of input.packagesWithoutMajorVersionConflicts) {
-				// add package to gasoline package json
+			let command: string[] = [input.packageManager];
+
+			for (const packageWithoutMajorVersionConflicts of input.packagesWithoutMajorVersionConflicts) {
+				console.log(packageWithoutMajorVersionConflicts);
 			}
 
 			for (const packageWithMajorVersionConflict of input.packagesWithMajorVersionConflicts) {
-				console.log("package in conflict");
-				console.log(packageWithMajorVersionConflict);
-				console.log(
-					"current version: " +
-						input.gasolineDirPackageJson?.dependencies[
-							packageWithMajorVersionConflict
-						],
-				);
-				console.log(
-					"new version:" +
-						input.downloadedTemplatePackageJson?.dependencies[
-							packageWithMajorVersionConflict
-						],
-				);
-				// add package to gasoline package json
-				// with alias
+				if (
+					input.gasolineDirPackageJson?.dependencies?.[
+						packageWithMajorVersionConflict
+					] &&
+					input.downloadedTemplatePackageJson?.dependencies?.[
+						packageWithMajorVersionConflict
+					]
+				) {
+					console.log("package in conflict");
+					console.log(packageWithMajorVersionConflict);
+					console.log(
+						`current version: ${input.gasolineDirPackageJson.dependencies[packageWithMajorVersionConflict]}`,
+					);
+					console.log(
+						`new version:${input.downloadedTemplatePackageJson?.dependencies[packageWithMajorVersionConflict]}`,
+					);
+					command.push("example1@npm:example-package@1.0.0");
+				}
 			}
+
+			console.log(command);
 
 			//if (input.packageManager === "npm") {
 			// npm install --save-dev <package>@<version>
 			// npm install --save <package>@<version>
 			//}
-
 			//if (input.packageManager === "pnpm") {
 			// pnpm add --save-dev <package>@<version>
 			// pnpm add --save <package>@<version>
@@ -364,6 +366,11 @@ async function runAddCommand(commandUsed: string) {
 		packagesWithoutMajorVersionConflicts: string[];
 		packagesWithMajorVersionConflicts: string[];
 		packageManager: undefined | "npm" | "pnpm";
+		howToResolveMajorVersionPackageConflictPromptAnswer:
+			| undefined
+			| "Update outdated"
+			| "Use aliases"
+			| "Cancel";
 	};
 
 	type PackageJson = {
@@ -382,7 +389,7 @@ async function runAddCommand(commandUsed: string) {
 			setPackagesWithMajorVersionConflicts,
 			runHowToResolveMajorVersionPackageConflictPrompt,
 			getProjectPackageManager,
-			addPackagesToGasolinePackageJson,
+			installGasolinePackageJsonPackagesWithAliases,
 		},
 		guards: {
 			isGasolineStoreTemplatesDirPresent,
@@ -411,6 +418,7 @@ async function runAddCommand(commandUsed: string) {
 			packagesWithoutMajorVersionConflicts: [],
 			packagesWithMajorVersionConflicts: [],
 			packageManager: undefined,
+			howToResolveMajorVersionPackageConflictPromptAnswer: undefined,
 		},
 		states: {
 			checkingIfGasolineStoreTemplatesDirExists: {
@@ -558,9 +566,9 @@ async function runAddCommand(commandUsed: string) {
 							src: "runHowToResolveMajorVersionPackageConflictPrompt",
 							onDone: [
 								{
-									target: "processingResolutionWithAliases",
+									target: "#root.ok",
 									guard: {
-										type: "isHowToResolveMajorVersionPackageConflictAnswerAliases",
+										type: "isHowToResolveMajorVersionPackageConflictAnswerCancel",
 										params: ({ event }) => ({
 											howToResolveMajorVersionPackageConflictAnswer:
 												event.output,
@@ -568,7 +576,37 @@ async function runAddCommand(commandUsed: string) {
 									},
 								},
 								{
-									target: "#root.ok",
+									target: "gettingPackageManager",
+									actions: assign({
+										howToResolveMajorVersionPackageConflictPromptAnswer: ({
+											event,
+										}) => event.output,
+									}),
+								},
+							],
+							onError: {
+								target: "#root.err",
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
+					},
+					gettingPackageManager: {
+						invoke: {
+							id: "gettingPackageManager",
+							src: "getProjectPackageManager",
+							onDone: [
+								{
+									target: "processingResolutionWithAliases",
+									actions: assign({
+										packageManager: ({ event }) => event.output,
+									}),
+									guard: {
+										type: "isHowToResolveMajorVersionPackageConflictAnswerAliases",
+										params: ({ context }) => ({
+											howToResolveMajorVersionPackageConflictAnswer:
+												context.howToResolveMajorVersionPackageConflictPromptAnswer,
+										}),
+									},
 								},
 							],
 							onError: {
@@ -579,45 +617,12 @@ async function runAddCommand(commandUsed: string) {
 					},
 					processingResolutionWithAliases: {
 						id: "processingWithAlias",
-						initial: "gettingProjectPackageManager",
+						initial: "installingGasolinePackageJsonPackagesWithAliases",
 						states: {
-							gettingProjectPackageManager: {
+							installingGasolinePackageJsonPackagesWithAliases: {
 								invoke: {
-									id: "gettingProjectPackageManager",
-									src: "getProjectPackageManager",
-									onDone: {
-										target: "addingPackagesToGasolinePackageJson",
-										actions: assign({
-											packageManager: ({ event }) => event.output,
-										}),
-									},
-									onError: {
-										target: "#root.err",
-										actions: ({ context, event }) => console.error(event),
-									},
-								},
-							},
-							addingPackagesToGasolinePackageJson: {
-								// loop over packages that are in conflict
-								// get their versions from template p json
-								// install/add to gasoline package json
-								// ->
-								// loop over packages not in conflict
-								// install add to gasoline package json
-								// ->
-								// transition to updating code with aliases
-								// copy code to gasoline dir
-								entry: [
-									({ context, event }) => {
-										console.log("ADDING ALIASES");
-										console.log(context.packageManager);
-										console.log(context.packagesWithMajorVersionConflicts);
-										console.log(context.packagesWithoutMajorVersionConflicts);
-									},
-								],
-								invoke: {
-									id: "addingPackagesToGasolinePackageJson",
-									src: "addPackagesToGasolinePackageJson",
+									id: "installingGasolinePackageJsonPackagesWithAliases",
+									src: "installGasolinePackageJsonPackagesWithAliases",
 									input: ({ context }) => ({
 										downloadedTemplatePackageJson:
 											context.downloadedTemplatePackageJson,
