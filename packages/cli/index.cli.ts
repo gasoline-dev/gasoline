@@ -142,21 +142,26 @@ async function runAddCommand(commandUsed: string) {
 		}
 	});
 
+	type PackageJson = {
+		dependencies?: { [key: string]: string };
+		devDependencies?: { [key: string]: string };
+	};
+
 	const setPackagesWithoutMajorVersionConflicts = fromPromise(
 		async ({
 			input,
 		}: {
 			input: {
-				downloadedTemplatePackageJson: Context["downloadedTemplatePackageJson"];
-				gasolineDirPackageJson: Context["gasolineDirPackageJson"];
+				downloadedTemplatePackageJson: PackageJson;
+				gasolineDirPackageJson: PackageJson;
 			};
 		}) => {
 			const result: string[] = [];
 			if (
-				input.downloadedTemplatePackageJson?.dependencies &&
+				input.downloadedTemplatePackageJson.dependencies &&
 				Object.keys(input.downloadedTemplatePackageJson.dependencies).length >
 					0 &&
-				input.gasolineDirPackageJson?.dependencies &&
+				input.gasolineDirPackageJson.dependencies &&
 				Object.keys(input.gasolineDirPackageJson.dependencies).length > 0
 			) {
 				for (const downloadedTemplateDep in input.downloadedTemplatePackageJson
@@ -180,16 +185,16 @@ async function runAddCommand(commandUsed: string) {
 			input,
 		}: {
 			input: {
-				downloadedTemplatePackageJson: Context["downloadedTemplatePackageJson"];
-				gasolineDirPackageJson: Context["gasolineDirPackageJson"];
+				downloadedTemplatePackageJson: PackageJson;
+				gasolineDirPackageJson: PackageJson;
 			};
 		}) => {
 			const result: string[] = [];
 			if (
-				input.downloadedTemplatePackageJson?.dependencies &&
+				input.downloadedTemplatePackageJson.dependencies &&
 				Object.keys(input.downloadedTemplatePackageJson.dependencies).length >
 					0 &&
-				input.gasolineDirPackageJson?.dependencies &&
+				input.gasolineDirPackageJson.dependencies &&
 				Object.keys(input.gasolineDirPackageJson.dependencies).length > 0
 			) {
 				for (const downloadedTemplateDep in input.downloadedTemplatePackageJson
@@ -221,7 +226,9 @@ async function runAddCommand(commandUsed: string) {
 	};
 
 	type HowToResolveMajorVersionPackageConflictPromptAnswer =
-		Context["howToResolveMajorVersionPackageConflictPromptAnswer"];
+		| "Update outdated"
+		| "Use aliases"
+		| "Cancel";
 
 	const runHowToResolveMajorVersionPackageConflictPrompt = fromPromise(
 		async () => {
@@ -307,16 +314,22 @@ async function runAddCommand(commandUsed: string) {
 		throw new Error("Unable to get project package manager");
 	});
 
+	type PackageManager = "npm" | "pnpm";
+
+	type PackagesWithMajorConflicts = string[];
+
+	type PackagesWithoutMajorConflicts = string[];
+
 	const installGasolinePackageJsonPackagesWithAliases = fromPromise(
 		async ({
 			input,
 		}: {
 			input: {
-				downloadedTemplatePackageJson: Context["downloadedTemplatePackageJson"];
-				gasolineDirPackageJson: Context["gasolineDirPackageJson"];
-				packageManager: Context["packageManager"];
-				packagesWithMajorVersionConflicts: Context["packagesWithMajorVersionConflicts"];
-				packagesWithoutMajorVersionConflicts: Context["packagesWithoutMajorVersionConflicts"];
+				downloadedTemplatePackageJson: PackageJson;
+				gasolineDirPackageJson: PackageJson;
+				packageManager: PackageManager;
+				packagesWithMajorVersionConflicts: PackagesWithMajorConflicts;
+				packagesWithoutMajorVersionConflicts: PackagesWithoutMajorConflicts;
 			};
 		}) => {
 			let command: string[] = [input.packageManager];
@@ -363,19 +376,12 @@ async function runAddCommand(commandUsed: string) {
 		commandUsed: string;
 		downloadedTemplatePackageJson: undefined | PackageJson;
 		gasolineDirPackageJson: undefined | PackageJson;
-		packagesWithoutMajorVersionConflicts: string[];
-		packagesWithMajorVersionConflicts: string[];
-		packageManager: undefined | "npm" | "pnpm";
+		packagesWithoutMajorVersionConflicts: PackagesWithMajorConflicts;
+		packagesWithMajorVersionConflicts: PackagesWithoutMajorConflicts;
+		packageManager: undefined | PackageManager;
 		howToResolveMajorVersionPackageConflictPromptAnswer:
 			| undefined
-			| "Update outdated"
-			| "Use aliases"
-			| "Cancel";
-	};
-
-	type PackageJson = {
-		dependencies?: { [key: string]: string };
-		devDependencies?: { [key: string]: string };
+			| HowToResolveMajorVersionPackageConflictPromptAnswer;
 	};
 
 	const machine = setup({
@@ -509,8 +515,9 @@ async function runAddCommand(commandUsed: string) {
 					src: "setPackagesWithoutMajorVersionConflicts",
 					input: ({ context }) => ({
 						downloadedTemplatePackageJson:
-							context.downloadedTemplatePackageJson,
-						gasolineDirPackageJson: context.gasolineDirPackageJson,
+							context.downloadedTemplatePackageJson as PackageJson,
+						gasolineDirPackageJson:
+							context.gasolineDirPackageJson as PackageJson,
 					}),
 					onDone: {
 						target: "settingPackagesWithMajorVersionConflicts",
@@ -530,8 +537,9 @@ async function runAddCommand(commandUsed: string) {
 					src: "setPackagesWithMajorVersionConflicts",
 					input: ({ context }) => ({
 						downloadedTemplatePackageJson:
-							context.downloadedTemplatePackageJson,
-						gasolineDirPackageJson: context.gasolineDirPackageJson,
+							context.downloadedTemplatePackageJson as PackageJson,
+						gasolineDirPackageJson:
+							context.gasolineDirPackageJson as PackageJson,
 					}),
 					onDone: [
 						{
@@ -604,7 +612,7 @@ async function runAddCommand(commandUsed: string) {
 										type: "isHowToResolveMajorVersionPackageConflictAnswerAliases",
 										params: ({ context }) => ({
 											howToResolveMajorVersionPackageConflictAnswer:
-												context.howToResolveMajorVersionPackageConflictPromptAnswer,
+												context.howToResolveMajorVersionPackageConflictPromptAnswer as HowToResolveMajorVersionPackageConflictPromptAnswer,
 										}),
 									},
 								},
@@ -625,9 +633,10 @@ async function runAddCommand(commandUsed: string) {
 									src: "installGasolinePackageJsonPackagesWithAliases",
 									input: ({ context }) => ({
 										downloadedTemplatePackageJson:
-											context.downloadedTemplatePackageJson,
-										gasolineDirPackageJson: context.gasolineDirPackageJson,
-										packageManager: context.packageManager,
+											context.downloadedTemplatePackageJson as PackageJson,
+										gasolineDirPackageJson:
+											context.gasolineDirPackageJson as PackageJson,
+										packageManager: context.packageManager as PackageManager,
 										packagesWithMajorVersionConflicts:
 											context.packagesWithMajorVersionConflicts,
 										packagesWithoutMajorVersionConflicts:
