@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { parseArgs } from "node:util";
+import { parseArgs, promisify } from "node:util";
 import inquirer from "inquirer";
 import { assign, createActor, fromPromise, setup, waitFor } from "xstate";
 import fsPromises from "fs/promises";
 import { downloadTemplate } from "giget";
 import path from "node:path";
+import { exec } from "node:child_process";
 
 await main();
 
@@ -332,43 +333,60 @@ async function runAddCommand(commandUsed: string) {
 				packagesWithoutMajorVersionConflicts: PackagesWithoutMajorConflicts;
 			};
 		}) => {
-			let command: string[] = [input.packageManager];
+			const command: string[] = [input.packageManager];
+
+			if (input.packageManager === "npm") {
+				command.push("install");
+			} else {
+				command.push("add");
+			}
 
 			for (const packageWithoutMajorVersionConflicts of input.packagesWithoutMajorVersionConflicts) {
-				console.log(packageWithoutMajorVersionConflicts);
+				command.push(packageWithoutMajorVersionConflicts);
 			}
 
 			for (const packageWithMajorVersionConflict of input.packagesWithMajorVersionConflicts) {
 				if (
-					input.gasolineDirPackageJson?.dependencies?.[
+					input.gasolineDirPackageJson.dependencies?.[
 						packageWithMajorVersionConflict
 					] &&
-					input.downloadedTemplatePackageJson?.dependencies?.[
+					input.downloadedTemplatePackageJson.dependencies?.[
 						packageWithMajorVersionConflict
 					]
 				) {
-					console.log("package in conflict");
-					console.log(packageWithMajorVersionConflict);
-					console.log(
-						`current version: ${input.gasolineDirPackageJson.dependencies[packageWithMajorVersionConflict]}`,
+					const newPackageMajorVersion =
+						input.downloadedTemplatePackageJson?.dependencies[
+							packageWithMajorVersionConflict
+						]
+							.split(".")[0]
+							.replace("^", "");
+
+					const newPackageVersion =
+						input.downloadedTemplatePackageJson?.dependencies[
+							packageWithMajorVersionConflict
+						];
+
+					command.push(
+						`${packageWithMajorVersionConflict}V${newPackageMajorVersion}@npm:${packageWithMajorVersionConflict}@${newPackageVersion}`,
 					);
-					console.log(
-						`new version:${input.downloadedTemplatePackageJson?.dependencies[packageWithMajorVersionConflict]}`,
-					);
-					command.push("example1@npm:example-package@1.0.0");
 				}
 			}
 
-			console.log(command);
+			command.push("--save");
 
-			//if (input.packageManager === "npm") {
-			// npm install --save-dev <package>@<version>
-			// npm install --save <package>@<version>
-			//}
-			//if (input.packageManager === "pnpm") {
-			// pnpm add --save-dev <package>@<version>
-			// pnpm add --save <package>@<version>
-			//}
+			console.log(command.join(" "));
+
+			try {
+				console.log("Installing packages with aliases");
+				const promisifiedExec = promisify(exec);
+				await promisifiedExec(command.join(" "), {
+					cwd: gasolineDirectory,
+				});
+				console.log("Installed packages with aliases");
+			} catch (error) {
+				console.error(error);
+				throw new Error("Unable to install packages with aliases");
+			}
 		},
 	);
 
