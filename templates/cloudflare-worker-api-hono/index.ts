@@ -1,3 +1,5 @@
+import { Hono } from "hono";
+
 export interface Env {}
 
 export default {

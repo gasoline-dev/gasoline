@@ -6,6 +6,7 @@ import fsPromises from "fs/promises";
 import { downloadTemplate } from "giget";
 import path from "node:path";
 import { exec } from "node:child_process";
+import { loadFile } from "magicast";
 
 await main();
 
@@ -55,6 +56,7 @@ async function runAddCommand(commandUsed: string) {
 	const gasolineDirectory = "./gasoline";
 	const localTemplatesDirectory = "./gasoline/.store/templates";
 	const templateName = commandUsed.replace("add:", "").replace(/:/g, "-");
+	const localTemplateIndexPath = `./gasoline/.store/templates/${templateName}/index.ts`;
 	const templateSource = `github:gasoline-dev/gasoline/templates/${templateName}`;
 
 	const checkIfGasolineStoreTemplatesDirExists = fromPromise(async () => {
@@ -390,6 +392,20 @@ async function runAddCommand(commandUsed: string) {
 		},
 	);
 
+	const replaceDownloadedTemplateImportsWithAliases = fromPromise(async () => {
+		try {
+			console.log("Replacing downloaded template imports with aliases");
+			const mod = await loadFile(localTemplateIndexPath);
+			console.log(mod.imports.$items);
+			console.log("Replaced downloaded template imports with aliases");
+		} catch (error) {
+			console.error(error);
+			throw new Error(
+				"Unable to replace downloaded template imports with aliases",
+			);
+		}
+	});
+
 	type Context = {
 		commandUsed: string;
 		downloadedTemplatePackageJson: undefined | PackageJson;
@@ -414,6 +430,7 @@ async function runAddCommand(commandUsed: string) {
 			runHowToResolveMajorVersionPackageConflictPrompt,
 			getProjectPackageManager,
 			installGasolinePackageJsonPackagesWithAliases,
+			replaceDownloadedTemplateImportsWithAliases,
 		},
 		guards: {
 			isGasolineStoreTemplatesDirPresent,
@@ -660,6 +677,19 @@ async function runAddCommand(commandUsed: string) {
 										packagesWithoutMajorVersionConflicts:
 											context.packagesWithoutMajorVersionConflicts,
 									}),
+									onDone: {
+										target: "replacingDownloadedTemplateImportsWithAliases",
+									},
+									onError: {
+										target: "#root.err",
+										actions: ({ context, event }) => console.error(event),
+									},
+								},
+							},
+							replacingDownloadedTemplateImportsWithAliases: {
+								invoke: {
+									id: "replacingDownloadedTemplateImportsWithAliases",
+									src: "replaceDownloadedTemplateImportsWithAliases",
 									onDone: {
 										target: "#root.ok",
 									},
