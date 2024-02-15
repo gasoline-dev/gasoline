@@ -452,6 +452,30 @@ async function runAddCommand(commandUsed: string) {
 		},
 	);
 
+	const copyDownloadedTemplateToGasolineDir = fromPromise(async () => {
+		try {
+			console.log("Copying downloaded template to gasoline directory");
+			const excludedFiles = ["package.json", "tsconfig.json"];
+			await fsPromises.cp(
+				path.join(localTemplatesDirectory, templateName),
+				gasolineDirectory,
+				{
+					recursive: true,
+					filter: (src) => {
+						const srcName = path.basename(src);
+						return !excludedFiles.includes(srcName);
+					},
+				},
+			);
+			console.log("Copied downloaded template to gasoline directory");
+		} catch (error) {
+			console.error(error);
+			throw new Error(
+				"Unable to copy downloaded template to gasoline directory",
+			);
+		}
+	});
+
 	type Context = {
 		commandUsed: string;
 		downloadedTemplatePackageJson: undefined | PackageJson;
@@ -477,6 +501,7 @@ async function runAddCommand(commandUsed: string) {
 			getProjectPackageManager,
 			installGasolinePackageJsonPackagesWithAliases,
 			replaceDownloadedTemplateImportsWithAliases,
+			copyDownloadedTemplateToGasolineDir,
 		},
 		guards: {
 			isGasolineStoreTemplatesDirPresent,
@@ -748,7 +773,7 @@ async function runAddCommand(commandUsed: string) {
 											context.packagesWithoutMajorVersionConflicts,
 									}),
 									onDone: {
-										target: "#root.ok",
+										target: "#root.copyingDownloadedTemplateToGasolineDir",
 									},
 									onError: {
 										target: "#root.err",
@@ -757,6 +782,19 @@ async function runAddCommand(commandUsed: string) {
 								},
 							},
 						},
+					},
+				},
+			},
+			copyingDownloadedTemplateToGasolineDir: {
+				invoke: {
+					id: "copyingDownloadedTemplateToGasolineDir",
+					src: "copyDownloadedTemplateToGasolineDir",
+					onDone: {
+						target: "ok",
+					},
+					onError: {
+						target: "err",
+						actions: ({ context, event }) => console.error(event),
 					},
 				},
 			},
