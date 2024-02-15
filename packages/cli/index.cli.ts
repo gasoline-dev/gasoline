@@ -6,7 +6,7 @@ import fsPromises from "fs/promises";
 import { downloadTemplate } from "giget";
 import path from "node:path";
 import { exec } from "node:child_process";
-import { loadFile } from "magicast";
+import { generateCode, loadFile, parseModule, writeFile } from "magicast";
 
 await main();
 
@@ -167,15 +167,17 @@ async function runAddCommand(commandUsed: string) {
 				input.gasolineDirPackageJson.dependencies &&
 				Object.keys(input.gasolineDirPackageJson.dependencies).length > 0
 			) {
-				for (const downloadedTemplateDep in input.downloadedTemplatePackageJson
-					.dependencies) {
+				for (const downloadedTemplateDependency in input
+					.downloadedTemplatePackageJson.dependencies) {
 					if (
-						input.gasolineDirPackageJson.dependencies[downloadedTemplateDep] &&
 						input.gasolineDirPackageJson.dependencies[
-							downloadedTemplateDep
-						].split(".")[0] === downloadedTemplateDep.split(".")[0]
+							downloadedTemplateDependency
+						] &&
+						input.gasolineDirPackageJson.dependencies[
+							downloadedTemplateDependency
+						].split(".")[0] === downloadedTemplateDependency.split(".")[0]
 					) {
-						result.push(downloadedTemplateDep);
+						result.push(downloadedTemplateDependency);
 					}
 				}
 			}
@@ -200,15 +202,17 @@ async function runAddCommand(commandUsed: string) {
 				input.gasolineDirPackageJson.dependencies &&
 				Object.keys(input.gasolineDirPackageJson.dependencies).length > 0
 			) {
-				for (const downloadedTemplateDep in input.downloadedTemplatePackageJson
-					.dependencies) {
+				for (const downloadedTemplateDependency in input
+					.downloadedTemplatePackageJson.dependencies) {
 					if (
-						input.gasolineDirPackageJson.dependencies[downloadedTemplateDep] &&
 						input.gasolineDirPackageJson.dependencies[
-							downloadedTemplateDep
-						].split(".")[0] !== downloadedTemplateDep.split(".")[0]
+							downloadedTemplateDependency
+						] &&
+						input.gasolineDirPackageJson.dependencies[
+							downloadedTemplateDependency
+						].split(".")[0] !== downloadedTemplateDependency.split(".")[0]
 					) {
-						result.push(downloadedTemplateDep);
+						result.push(downloadedTemplateDependency);
 					}
 				}
 			}
@@ -380,10 +384,10 @@ async function runAddCommand(commandUsed: string) {
 
 			try {
 				console.log("Installing packages with aliases");
-				const promisifiedExec = promisify(exec);
-				await promisifiedExec(command.join(" "), {
-					cwd: gasolineDirectory,
-				});
+				//const promisifiedExec = promisify(exec);
+				//await promisifiedExec(command.join(" "), {
+				//cwd: gasolineDirectory,
+				//});
 				console.log("Installed packages with aliases");
 			} catch (error) {
 				console.error(error);
@@ -392,19 +396,61 @@ async function runAddCommand(commandUsed: string) {
 		},
 	);
 
-	const replaceDownloadedTemplateImportsWithAliases = fromPromise(async () => {
-		try {
-			console.log("Replacing downloaded template imports with aliases");
-			const mod = await loadFile(localTemplateIndexPath);
-			console.log(mod.imports.$items);
-			console.log("Replaced downloaded template imports with aliases");
-		} catch (error) {
-			console.error(error);
-			throw new Error(
-				"Unable to replace downloaded template imports with aliases",
-			);
-		}
-	});
+	const replaceDownloadedTemplateImportsWithAliases = fromPromise(
+		async ({
+			input,
+		}: {
+			input: {
+				downloadedTemplatePackageJson: PackageJson;
+				gasolineDirPackageJson: PackageJson;
+				packageManager: PackageManager;
+				packagesWithMajorVersionConflicts: PackagesWithMajorConflicts;
+				packagesWithoutMajorVersionConflicts: PackagesWithoutMajorConflicts;
+			};
+		}) => {
+			try {
+				console.log("Replacing downloaded template imports with aliases");
+
+				const mod = await loadFile(localTemplateIndexPath);
+
+				for (const packageWithMajorVersionConflict of input.packagesWithMajorVersionConflicts) {
+					if (
+						input.gasolineDirPackageJson.dependencies?.[
+							packageWithMajorVersionConflict
+						] &&
+						input.downloadedTemplatePackageJson.dependencies?.[
+							packageWithMajorVersionConflict
+						]
+					) {
+						const newPackageMajorVersion =
+							input.downloadedTemplatePackageJson?.dependencies[
+								packageWithMajorVersionConflict
+							]
+								.split(".")[0]
+								.replace("^", "");
+
+						for (const item of mod.imports.$items) {
+							if (item.from === packageWithMajorVersionConflict) {
+								mod.imports.$add({
+									from: `${packageWithMajorVersionConflict}V${newPackageMajorVersion}`,
+									imported: item.local,
+								});
+							}
+						}
+					}
+				}
+
+				await writeFile(mod, localTemplateIndexPath);
+
+				console.log("Replaced downloaded template imports with aliases");
+			} catch (error) {
+				console.error(error);
+				throw new Error(
+					"Unable to replace downloaded template imports with aliases",
+				);
+			}
+		},
+	);
 
 	type Context = {
 		commandUsed: string;
@@ -690,6 +736,17 @@ async function runAddCommand(commandUsed: string) {
 								invoke: {
 									id: "replacingDownloadedTemplateImportsWithAliases",
 									src: "replaceDownloadedTemplateImportsWithAliases",
+									input: ({ context }) => ({
+										downloadedTemplatePackageJson:
+											context.downloadedTemplatePackageJson as PackageJson,
+										gasolineDirPackageJson:
+											context.gasolineDirPackageJson as PackageJson,
+										packageManager: context.packageManager as PackageManager,
+										packagesWithMajorVersionConflicts:
+											context.packagesWithMajorVersionConflicts,
+										packagesWithoutMajorVersionConflicts:
+											context.packagesWithoutMajorVersionConflicts,
+									}),
 									onDone: {
 										target: "#root.ok",
 									},
