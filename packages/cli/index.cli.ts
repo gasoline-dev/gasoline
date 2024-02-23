@@ -92,6 +92,146 @@ async function runAddCommand(commandUsed: string) {
 		}
 	});
 
+	const getGasolineDirFiles = fromPromise(async () => {
+		try {
+			console.log("Reading gasoline directory");
+			const result: string[] = [];
+			async function recursiveRead(currentPath: string) {
+				const entries = await fsPromises.readdir(currentPath, {
+					withFileTypes: true,
+				});
+				for (const entry of entries) {
+					const entryPath = path.join(currentPath, entry.name);
+					if (entry.isDirectory()) {
+						if (entry.name !== "node_modules" && entry.name !== ".store") {
+							await recursiveRead(entryPath);
+						}
+					} else {
+						if (entry.name.split(".").length === 4) {
+							result.push(entry.name);
+						}
+					}
+				}
+			}
+			await recursiveRead(gasolineDirectory);
+			console.log("Read gasoline directory");
+			return result;
+		} catch (error) {
+			console.error(error);
+			throw new Error("Unable to read gasoline directory");
+		}
+	});
+
+	type EntityGroupToEntities = {
+		[entityGroup: string]: string[];
+	};
+
+	const setEntityGroupToEntities = fromPromise(
+		async ({
+			input,
+		}: {
+			input: { gasolineDirFiles: string[] };
+		}) => {
+			const entityGroupToEntities: EntityGroupToEntities = {};
+			for (const file of input.gasolineDirFiles) {
+				const splitFile = file.split(".");
+				const [entityGroup, entityName] = splitFile;
+				if (entityGroup in entityGroupToEntities) {
+					entityGroupToEntities[entityGroup].push(entityName);
+				} else {
+					entityGroupToEntities[entityGroup] = [entityName];
+				}
+			}
+			return entityGroupToEntities;
+		},
+	);
+
+	type EntityGroup = string;
+
+	const runEntityGroupPrompt = fromPromise(
+		async ({
+			input,
+		}: {
+			input: { entityGroups: string[] };
+		}) => {
+			const { entityGroup } = await inquirer.prompt([
+				{
+					type: "list",
+					name: "entityGroup",
+					message: "Select entity group",
+					choices: ["Add new", ...input.entityGroups],
+				},
+			]);
+
+			return entityGroup;
+		},
+	);
+
+	const isEntityGroupSetToAddNew = (
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		_: any,
+		params: { entityGroup: string },
+	) => {
+		return params.entityGroup === "Add new";
+	};
+
+	const runAddEntityGroupPrompt = fromPromise(async () => {
+		const { entityGroup } = await inquirer.prompt([
+			{
+				type: "input",
+				name: "entityGroup",
+				message: "Enter entity group",
+			},
+		]);
+
+		return entityGroup;
+	});
+
+	const runEntityPrompt = fromPromise(
+		async ({
+			input,
+		}: {
+			input: {
+				entityGroupToEntities: EntityGroupToEntities;
+				entityGroup: EntityGroup;
+			};
+		}) => {
+			const { entity } = await inquirer.prompt([
+				{
+					type: "list",
+					name: "entity",
+					message: "Select entity",
+					choices: [
+						"Add new",
+						...input.entityGroupToEntities[input.entityGroup],
+					],
+				},
+			]);
+
+			return entity;
+		},
+	);
+
+	const isEntitySetToAddNew = (
+		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
+		_: any,
+		params: { entity: string },
+	) => {
+		return params.entity === "Add new";
+	};
+
+	const runAddEntityPrompt = fromPromise(async () => {
+		const { entity } = await inquirer.prompt([
+			{
+				type: "input",
+				name: "entity",
+				message: "Enter entity",
+			},
+		]);
+
+		return entity;
+	});
+
 	const isGasolineStoreTemplatesDirPresent = (
 		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		_: any,
@@ -477,6 +617,10 @@ async function runAddCommand(commandUsed: string) {
 	});
 
 	type Context = {
+		gasolineDirFiles: string[];
+		entityGroupToEntities: EntityGroupToEntities;
+		entityGroup: EntityGroup;
+		entity: string;
 		commandUsed: string;
 		downloadedTemplatePackageJson: undefined | PackageJson;
 		gasolineDirPackageJson: undefined | PackageJson;
@@ -492,6 +636,12 @@ async function runAddCommand(commandUsed: string) {
 		actors: {
 			checkIfGasolineStoreTemplatesDirExists,
 			createGasolineStoreTemplatesDir,
+			getGasolineDirFiles,
+			setEntityGroupToEntities,
+			runEntityGroupPrompt,
+			runAddEntityGroupPrompt,
+			runEntityPrompt,
+			runAddEntityPrompt,
 			downloadProvidedTemplate,
 			getDownloadedTemplatePackageJson,
 			getGasolineDirPackageJson,
@@ -504,6 +654,8 @@ async function runAddCommand(commandUsed: string) {
 			copyDownloadedTemplateToGasolineDir,
 		},
 		guards: {
+			isEntityGroupSetToAddNew,
+			isEntitySetToAddNew,
 			isGasolineStoreTemplatesDirPresent,
 			isThereAMajorVersionPackageConflict,
 			isHowToResolveMajorVersionPackageConflictAnswerUpdate,
@@ -524,6 +676,10 @@ async function runAddCommand(commandUsed: string) {
 		id: "root",
 		initial: "checkingIfGasolineStoreTemplatesDirExists",
 		context: {
+			gasolineDirFiles: [],
+			entityGroupToEntities: {},
+			entityGroup: "",
+			entity: "",
 			commandUsed,
 			downloadedTemplatePackageJson: undefined,
 			gasolineDirPackageJson: undefined,
@@ -539,7 +695,7 @@ async function runAddCommand(commandUsed: string) {
 					src: "checkIfGasolineStoreTemplatesDirExists",
 					onDone: [
 						{
-							target: "downloadingTemplate",
+							target: "processingEntities",
 							guard: {
 								type: "isGasolineStoreTemplatesDirPresent",
 								params: ({ event }) => ({
@@ -567,6 +723,143 @@ async function runAddCommand(commandUsed: string) {
 					onError: {
 						target: "err",
 						actions: ({ context, event }) => console.error(event),
+					},
+				},
+			},
+			processingEntities: {
+				id: "processingEntities",
+				initial: "gettingGasolineDirFiles",
+				states: {
+					gettingGasolineDirFiles: {
+						invoke: {
+							id: "gettingGasolineDirFiles",
+							src: "getGasolineDirFiles",
+							onDone: {
+								target: "settingEntityGroupToEntities",
+								actions: assign({
+									gasolineDirFiles: ({ event }) => event.output,
+								}),
+							},
+							onError: {
+								target: "#root.err",
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
+					},
+					settingEntityGroupToEntities: {
+						invoke: {
+							id: "settingEntityGroupToEntities",
+							src: "setEntityGroupToEntities",
+							input: ({ context }) => ({
+								gasolineDirFiles: context.gasolineDirFiles,
+							}),
+							onDone: {
+								target: "runningEntityGroupPrompt",
+								actions: assign({
+									entityGroupToEntities: ({ event }) => event.output,
+								}),
+							},
+							onError: {
+								target: "#root.err",
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
+					},
+					runningEntityGroupPrompt: {
+						invoke: {
+							id: "runningEntityGroupPrompt",
+							src: "runEntityGroupPrompt",
+							input: ({ context }) => ({
+								entityGroups: Object.keys(context.entityGroupToEntities),
+							}),
+							onDone: [
+								{
+									target: "runningAddEntityGroupPrompt",
+									guard: {
+										type: "isEntityGroupSetToAddNew",
+										params: ({ event }) => ({
+											entityGroup: event.output,
+										}),
+									},
+									actions: assign({
+										entityGroup: ({ event }) => event.output,
+									}),
+								},
+								{
+									target: "runningEntityPrompt",
+									actions: assign({
+										entityGroup: ({ event }) => event.output,
+									}),
+								},
+							],
+							onError: {
+								target: "#root.err",
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
+					},
+					runningAddEntityGroupPrompt: {
+						invoke: {
+							id: "runningAddEntityGroupPrompt",
+							src: "runAddEntityGroupPrompt",
+							onDone: {
+								target: "runningEntityPrompt",
+								actions: assign({
+									entityGroup: ({ event }) => event.output,
+								}),
+							},
+							onError: {
+								target: "#root.err",
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
+					},
+					runningEntityPrompt: {
+						invoke: {
+							id: "runningEntityPrompt",
+							src: "runEntityPrompt",
+							input: ({ context }) => ({
+								entityGroupToEntities: context.entityGroupToEntities,
+								entityGroup: context.entityGroup,
+							}),
+							onDone: [
+								{
+									target: "runningAddEntityPrompt",
+									guard: {
+										type: "isEntitySetToAddNew",
+										params: ({ event }) => ({
+											entity: event.output,
+										}),
+									},
+									actions: assign({
+										entity: ({ event }) => event.output,
+									}),
+								},
+								{
+									target: "#root.downloadingTemplate",
+								},
+							],
+							onError: {
+								target: "#root.err",
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
+					},
+					runningAddEntityPrompt: {
+						invoke: {
+							id: "runningAddEntityPrompt",
+							src: "runAddEntityPrompt",
+							onDone: {
+								target: "#root.downloadingTemplate",
+								actions: assign({
+									entity: ({ event }) => event.output,
+								}),
+							},
+							onError: {
+								target: "#root.err",
+								actions: ({ context, event }) => console.error(event),
+							},
+						},
 					},
 				},
 			},
