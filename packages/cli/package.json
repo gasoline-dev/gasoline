@@ -30,9 +30,12 @@
 		"@types/node": "^18.0.0"
 	},
 	"dependencies": {
+		"@hono/node-server": "^1.8.1",
 		"giget": "^1.2.1",
+		"hono": "^3.12.10",
 		"inquirer": "^9.2.12",
 		"magicast": "^0.3.3",
+		"miniflare": "^3.20240208.0",
 		"xstate": "^5.5.1"
 	}
 }

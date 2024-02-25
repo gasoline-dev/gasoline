@@ -7,6 +7,9 @@ import { downloadTemplate } from "giget";
 import path from "node:path";
 import { exec } from "node:child_process";
 import { generateCode, loadFile, parseModule, writeFile } from "magicast";
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
+import { Miniflare } from "miniflare";
 
 await main();
 
@@ -43,6 +46,10 @@ async function main() {
 				} else {
 					console.log(`Command ${command} not found`);
 				}
+			}
+
+			if (command === "dev") {
+				await runDevCommand();
 			}
 		} else {
 			logHelp();
@@ -1134,4 +1141,26 @@ async function fsIsDirPresent(directory: string) {
 	} catch (error) {
 		return false;
 	}
+}
+
+async function runDevCommand() {
+	console.log("Running dev server");
+	const app = new Hono();
+	app.get("/", async (c) => {
+		const mf = new Miniflare({
+			modules: true,
+			script: `
+			export default {
+				async fetch(request, env, ctx) {
+					return new Response("Hello Miniflare!");
+				}
+			}
+			`,
+		});
+		const fetchRes = await mf.dispatchFetch("http://localhost:8787/");
+		const text = await fetchRes.text();
+		await mf.dispose();
+		return c.text(text);
+	});
+	serve(app);
 }
