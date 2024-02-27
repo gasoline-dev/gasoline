@@ -1,12 +1,11 @@
 #!/usr/bin/env node
-import { parseArgs, promisify } from "node:util";
+import { parseArgs } from "node:util";
 import inquirer from "inquirer";
 import { assign, createActor, fromPromise, setup, waitFor } from "xstate";
 import fsPromises from "fs/promises";
 import { downloadTemplate } from "giget";
 import path from "node:path";
-import { exec } from "node:child_process";
-import { generateCode, loadFile, parseModule, writeFile } from "magicast";
+import { loadFile, parseModule, writeFile } from "magicast";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { Miniflare } from "miniflare";
@@ -34,23 +33,23 @@ async function main() {
 		if (parsedArgs.positionals?.[0]) {
 			const command = parsedArgs.positionals[0];
 
-			const isAddCommand = command.includes("add:") ? true : false;
+			const commandDoesNotExistMessage = `Command "${command}" does not exist. Run "gasoline --help" to see available commands.`;
 
-			const availableAddCommands = [
-				"add:cloudflare:worker:api:empty",
-				"add:cloudflare:worker:api:hono",
-			];
+			if (command.includes("add:")) {
+				const availableAddCommands = [
+					"add:cloudflare:worker:api:empty",
+					"add:cloudflare:worker:api:hono",
+				];
 
-			if (isAddCommand) {
 				if (availableAddCommands.includes(command)) {
 					await runAddCommand(command);
 				} else {
-					console.log(`Command ${command} not found`);
+					console.log(commandDoesNotExistMessage);
 				}
-			}
-
-			if (command === "dev") {
+			} else if (command === "dev") {
 				await runDevCommand();
+			} else {
+				console.log(commandDoesNotExistMessage);
 			}
 		} else {
 			logHelp();
