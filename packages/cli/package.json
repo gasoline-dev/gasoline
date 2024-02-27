@@ -31,6 +31,8 @@
 	},
 	"dependencies": {
 		"@hono/node-server": "^1.8.1",
+		"chokidar": "^3.6.0",
+		"esbuild": "^0.20.1",
 		"giget": "^1.2.1",
 		"hono": "^3.12.10",
 		"inquirer": "^9.2.12",
