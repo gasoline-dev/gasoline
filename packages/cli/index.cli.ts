@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { parseArgs } from "node:util";
+import { parseArgs, promisify } from "node:util";
 import inquirer from "inquirer";
 import { assign, createActor, fromPromise, setup, waitFor } from "xstate";
 import fsPromises from "fs/promises";
@@ -10,6 +10,7 @@ import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { Miniflare } from "miniflare";
 import * as esbuild from "esbuild";
+import { exec } from "node:child_process";
 
 await main();
 
@@ -29,6 +30,15 @@ async function main() {
 			allowPositionals: true,
 			options,
 		});
+
+		const helpMessage = `Usage:
+gasoline [command] -> Run command
+
+Commands:
+ add:cloudflare:worker:api:empty Add Cloudflare Worker API
+
+Options:
+ --help, -h Print help`;
 
 		if (parsedArgs.positionals?.[0]) {
 			const command = parsedArgs.positionals[0];
@@ -52,7 +62,7 @@ async function main() {
 				console.log(commandDoesNotExistMessage);
 			}
 		} else {
-			logHelp();
+			console.log(helpMessage);
 		}
 	} catch (error) {
 		console.error(error);
@@ -60,183 +70,88 @@ async function main() {
 }
 
 async function runAddCommand(commandUsed: string) {
-	const gasolineDirectory = "./gasoline";
-	const localTemplatesDirectory = "./gasoline/.store/templates";
+	const gasolineDir = "./gasoline";
+	const localTemplatesDir = "./gasoline/.store/templates";
 	const templateName = commandUsed.replace("add:", "").replace(/:/g, "-");
 	const localTemplateIndexPath = `./gasoline/.store/templates/${templateName}/index.ts`;
 	const templateSource = `github:gasoline-dev/gasoline/templates/${templateName}`;
 
 	const checkIfGasolineStoreTemplatesDirExists = fromPromise(async () => {
-		try {
-			console.log(`Checking if ${localTemplatesDirectory} directory exists`);
-			const isGasolineStoreTemplatesDirPresent = await fsIsDirPresent(
-				localTemplatesDirectory,
-			);
-			if (!isGasolineStoreTemplatesDirPresent) {
-				console.log(`${localTemplatesDirectory} directory is not present`);
-				return false;
-			}
-			console.log(`${localTemplatesDirectory} directory is present`);
-			return true;
-		} catch (error) {
-			console.error(error);
-			throw new Error(
-				`Unable to check if ${localTemplatesDirectory} directory exists`,
-			);
-		}
+		return await fsIsDirPresent(localTemplatesDir);
 	});
 
 	const createGasolineStoreTemplatesDir = fromPromise(async () => {
-		try {
-			console.log(`Creating ${localTemplatesDirectory} directory`);
-			await fsPromises.mkdir(localTemplatesDirectory, {
-				recursive: true,
-			});
-			console.log(`Created ${localTemplatesDirectory} directory`);
-		} catch (error) {
-			console.error(error);
-			throw new Error(`Unable to create${localTemplatesDirectory} directory`);
-		}
+		return await fsCreateDir(localTemplatesDir);
 	});
 
 	const getGasolineDirFiles = fromPromise(async () => {
-		try {
-			console.log("Reading gasoline directory");
-			const result: string[] = [];
-			async function recursiveRead(currentPath: string) {
-				const entries = await fsPromises.readdir(currentPath, {
-					withFileTypes: true,
-				});
-				for (const entry of entries) {
-					const entryPath = path.join(currentPath, entry.name);
-					if (entry.isDirectory()) {
-						if (entry.name !== "node_modules" && entry.name !== ".store") {
-							await recursiveRead(entryPath);
-						}
-					} else {
-						if (entry.name.split(".").length === 4) {
-							result.push(entry.name);
-						}
-					}
-				}
-			}
-			await recursiveRead(gasolineDirectory);
-			console.log("Read gasoline directory");
-			return result;
-		} catch (error) {
-			console.error(error);
-			throw new Error("Unable to read gasoline directory");
-		}
+		return await fsGetDirFiles(gasolineDir, {
+			fileRegexToMatch: /^[^.]+\.[^.]+\.[^.]+\.[^.]+$/,
+		});
 	});
 
-	type EntityGroupToEntities = {
-		[entityGroup: string]: string[];
-	};
-
-	const setEntityGroupToEntities = fromPromise(
+	const setResourceEntityGroupToEntitiesMap = fromPromise(
 		async ({
 			input,
 		}: {
 			input: { gasolineDirFiles: string[] };
 		}) => {
-			const entityGroupToEntities: EntityGroupToEntities = {};
-			for (const file of input.gasolineDirFiles) {
-				const splitFile = file.split(".");
-				const [entityGroup, entityName] = splitFile;
-				if (entityGroup in entityGroupToEntities) {
-					entityGroupToEntities[entityGroup].push(entityName);
-				} else {
-					entityGroupToEntities[entityGroup] = [entityName];
-				}
-			}
-			return entityGroupToEntities;
+			return resourcesSetEntityGroupToEntitiesMap(input.gasolineDirFiles);
 		},
 	);
 
-	type EntityGroup = string;
+	type ResourceEntityGroup = string;
 
-	const runEntityGroupPrompt = fromPromise(
+	const runSelectResourceEntityGroupPrompt = fromPromise(
 		async ({
 			input,
 		}: {
-			input: { entityGroups: string[] };
+			input: { resourceEntityGroups: string[] };
 		}) => {
-			const { entityGroup } = await inquirer.prompt([
-				{
-					type: "list",
-					name: "entityGroup",
-					message: "Select entity group",
-					choices: ["Add new", ...input.entityGroups],
-				},
-			]);
-
-			return entityGroup;
+			return await promptsRunSelectResourceEntityGroup(
+				input.resourceEntityGroups,
+			);
 		},
 	);
 
-	const isEntityGroupSetToAddNew = (
+	const isResourceEntityGroupSetToAddNew = (
 		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		_: any,
-		params: { entityGroup: string },
+		params: { resourceEntityGroup: string },
 	) => {
-		return params.entityGroup === "Add new";
+		return params.resourceEntityGroup === "Add new";
 	};
 
-	const runAddEntityGroupPrompt = fromPromise(async () => {
-		const { entityGroup } = await inquirer.prompt([
-			{
-				type: "input",
-				name: "entityGroup",
-				message: "Enter entity group",
-			},
-		]);
-
-		return entityGroup;
+	const runAddResourceEntityGroupPrompt = fromPromise(async () => {
+		return await promptsRunAddResourceEntityGroupPrompt();
 	});
 
-	const runEntityPrompt = fromPromise(
+	const runSelectResourceEntityPrompt = fromPromise(
 		async ({
 			input,
 		}: {
 			input: {
-				entityGroupToEntities: EntityGroupToEntities;
-				entityGroup: EntityGroup;
+				resourceEntityGroupToEntitiesMap: ResourcesEntityGroupToEntitiesMap;
+				resourceEntityGroup: ResourceEntityGroup;
 			};
 		}) => {
-			const { entity } = await inquirer.prompt([
-				{
-					type: "list",
-					name: "entity",
-					message: "Select entity",
-					choices: [
-						"Add new",
-						...input.entityGroupToEntities[input.entityGroup],
-					],
-				},
-			]);
-
-			return entity;
+			return await promptsRunSelectResourceEntity(
+				input.resourceEntityGroupToEntitiesMap,
+				input.resourceEntityGroup,
+			);
 		},
 	);
 
-	const isEntitySetToAddNew = (
+	const isResourceEntitySetToAddNew = (
 		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
 		_: any,
-		params: { entity: string },
+		params: { resourceEntity: string },
 	) => {
-		return params.entity === "Add new";
+		return params.resourceEntity === "Add new";
 	};
 
-	const runAddEntityPrompt = fromPromise(async () => {
-		const { entity } = await inquirer.prompt([
-			{
-				type: "input",
-				name: "entity",
-				message: "Enter entity",
-			},
-		]);
-
-		return entity;
+	const runAddResourceEntityPrompt = fromPromise(async () => {
+		return await promptsAddResourceEntity();
 	});
 
 	const isGasolineStoreTemplatesDirPresent = (
@@ -247,90 +162,41 @@ async function runAddCommand(commandUsed: string) {
 		return params.isPresent;
 	};
 
-	const downloadProvidedTemplate = fromPromise(async () => {
-		try {
-			console.log(`Downloading provided template ${templateSource}`);
-			await downloadTemplate(templateSource, {
-				dir: `${localTemplatesDirectory}/${templateName}`,
-				forceClean: true,
-			});
-			console.log(`Downloaded provided template ${templateSource}`);
-		} catch (error) {
-			console.error(error);
-			throw new Error("Unable to download provided template");
-		}
+	const downloadTemplate = fromPromise(async () => {
+		return await templatesDownload({
+			src: templateSource,
+			downloadDir: localTemplatesDir,
+			templateName,
+		});
 	});
 
 	const getDownloadedTemplatePackageJson = fromPromise(async () => {
-		try {
-			console.log("Getting downloaded template package.json");
-			const packageJson = await fsPromises
-				.readFile(
-					path.join(localTemplatesDirectory, templateName, "package.json"),
-					"utf-8",
-				)
-				.then(JSON.parse);
-			console.log("Got downloaded template package.json");
-			return packageJson;
-		} catch (error) {
-			console.error(error);
-			throw new Error("Unable to get downloaded template package.json");
-		}
+		return await templatesGetDownloadedPackageJson(
+			localTemplatesDir,
+			templateName,
+		);
 	});
 
 	const getGasolineDirPackageJson = fromPromise(async () => {
-		try {
-			console.log("Getting gasoline directory package.json");
-			const packageJson = await fsPromises
-				.readFile(path.join(gasolineDirectory, "package.json"), "utf-8")
-				.then(JSON.parse);
-			console.log("Got gasoline directory package.json");
-			return packageJson;
-		} catch (error) {
-			console.error(error);
-			throw new Error("Unable to get gasoline directory package.json");
-		}
+		return gasolineDirGetPackageJson(gasolineDir);
 	});
 
-	type PackageJson = {
-		dependencies?: { [key: string]: string };
-		devDependencies?: { [key: string]: string };
-	};
-
-	const setPackagesWithoutMajorVersionConflicts = fromPromise(
-		async ({
-			input,
-		}: {
-			input: {
-				downloadedTemplatePackageJson: PackageJson;
-				gasolineDirPackageJson: PackageJson;
-			};
-		}) => {
-			const result: string[] = [];
-			if (
-				input.downloadedTemplatePackageJson.dependencies &&
-				Object.keys(input.downloadedTemplatePackageJson.dependencies).length >
-					0 &&
-				input.gasolineDirPackageJson.dependencies &&
-				Object.keys(input.gasolineDirPackageJson.dependencies).length > 0
-			) {
-				for (const downloadedTemplateDependency in input
-					.downloadedTemplatePackageJson.dependencies) {
-					if (
-						input.gasolineDirPackageJson.dependencies[
-							downloadedTemplateDependency
-						] &&
-						input.gasolineDirPackageJson.dependencies[
-							downloadedTemplateDependency
-						].split(".")[0] === downloadedTemplateDependency.split(".")[0]
-					) {
-						result.push(downloadedTemplateDependency);
-					}
-				}
-			}
-			return result;
-		},
-	);
+	const setDownloadedTemplatePackageJsonPackagesWithoutMajorVersionConflicts =
+		fromPromise(
+			async ({
+				input,
+			}: {
+				input: {
+					downloadedTemplatePackageJson: PackageJson;
+					gasolineDirPackageJson: PackageJson;
+				};
+			}) => {
+				return templatesSetDownloadedPackageJsonPackagesWithoutMajorVersionConflicts(
+					input.downloadedTemplatePackageJson,
+					input.gasolineDirPackageJson,
+				);
+			},
+		);
 
 	const setPackagesWithMajorVersionConflicts = fromPromise(
 		async ({
@@ -531,10 +397,10 @@ async function runAddCommand(commandUsed: string) {
 
 			try {
 				console.log("Installing packages with aliases");
-				//const promisifiedExec = promisify(exec);
-				//await promisifiedExec(command.join(" "), {
-				//cwd: gasolineDirectory,
-				//});
+				const promisifiedExec = promisify(exec);
+				await promisifiedExec(command.join(" "), {
+					cwd: gasolineDir,
+				});
 				console.log("Installed packages with aliases");
 			} catch (error) {
 				console.error(error);
@@ -604,8 +470,8 @@ async function runAddCommand(commandUsed: string) {
 			console.log("Copying downloaded template to gasoline directory");
 			const excludedFiles = ["package.json", "tsconfig.json"];
 			await fsPromises.cp(
-				path.join(localTemplatesDirectory, templateName),
-				gasolineDirectory,
+				path.join(localTemplatesDir, templateName),
+				gasolineDir,
 				{
 					recursive: true,
 					filter: (src) => {
@@ -625,9 +491,9 @@ async function runAddCommand(commandUsed: string) {
 
 	type Context = {
 		gasolineDirFiles: string[];
-		entityGroupToEntities: EntityGroupToEntities;
-		entityGroup: EntityGroup;
-		entity: string;
+		resourceEntityGroupToEntitiesMap: ResourcesEntityGroupToEntitiesMap;
+		resourceEntityGroup: ResourceEntityGroup;
+		resourceEntity: string;
 		commandUsed: string;
 		downloadedTemplatePackageJson: undefined | PackageJson;
 		gasolineDirPackageJson: undefined | PackageJson;
@@ -644,15 +510,15 @@ async function runAddCommand(commandUsed: string) {
 			checkIfGasolineStoreTemplatesDirExists,
 			createGasolineStoreTemplatesDir,
 			getGasolineDirFiles,
-			setEntityGroupToEntities,
-			runEntityGroupPrompt,
-			runAddEntityGroupPrompt,
-			runEntityPrompt,
-			runAddEntityPrompt,
-			downloadProvidedTemplate,
+			setResourceEntityGroupToEntitiesMap,
+			runSelectResourceEntityGroupPrompt,
+			runAddResourceEntityGroupPrompt,
+			runSelectResourceEntityPrompt,
+			runAddResourceEntityPrompt,
+			downloadTemplate,
 			getDownloadedTemplatePackageJson,
 			getGasolineDirPackageJson,
-			setPackagesWithoutMajorVersionConflicts,
+			setDownloadedTemplatePackageJsonPackagesWithoutMajorVersionConflicts,
 			setPackagesWithMajorVersionConflicts,
 			runHowToResolveMajorVersionPackageConflictPrompt,
 			getProjectPackageManager,
@@ -661,8 +527,8 @@ async function runAddCommand(commandUsed: string) {
 			copyDownloadedTemplateToGasolineDir,
 		},
 		guards: {
-			isEntityGroupSetToAddNew,
-			isEntitySetToAddNew,
+			isResourceEntityGroupSetToAddNew,
+			isResourceEntitySetToAddNew,
 			isGasolineStoreTemplatesDirPresent,
 			isThereAMajorVersionPackageConflict,
 			isHowToResolveMajorVersionPackageConflictAnswerUpdate,
@@ -684,9 +550,9 @@ async function runAddCommand(commandUsed: string) {
 		initial: "checkingIfGasolineStoreTemplatesDirExists",
 		context: {
 			gasolineDirFiles: [],
-			entityGroupToEntities: {},
-			entityGroup: "",
-			entity: "",
+			resourceEntityGroupToEntitiesMap: new Map(),
+			resourceEntityGroup: "",
+			resourceEntity: "",
 			commandUsed,
 			downloadedTemplatePackageJson: undefined,
 			gasolineDirPackageJson: undefined,
@@ -702,7 +568,7 @@ async function runAddCommand(commandUsed: string) {
 					src: "checkIfGasolineStoreTemplatesDirExists",
 					onDone: [
 						{
-							target: "processingEntities",
+							target: "processingResourceEntities",
 							guard: {
 								type: "isGasolineStoreTemplatesDirPresent",
 								params: ({ event }) => ({
@@ -733,8 +599,8 @@ async function runAddCommand(commandUsed: string) {
 					},
 				},
 			},
-			processingEntities: {
-				id: "processingEntities",
+			processingResourceEntities: {
+				id: "processingResourceEntities",
 				initial: "gettingGasolineDirFiles",
 				states: {
 					gettingGasolineDirFiles: {
@@ -742,7 +608,7 @@ async function runAddCommand(commandUsed: string) {
 							id: "gettingGasolineDirFiles",
 							src: "getGasolineDirFiles",
 							onDone: {
-								target: "settingEntityGroupToEntities",
+								target: "settingResourceEntityGroupToEntitiesMap",
 								actions: assign({
 									gasolineDirFiles: ({ event }) => event.output,
 								}),
@@ -753,17 +619,17 @@ async function runAddCommand(commandUsed: string) {
 							},
 						},
 					},
-					settingEntityGroupToEntities: {
+					settingResourceEntityGroupToEntitiesMap: {
 						invoke: {
-							id: "settingEntityGroupToEntities",
-							src: "setEntityGroupToEntities",
+							id: "settingResourceEntityGroupToEntitiesMap",
+							src: "setResourceEntityGroupToEntitiesMap",
 							input: ({ context }) => ({
 								gasolineDirFiles: context.gasolineDirFiles,
 							}),
 							onDone: {
-								target: "runningEntityGroupPrompt",
+								target: "runningSelectResourceEntityGroupPrompt",
 								actions: assign({
-									entityGroupToEntities: ({ event }) => event.output,
+									resourceEntityGroupToEntitiesMap: ({ event }) => event.output,
 								}),
 							},
 							onError: {
@@ -772,30 +638,32 @@ async function runAddCommand(commandUsed: string) {
 							},
 						},
 					},
-					runningEntityGroupPrompt: {
+					runningSelectResourceEntityGroupPrompt: {
 						invoke: {
-							id: "runningEntityGroupPrompt",
-							src: "runEntityGroupPrompt",
+							id: "runningSelectResourceEntityGroupPrompt",
+							src: "runSelectResourceEntityGroupPrompt",
 							input: ({ context }) => ({
-								entityGroups: Object.keys(context.entityGroupToEntities),
+								resourceEntityGroups: [
+									...context.resourceEntityGroupToEntitiesMap.keys(),
+								],
 							}),
 							onDone: [
 								{
-									target: "runningAddEntityGroupPrompt",
+									target: "runningAddResourceEntityGroupPrompt",
 									guard: {
-										type: "isEntityGroupSetToAddNew",
+										type: "isResourceEntityGroupSetToAddNew",
 										params: ({ event }) => ({
-											entityGroup: event.output,
+											resourceEntityGroup: event.output,
 										}),
 									},
 									actions: assign({
-										entityGroup: ({ event }) => event.output,
+										resourceEntityGroup: ({ event }) => event.output,
 									}),
 								},
 								{
-									target: "runningEntityPrompt",
+									target: "runningSetResourceEntityPrompt",
 									actions: assign({
-										entityGroup: ({ event }) => event.output,
+										resourceEntityGroup: ({ event }) => event.output,
 									}),
 								},
 							],
@@ -805,14 +673,14 @@ async function runAddCommand(commandUsed: string) {
 							},
 						},
 					},
-					runningAddEntityGroupPrompt: {
+					runningAddResourceEntityGroupPrompt: {
 						invoke: {
-							id: "runningAddEntityGroupPrompt",
-							src: "runAddEntityGroupPrompt",
+							id: "runningAddResourceEntityGroupPrompt",
+							src: "runAddResourceEntityGroupPrompt",
 							onDone: {
-								target: "runningEntityPrompt",
+								target: "runningSetResourceEntityPrompt",
 								actions: assign({
-									entityGroup: ({ event }) => event.output,
+									resourceEntityGroup: ({ event }) => event.output,
 								}),
 							},
 							onError: {
@@ -821,25 +689,26 @@ async function runAddCommand(commandUsed: string) {
 							},
 						},
 					},
-					runningEntityPrompt: {
+					runningSetResourceEntityPrompt: {
 						invoke: {
-							id: "runningEntityPrompt",
-							src: "runEntityPrompt",
+							id: "runningSetResourceEntityPrompt",
+							src: "runSelectResourceEntityPrompt",
 							input: ({ context }) => ({
-								entityGroupToEntities: context.entityGroupToEntities,
-								entityGroup: context.entityGroup,
+								resourceEntityGroupToEntitiesMap:
+									context.resourceEntityGroupToEntitiesMap,
+								resourceEntityGroup: context.resourceEntityGroup,
 							}),
 							onDone: [
 								{
-									target: "runningAddEntityPrompt",
+									target: "runningAddResourceEntityPrompt",
 									guard: {
-										type: "isEntitySetToAddNew",
+										type: "isResourceEntitySetToAddNew",
 										params: ({ event }) => ({
-											entity: event.output,
+											resourceEntity: event.output,
 										}),
 									},
 									actions: assign({
-										entity: ({ event }) => event.output,
+										resourceEntity: ({ event }) => event.output,
 									}),
 								},
 								{
@@ -852,14 +721,14 @@ async function runAddCommand(commandUsed: string) {
 							},
 						},
 					},
-					runningAddEntityPrompt: {
+					runningAddResourceEntityPrompt: {
 						invoke: {
-							id: "runningAddEntityPrompt",
-							src: "runAddEntityPrompt",
+							id: "runningAddResourceEntityPrompt",
+							src: "runAddResourceEntityPrompt",
 							onDone: {
 								target: "#root.downloadingTemplate",
 								actions: assign({
-									entity: ({ event }) => event.output,
+									resourceEntity: ({ event }) => event.output,
 								}),
 							},
 							onError: {
@@ -873,7 +742,7 @@ async function runAddCommand(commandUsed: string) {
 			downloadingTemplate: {
 				invoke: {
 					id: "downloadingTemplate",
-					src: "downloadProvidedTemplate",
+					src: "downloadTemplate",
 					onDone: {
 						target: "gettingDownloadedTemplatePackageJson",
 					},
@@ -904,7 +773,8 @@ async function runAddCommand(commandUsed: string) {
 					id: "gettingGasolineDirPackageJson",
 					src: "getGasolineDirPackageJson",
 					onDone: {
-						target: "settingPackagesWithoutMajorVersionConflicts",
+						target:
+							"settingDownloadedTemplatePackageJsonPackagesWithoutMajorVersionConflicts",
 						actions: assign({
 							gasolineDirPackageJson: ({ event }) => event.output,
 						}),
@@ -915,28 +785,30 @@ async function runAddCommand(commandUsed: string) {
 					},
 				},
 			},
-			settingPackagesWithoutMajorVersionConflicts: {
-				invoke: {
-					id: "settingPackagesWithoutMajorVersionConflicts",
-					src: "setPackagesWithoutMajorVersionConflicts",
-					input: ({ context }) => ({
-						downloadedTemplatePackageJson:
-							context.downloadedTemplatePackageJson as PackageJson,
-						gasolineDirPackageJson:
-							context.gasolineDirPackageJson as PackageJson,
-					}),
-					onDone: {
-						target: "settingPackagesWithMajorVersionConflicts",
-						actions: assign({
-							packagesWithoutMajorVersionConflicts: ({ event }) => event.output,
+			settingDownloadedTemplatePackageJsonPackagesWithoutMajorVersionConflicts:
+				{
+					invoke: {
+						id: "settingDownloadedTemplatePackageJsonPackagesWithoutMajorVersionConflicts",
+						src: "setDownloadedTemplatePackageJsonPackagesWithoutMajorVersionConflicts",
+						input: ({ context }) => ({
+							downloadedTemplatePackageJson:
+								context.downloadedTemplatePackageJson as PackageJson,
+							gasolineDirPackageJson:
+								context.gasolineDirPackageJson as PackageJson,
 						}),
-					},
-					onError: {
-						target: "err",
-						actions: ({ context, event }) => console.error(event),
+						onDone: {
+							target: "settingPackagesWithMajorVersionConflicts",
+							actions: assign({
+								packagesWithoutMajorVersionConflicts: ({ event }) =>
+									event.output,
+							}),
+						},
+						onError: {
+							target: "err",
+							actions: ({ context, event }) => console.error(event),
+						},
 					},
 				},
-			},
 			settingPackagesWithMajorVersionConflicts: {
 				invoke: {
 					id: "settingPackagesWithMajorVersionConflicts",
@@ -1122,27 +994,6 @@ async function runAddCommand(commandUsed: string) {
 	}
 }
 
-function logHelp() {
-	console.log(`Usage:
-gasoline [command] -> Run command
-gas [command] -> Run command
-
-Commands:
- add:cloudflare:worker:api:empty Add Cloudflare Worker API
-
-Options:
- --help, -h Print help`);
-}
-
-async function fsIsDirPresent(directory: string) {
-	try {
-		await fsPromises.access(directory);
-		return true;
-	} catch (error) {
-		return false;
-	}
-}
-
 async function runDevCommand() {
 	async function getGasolineDirFiles() {
 		try {
@@ -1263,4 +1114,219 @@ async function runDevCommand() {
 	serve(app, (info) => {
 		console.log(`Listening on http://localhost:${info.port}`);
 	});
+}
+
+async function fsAccess(dir: string) {
+	try {
+		await fsPromises.access(dir);
+		return true;
+	} catch (error) {
+		return false;
+	}
+}
+
+async function fsCreateDir(dir: string) {
+	try {
+		console.log(`Creating ${dir} directory`);
+		await fsPromises.mkdir(dir, {
+			recursive: true,
+		});
+		console.log(`Created ${dir} directory`);
+	} catch (error) {
+		console.error(error);
+		throw new Error(`Unable to create${dir} directory`);
+	}
+}
+
+type FsGetDirFilesOptions = {
+	fileRegexToMatch?: RegExp;
+};
+
+async function fsGetDirFiles(dir: string, options: FsGetDirFilesOptions = {}) {
+	try {
+		const result = [];
+		const { fileRegexToMatch = /.*/ } = options;
+		console.log(`Getting ${dir} directory files`);
+		const entries = await fsPromises.readdir(dir, {
+			withFileTypes: true,
+		});
+		for (const entry of entries) {
+			if (!entry.isDirectory() && fileRegexToMatch.test(entry.name)) {
+				result.push(entry.name);
+			}
+		}
+		console.log(`Got ${dir} directory files`);
+		return result;
+	} catch (error) {
+		console.error(error);
+		throw new Error(`Unable to get ${dir} directory files`);
+	}
+}
+
+async function fsIsDirPresent(dir: string) {
+	try {
+		console.log(`Checking if ${dir} directory is present`);
+		const isDirPresent = await fsAccess(dir);
+		if (!isDirPresent) {
+			console.log(`${dir} directory is not present`);
+			return false;
+		}
+		console.log(`${dir} directory is present`);
+		return true;
+	} catch (error) {
+		console.error(error);
+		throw new Error(`Unable to check if ${dir} directory exists`);
+	}
+}
+
+async function gasolineDirGetPackageJson(dir: string) {
+	try {
+		console.log(`Getting ${dir}/package.json`);
+		const packageJson = await fsPromises
+			.readFile(path.join(dir, "package.json"), "utf-8")
+			.then(JSON.parse);
+		console.log(`Got ${dir}/package.json`);
+		return packageJson;
+	} catch (error) {
+		console.error(error);
+		throw new Error(`Unable to get ${dir}/package.json`);
+	}
+}
+
+async function promptsAddResourceEntity() {
+	const { resourceEntity } = await inquirer.prompt([
+		{
+			type: "input",
+			name: "resourceEntity",
+			message: "Enter resource entity",
+		},
+	]);
+	return resourceEntity;
+}
+
+async function promptsRunAddResourceEntityGroupPrompt() {
+	const { resourceEntityGroup } = await inquirer.prompt([
+		{
+			type: "input",
+			name: "resourceEntityGroup",
+			message: "Enter resource entity group",
+		},
+	]);
+	return resourceEntityGroup;
+}
+
+async function promptsRunSelectResourceEntity(
+	resourceEntityGroupToEntitiesMap: ResourcesEntityGroupToEntitiesMap,
+	resourceEntityGroup: string,
+) {
+	const { resourceEntity } = await inquirer.prompt([
+		{
+			type: "list",
+			name: "resourceEntity",
+			message: "Select resource entity",
+			choices: [
+				"Add new",
+				...(resourceEntityGroupToEntitiesMap.get(resourceEntityGroup) || []),
+			],
+		},
+	]);
+	return resourceEntity;
+}
+
+async function promptsRunSelectResourceEntityGroup(
+	resourceEntityGroups: string[],
+) {
+	const { resourceEntityGroup } = await inquirer.prompt([
+		{
+			type: "list",
+			name: "resourceEntityGroup",
+			message: "Select resource entity group",
+			choices: ["Add new", ...resourceEntityGroups],
+		},
+	]);
+	return resourceEntityGroup;
+}
+
+type ResourcesEntityGroupToEntitiesMap = Map<string, string[]>;
+
+function resourcesSetEntityGroupToEntitiesMap(
+	gasolineDirFiles: string[],
+): ResourcesEntityGroupToEntitiesMap {
+	const result = new Map<string, string[]>();
+	for (const file of gasolineDirFiles) {
+		const splitFile = file.split(".");
+		const [resourceEntityGroup, resourceEntity] = splitFile;
+		if (result.has(resourceEntityGroup)) {
+			result.get(resourceEntityGroup)?.push(resourceEntity);
+		} else {
+			result.set(resourceEntityGroup, [resourceEntity]);
+		}
+	}
+	return result;
+}
+
+async function templatesDownload(options: {
+	src: string;
+	downloadDir: string;
+	templateName: string;
+}) {
+	try {
+		const { src, downloadDir, templateName } = options;
+		console.log(`Downloading template ${src}`);
+		await downloadTemplate(src, {
+			dir: `${downloadDir}/${templateName}`,
+			forceClean: true,
+		});
+		console.log(`Downloaded template ${src}`);
+	} catch (error) {
+		console.error(error);
+		throw new Error("Unable to download template");
+	}
+}
+
+async function templatesGetDownloadedPackageJson(
+	downloadDir: string,
+	templateName: string,
+) {
+	try {
+		console.log("Getting downloaded template package.json");
+		const packageJson = await fsPromises
+			.readFile(path.join(downloadDir, templateName, "package.json"), "utf-8")
+			.then(JSON.parse);
+		console.log("Got downloaded template package.json");
+		return packageJson;
+	} catch (error) {
+		console.error(error);
+		throw new Error("Unable to get downloaded template package.json");
+	}
+}
+
+type PackageJson = {
+	dependencies?: { [key: string]: string };
+	devDependencies?: { [key: string]: string };
+};
+
+function templatesSetDownloadedPackageJsonPackagesWithoutMajorVersionConflicts(
+	downloadedTemplatePackageJson: PackageJson,
+	gasolineDirPackageJson: PackageJson,
+) {
+	const result: string[] = [];
+	if (
+		downloadedTemplatePackageJson.dependencies &&
+		Object.keys(downloadedTemplatePackageJson.dependencies).length > 0 &&
+		gasolineDirPackageJson.dependencies &&
+		Object.keys(gasolineDirPackageJson.dependencies).length > 0
+	) {
+		for (const downloadedTemplateDependency in downloadedTemplatePackageJson.dependencies) {
+			if (
+				gasolineDirPackageJson.dependencies[downloadedTemplateDependency] &&
+				gasolineDirPackageJson.dependencies[downloadedTemplateDependency].split(
+					".",
+				)[0] === downloadedTemplateDependency.split(".")[0]
+			) {
+				result.push(downloadedTemplateDependency);
+			}
+		}
+	}
+	return result;
 }
