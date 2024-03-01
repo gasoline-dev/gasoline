@@ -466,34 +466,52 @@ async function commandsRunAdd(
 		}
 	}
 
+	async function fsIsFilePresent(file: string) {
+		try {
+			console.log(`Checking if ${file} is present`);
+			await fsPromises.access(file);
+			console.log(`${file} is present`);
+			return true;
+		} catch (error) {
+			console.error(error);
+			console.log(`${file} is not present`);
+			return false;
+		}
+	}
+
 	type PackageManager = "npm" | "pnpm";
 
-	async function packageManagerSet(): Promise<PackageManager> {
-		console.log("Getting project package manager");
-		const isRootPackageJsonPresent = await fsPromises
-			.access("package.json")
-			.then(
-				() => true,
-				() => false,
-			);
-
-		if (isRootPackageJsonPresent) {
-			const packageJson = JSON.parse(
-				await fsPromises.readFile("package.json", "utf8"),
-			);
-			if ("workspaces" in packageJson) {
-				return "npm";
+	async function packageManagerGet(): Promise<PackageManager> {
+		try {
+			console.log("Getting package manager");
+			const packageManagers: Array<PackageManager> = ["npm", "pnpm"];
+			for (const packageManager of packageManagers) {
+				switch (packageManager) {
+					case "npm": {
+						const rootPackageJson = await fsReadJsonFile("package.json");
+						if ("workspaces" in rootPackageJson) {
+							console.log(`Got package manager -> ${packageManager}`);
+							return packageManager;
+						}
+						break;
+					}
+					case "pnpm": {
+						const isPnpmWorkspaceYamlPresent = await fsIsFilePresent(
+							"pnpm-workspace.yaml",
+						);
+						if (isPnpmWorkspaceYamlPresent) {
+							console.log(`Got package manager -> ${packageManager}`);
+							return packageManager;
+						}
+						break;
+					}
+				}
 			}
+			throw new Error("No supported package manager found (npm or pnpm)");
+		} catch (error) {
+			console.error(error);
+			throw new Error("Unable to get package manager");
 		}
-
-		const isPnpm = await fsPromises.access("./pnpm-workspace.yaml").then(
-			() => true,
-			() => false,
-		);
-
-		if (isPnpm) return "pnpm";
-
-		throw new Error("Unable to get project package manager");
 	}
 
 	function packageManagerSetInstallCommand(
@@ -651,7 +669,7 @@ async function commandsRunAdd(
 			),
 		);
 
-		const packageManager = await packageManagerSet();
+		const packageManager = await packageManagerGet();
 
 		const installCommand = packageManagerSetInstallCommand(
 			packageManager,
