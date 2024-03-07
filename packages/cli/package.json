@@ -4,8 +4,7 @@
 	"description": "CLI for interacting with Gasoline projects",
 	"type": "module",
 	"bin": {
-		"gasoline": "dist/index.cli.js",
-		"gas": "dist/index.cli.js"
+		"gasoline": "dist/index.cli.js"
 	},
 	"engines": {
 		"node": ">=18.0.0"
