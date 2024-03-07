@@ -4,12 +4,13 @@ import inquirer from "inquirer";
 import fsPromises from "fs/promises";
 import { downloadTemplate as downloadTemplateFromGitHub } from "giget";
 import path from "node:path";
-import { loadFile, parseModule, writeFile } from "magicast";
+import { parseModule } from "magicast";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { Miniflare } from "miniflare";
 import * as esbuild from "esbuild";
 import { exec } from "node:child_process";
+import { cwd } from "node:process";
 
 await main();
 
@@ -55,7 +56,7 @@ Options:
 				];
 
 				if (availableAddCommands.includes(command)) {
-					await commandsRunAdd(command, parsedArgs.values);
+					await runAddCommand(command, parsedArgs.values);
 				} else {
 					console.log(commandDoesNotExistMessage);
 				}
@@ -72,47 +73,70 @@ Options:
 	}
 }
 
-async function commandsRunAdd(
+async function runAddCommand(
 	command: string,
 	commandOptions: {
 		[value: string]: boolean | string | undefined;
 	},
 ) {
-	async function fsAccess(dir: string) {
-		try {
-			await fsPromises.access(dir);
-			return true;
-		} catch (error) {
-			return false;
-		}
-	}
+	type Config = {
+		dirs?: [];
+	};
 
-	async function fsCreateDir(dir: string) {
+	async function getConfig() {
 		try {
-			console.log(`Creating ${dir} directory`);
-			await fsPromises.mkdir(dir, {
-				recursive: true,
-			});
-			console.log(`Created ${dir} directory`);
+			let result: Config = {};
+			const configFile = "./gasoline.js";
+			const configIsPresent = await isFilePresent(configFile);
+			if (!configIsPresent) return result;
+			const importedConfig = await import(path.join(cwd(), configFile));
+			const configExport = importedConfig.default || module;
+			result = {
+				...configExport,
+			};
+			return result;
 		} catch (error) {
 			console.error(error);
-			throw new Error(`Unable to create${dir} directory`);
+			throw new Error("Unable to get ./gasoline.js config");
 		}
 	}
 
-	async function fsEnsureDirIsPresent(dir: string) {
-		const isDirPresent = await fsIsDirPresent(dir);
-		if (!isDirPresent) await fsCreateDir(dir);
+	type ResourceContainerDirs = string[];
+
+	type ResourceContainerOptions = {
+		// An option passed to the CLI can technically be any of these types.
+		commandDir?: undefined | boolean | string;
+		configDirs?: string[];
+	};
+
+	/**
+	 * Returns an array of resource container dirs. It returns
+	 * an array so projects can have multiple resource container
+	 * dirs if necessary.
+	 *
+	 * A resource container dir contains resource dirs.
+	 *
+	 * Most projects will have one resource container dir:
+	 * `[./gasoline]`.
+	 */
+	function setResourceContainerDirs(options: ResourceContainerOptions = {}) {
+		const { commandDir, configDirs } = options;
+		let result: ResourceContainerDirs = [];
+		if (typeof commandDir === "string") {
+			result = [commandDir];
+		} else if (configDirs) {
+			result = configDirs;
+		} else {
+			result = ["./gasoline"];
+		}
+		return result;
 	}
 
-	type FsGetDirFilesOptions = {
+	type GetDirFilesOptions = {
 		fileRegexToMatch?: RegExp;
 	};
 
-	async function fsReadDirFiles(
-		dir: string,
-		options: FsGetDirFilesOptions = {},
-	) {
+	async function getDirFiles(dir: string, options: GetDirFilesOptions = {}) {
 		const { fileRegexToMatch = /.*/ } = options;
 		try {
 			const result = [];
@@ -133,43 +157,234 @@ async function commandsRunAdd(
 		}
 	}
 
-	async function fsIsDirPresent(dir: string) {
+	async function isPathPresent(path: string) {
 		try {
-			console.log(`Checking if ${dir} directory is present`);
-			const isDirPresent = await fsAccess(dir);
-			if (!isDirPresent) {
-				console.log(`${dir} directory is not present`);
-				return false;
-			}
-			console.log(`${dir} directory is present`);
+			await fsPromises.access(path);
 			return true;
 		} catch (error) {
-			console.error(error);
-			throw new Error(`Unable to check if ${dir} directory exists`);
+			return false;
 		}
 	}
 
-	type ResourcesEntityGroupToEntitiesMap = Map<string, string[]>;
-
-	function resourcesSetEntityGroupToEntitiesMap(
-		files: string[],
-	): ResourcesEntityGroupToEntitiesMap {
-		const result: ResourcesEntityGroupToEntitiesMap = new Map();
-		for (const file of files) {
-			const splitFile = file.split(".");
-			const [resourceEntityGroup, resourceEntity] = splitFile;
-			if (result.has(resourceEntityGroup)) {
-				result.get(resourceEntityGroup)?.push(resourceEntity);
-			} else {
-				result.set(resourceEntityGroup, [resourceEntity]);
+	async function isFilePresent(file: string) {
+		try {
+			console.log(`Checking if ${file} is present`);
+			const pathIsPresent = await isPathPresent(file);
+			if (pathIsPresent) {
+				console.log(`${file} is present`);
+				return true;
 			}
+			console.log(`${file} is not present`);
+			return false;
+		} catch (error) {
+			console.error(error);
+			throw new Error(`Unable to check if ${file} is present`);
 		}
+	}
+
+	async function getDirs(dir: string) {
+		try {
+			console.log(`Getting ${dir} directories`);
+			const entries = await fsPromises.readdir(dir, {
+				withFileTypes: true,
+			});
+			const result: string[] = [];
+			for (const entry of entries) {
+				if (entry.isDirectory()) {
+					result.push(entry.name);
+				}
+			}
+			console.log(`Got ${dir} directories`);
+			return result;
+		} catch (error) {
+			console.error(error);
+			throw new Error(`Unable to get ${dir} directories`);
+		}
+	}
+
+	type ResourceDirs = string[][];
+
+	/**
+	 * Returns an array of resource dir arrays.
+	 *
+	 * A resource dir contains resource files.
+	 *
+	 * @example
+	 * ```ts
+	 * const resourceContainerDirs = ['./gasoline']
+	 * const result = await getResourceDirs(resourceContainerDirs)
+	 * expect(result).toEqual([
+	 * 	['core-base-api']
+	 * ])
+	 * ```
+	 */
+	async function getResourceDirs(resourceContainerDirs: string[]) {
+		return await Promise.all(
+			resourceContainerDirs.map((resourceContainerDir) =>
+				getDirs(resourceContainerDir),
+			),
+		);
+	}
+
+	type ResourceContainerDirToResourceDirsMap = Map<string, string[]>;
+
+	/**
+	 * Returns a resource container dir to resource dirs map.
+	 *
+	 * @example
+	 * ```ts
+	 * const resourceContainerDirs = ['./gasoline']
+	 * const resourceDirs = [
+	 * 	['core-base-api']
+	 * ]
+	 * const result = setResourceContainerDirToResourceDirsMap(
+	 * 	resourceContainerDirs,
+	 * 	resourceDirs
+	 * )
+	 * expect(result).toEqual(new Map([
+	 * 	['gasoline', 'core-base-api']
+	 * ]))
+	 * ```
+	 */
+	function setResourceContainerDirToResourceDirsMap(
+		resourceContainerDirs: string[],
+		resourceDirs: ResourceDirs,
+	): ResourceContainerDirToResourceDirsMap {
+		const result: ResourceContainerDirToResourceDirsMap = new Map();
+		resourceContainerDirs.forEach((resourceContainerDir, index) => {
+			result.set(resourceContainerDir, resourceDirs[index]);
+		});
 		return result;
 	}
 
-	async function resourcesRunSelectEntityGroupPrompt(
-		resourceEntityGroups: string[],
+	type ResourceFiles = string[][];
+
+	/**
+	 * Returns an array of resource file arrays.
+	 *
+	 * Resource files exist in resource dirs.
+	 *
+	 * A resource file is the entry point of a resource.
+	 *
+	 * @example
+	 * ```ts
+	 * const resourceContainerDirToResourceDirsMap = new Map([
+	 * 	['./gasoline', 'core-base-api']
+	 * ])
+	 * const result = await getResourceFiles(resourceContainerDirToResourceDirsMap)
+	 * expect(result).toEqual([
+	 * 	['index.core.base.api.ts']
+	 * ])
+	 * ```
+	 */
+	async function getResourceFiles(
+		resourceContainerDirToResourceDirsMap: ResourceContainerDirToResourceDirsMap,
+	): Promise<ResourceFiles> {
+		const resourceContainerPromises: Promise<string[]>[] = [];
+
+		for (const [
+			resourceContainerDir,
+			resourceDirs,
+		] of resourceContainerDirToResourceDirsMap) {
+			const dirPromises: Promise<string[]>[] = resourceDirs.map((resourceDir) =>
+				getDirFiles(`${resourceContainerDir}/${resourceDir}`, {
+					fileRegexToMatch: /^[^.]+\.[^.]+\.[^.]+\.[^.]+\.[^.]+$/,
+				}),
+			);
+			resourceContainerPromises.push(
+				Promise.all(dirPromises).then((filesArrays) => filesArrays.flat()),
+			);
+		}
+		return Promise.all(resourceContainerPromises);
+	}
+
+	type ResourceContainerDirToResourceFilesMap = Map<string, string[]>;
+
+	/**
+	 * Returns a resource container dir to resource files map.
+	 *
+	 * @example
+	 * ```ts
+	 * const resourceContainerDirs = ['./gasoline']
+	 * const resourceFiles = [
+	 * 	['index.core.base.api.ts']
+	 * ]
+	 * const result = setResourceContainerDirToResourceFilesMap(
+	 * 	resourceContainerDirs,
+	 *	resourceFiles
+	 * )
+	 * expect(result).toEqual(new Map([
+	 * 	['./gasoline', ['index.core.base.api.ts']]
+	 * ]))
+	 * ```
+	 */
+	async function setResourceContainerDirToResourceFilesMap(
+		resourceContainerDirs: string[],
+		resourceFiles: ResourceFiles,
+	): Promise<ResourceContainerDirToResourceFilesMap> {
+		const result: ResourceContainerDirToResourceFilesMap = new Map();
+		resourceContainerDirs.forEach((resourceContainerDir, index) => {
+			result.set(resourceContainerDir, resourceFiles[index]);
+		});
+		return result;
+	}
+
+	type ResourceContainerDirToResourceGroupsMap = Map<string, string[]>;
+
+	/**
+	 * Returns a resource container dir to resource groups map.
+	 *
+	 * @example
+	 * ```
+	 * const resourceContainerDirToResourceFilesMap = new Map([
+	 * 	['./gasoline', ['index.core.base.api.ts']]
+	 * ]
+	 * const result = setResourceContainerDirToResourceGroupsMap(
+	 * 	resourceContainerDirToResourceFilesMap
+	 * )
+	 * expect(result).toEqual(new Map([
+	 * 	['./gasoline', ['core']]
+	 * ]))
+	 * ```
+	 */
+	function setResourceContainerDirToResourceGroupsMap(
+		resourceContainerDirToResourceFilesMap: ResourceContainerDirToResourceFilesMap,
+	): ResourceContainerDirToResourceGroupsMap {
+		const result: ResourceContainerDirToResourceGroupsMap = new Map();
+		for (const [
+			resourceContainerDir,
+			resourceFiles,
+		] of resourceContainerDirToResourceFilesMap) {
+			for (const resourceFile of resourceFiles) {
+				const resourceGroup = resourceFile.split(".")[1];
+				if (!result.has(resourceContainerDir)) {
+					result.set(resourceContainerDir, []);
+				}
+				const resourceGroups = result.get(resourceContainerDir);
+				if (!resourceGroups?.includes(resourceGroup)) {
+					resourceGroups?.push(resourceGroup);
+				}
+			}
+		}
+
+		return result;
+	}
+
+	async function runSelectResourceContainerDirPrompt(
+		resourceContainerDirs: ResourceContainerDirs,
 	) {
+		const { resourceContainerDir } = await inquirer.prompt([
+			{
+				type: "list",
+				name: "resourceContainerDir",
+				message: "Select resource container dir",
+				choices: resourceContainerDirs,
+			},
+		]);
+		return resourceContainerDir;
+	}
+
+	async function runSelectEntityGroupPrompt(resourceEntityGroups: string[]) {
 		const { resourceEntityGroup } = await inquirer.prompt([
 			{
 				type: "list",
@@ -181,7 +396,7 @@ async function commandsRunAdd(
 		return resourceEntityGroup;
 	}
 
-	async function resourcesRunAddEntityGroupPrompt() {
+	async function runAddResourceEntityGroupPrompt() {
 		const { resourceEntityGroup } = await inquirer.prompt([
 			{
 				type: "input",
@@ -192,21 +407,58 @@ async function commandsRunAdd(
 		return resourceEntityGroup;
 	}
 
-	async function resourcesRunEntityGroupPrompt(resourceGroups: string[]) {
+	async function runResourceEntityGroupPrompt(resourceGroups: string[]) {
 		let result = "";
 		if (resourceGroups.length > 0) {
-			result = await resourcesRunSelectEntityGroupPrompt(resourceGroups);
+			result = await runSelectEntityGroupPrompt(resourceGroups);
 		} else {
-			result = await resourcesRunAddEntityGroupPrompt();
+			result = await runAddResourceEntityGroupPrompt();
 		}
 		if (result === "Add new") {
-			result = await resourcesRunAddEntityGroupPrompt();
+			result = await runAddResourceEntityGroupPrompt();
 		}
 		return result;
 	}
 
-	async function resourcesRunSelectEntityPrompt(
-		resourceEntityGroupToEntitiesMap: ResourcesEntityGroupToEntitiesMap,
+	type ResourceEntityGroupToEntitiesMap = Map<string, string[]>;
+
+	/**
+	 * Returns a resource entity group to entities map.
+	 *
+	 * @example
+	 * ```ts
+	 * const resourceContainerDirToResourceFilesMap = new Map([
+	 * 	['./gasoline', ['index.core.base.api.ts']]
+	 * ]
+	 * const result = setResourceEntityGroupToEntitiesMap(
+	 * 	resourceContainerDirToResourceFilesMap
+	 * )
+	 * expect(result).toEqual(new Map([
+	 * 	['core', ['base']]
+	 * ]))
+	 * ```
+	 */
+	function setResourceEntityGroupToEntitiesMap(
+		resourceContainerDirToResourceFilesMap: ResourceContainerDirToResourceFilesMap,
+	) {
+		const result: ResourceEntityGroupToEntitiesMap = new Map();
+		for (const [_, resourceFiles] of resourceContainerDirToResourceFilesMap) {
+			for (const resourceFile of resourceFiles) {
+				const splitFile = resourceFile.split(".");
+				const resourceEntityGroup = splitFile[1];
+				const resourceEntity = splitFile[2];
+				if (result.has(resourceEntityGroup)) {
+					result.get(resourceEntityGroup)?.push(resourceEntity);
+				} else {
+					result.set(resourceEntityGroup, [resourceEntity]);
+				}
+			}
+		}
+		return result;
+	}
+
+	async function runSelectResourceEntityPrompt(
+		resourceEntityGroupToEntitiesMap: ResourceEntityGroupToEntitiesMap,
 		resourceEntityGroup: string,
 	) {
 		const { resourceEntity } = await inquirer.prompt([
@@ -223,7 +475,7 @@ async function commandsRunAdd(
 		return resourceEntity;
 	}
 
-	async function resourcesRunAddEntity() {
+	async function runAddResourceEntity() {
 		const { resourceEntity } = await inquirer.prompt([
 			{
 				type: "input",
@@ -234,272 +486,77 @@ async function commandsRunAdd(
 		return resourceEntity;
 	}
 
-	async function resourcesRunEntityPrompt(
-		resourceEntityGroupToEntitiesMap: ResourcesEntityGroupToEntitiesMap,
+	async function runResourceEntityPrompt(
+		resourceEntityGroupToEntitiesMap: ResourceEntityGroupToEntitiesMap,
 		resourceEntityGroup: string,
 	) {
-		let result = await resourcesRunSelectEntityPrompt(
+		let result = await runSelectResourceEntityPrompt(
 			resourceEntityGroupToEntitiesMap,
 			resourceEntityGroup,
 		);
 		if (result === "Add new") {
-			result = await resourcesRunAddEntity();
+			result = await runAddResourceEntity();
 		}
 		return result;
 	}
 
-	async function templatesGet(
-		templateDir: string,
-		templateName: string,
-		templateSrc: string,
-	) {
+	/**
+	 * Returns a resource descriptor.
+	 *
+	 * A resource descriptor is the last part of a resource
+	 * file. It describes what the resource is (e.g. `api` is
+	 * the resource descriptor for `index.core.base.api.ts`).
+	 */
+	function setResourceDescriptor(command: string) {
+		if (command === "add:cloudflare:worker:api:hono") return "api";
+		throw new Error("Resource descriptor cannot be set for command");
+	}
+
+	async function getTemplate(src: string, targetDir: string) {
 		try {
-			console.log(
-				`Downloading template ${templateSrc} to ${templateDir}/${templateName}`,
-			);
-			await downloadTemplateFromGitHub(templateSrc, {
-				dir: `${templateDir}/${templateName}`,
+			console.log(`Downloading template ${src} to ${targetDir}`);
+			await downloadTemplateFromGitHub(src, {
+				dir: targetDir,
 				forceClean: true,
 			});
-			console.log(
-				`Downloaded template ${templateSrc} to ${templateDir}/${templateName}`,
-			);
+			console.log(`Downloaded template ${src} to ${targetDir}`);
 		} catch (error) {
 			console.error(error);
 			throw new Error("Unable to download template");
 		}
 	}
 
-	async function fsReadJsonFile(file: string) {
+	async function renameFile(oldPath: string, newPath: string) {
 		try {
-			console.log(`Reading ${file}`);
-			const packageJson = await fsPromises
-				.readFile(file, "utf-8")
-				.then(JSON.parse);
-			console.log(`Read ${file}`);
-			return packageJson;
+			console.log(`Renaming ${oldPath} to ${newPath}`);
+			await fsPromises.rename(oldPath, newPath);
+			console.log(`Renamed ${oldPath} to ${newPath}`);
 		} catch (error) {
 			console.error(error);
-			throw new Error(`Unable to read ${file}`);
-		}
-	}
-
-	type PackageJson = {
-		dependencies?: { [key: string]: string };
-		devDependencies?: { [key: string]: string };
-	};
-
-	function templatesSetPackagesWithoutMajorVersionConflicts(
-		base: PackageJson,
-		compare: PackageJson,
-	) {
-		const result: string[] = [];
-		if (
-			base.dependencies &&
-			Object.keys(base.dependencies).length > 0 &&
-			compare.dependencies &&
-			Object.keys(compare.dependencies).length > 0
-		) {
-			for (const downloadedTemplateDependency in base.dependencies) {
-				if (
-					compare.dependencies[downloadedTemplateDependency] &&
-					compare.dependencies[downloadedTemplateDependency].split(".")[0] ===
-						downloadedTemplateDependency.split(".")[0]
-				) {
-					result.push(downloadedTemplateDependency);
-				}
-			}
-		}
-		return result;
-	}
-
-	function templatesSetPackagesWithMajorVersionConflicts(
-		base: PackageJson,
-		compare: PackageJson,
-	) {
-		const result: string[] = [];
-		if (
-			base.dependencies &&
-			Object.keys(base.dependencies).length > 0 &&
-			compare.dependencies &&
-			Object.keys(compare.dependencies).length > 0
-		) {
-			for (const downloadedTemplateDependency in base.dependencies) {
-				if (
-					compare.dependencies[downloadedTemplateDependency] &&
-					compare.dependencies[downloadedTemplateDependency].split(".")[0] !==
-						downloadedTemplateDependency.split(".")[0]
-				) {
-					result.push(downloadedTemplateDependency);
-				}
-			}
-		}
-		return result;
-	}
-
-	type TemplatesRunHowToResolvePackagesWithMajorVersionConflictPromptResult =
-		| "Update outdated"
-		| "Use aliases";
-
-	async function templatesRunHowToResolvePackagesWithMajorVersionConflictPrompt() {
-		const { result } = await inquirer.prompt<{
-			result: TemplatesRunHowToResolvePackagesWithMajorVersionConflictPromptResult;
-		}>([
-			{
-				type: "list",
-				name: "result",
-				message:
-					"There are major version package conflicts. What would you like to do?",
-				choices: [
-					"Update outdated",
-					"Use aliases",
-				] satisfies Array<TemplatesRunHowToResolvePackagesWithMajorVersionConflictPromptResult>,
-				default: "Update outdated",
-			},
-		]);
-		return result;
-	}
-
-	function templatesSetPackageAliases(
-		templatePackageJson: PackageJson,
-		templatePackagesWithMajorVersionConflicts: string[],
-		gasolineDirPackageJson: PackageJson,
-	) {
-		const result: string[] = [];
-		for (const packageWithMajorVersionConflict of templatePackagesWithMajorVersionConflicts) {
-			if (
-				gasolineDirPackageJson.dependencies?.[
-					packageWithMajorVersionConflict
-				] &&
-				templatePackageJson.dependencies?.[packageWithMajorVersionConflict]
-			) {
-				const newPackageMajorVersion = templatePackageJson?.dependencies[
-					packageWithMajorVersionConflict
-				]
-					.split(".")[0]
-					.replace("^", "");
-
-				const newPackageVersion =
-					templatePackageJson?.dependencies[packageWithMajorVersionConflict];
-
-				result.push(
-					`${packageWithMajorVersionConflict}V${newPackageMajorVersion}@npm:${packageWithMajorVersionConflict}@${newPackageVersion}`,
-				);
-			}
-		}
-		return result;
-	}
-
-	async function templatesReplaceImportsWithAliases(options: {
-		gasolineDirPackageJson: PackageJson;
-		templateIndexPath: string;
-		templatePackageJson: PackageJson;
-		templatePackagesWithMajorVersionConflicts: string[];
-	}) {
-		try {
-			console.log("Replacing template imports with aliases");
-
-			const mod = await loadFile(options.templateIndexPath);
-
-			for (const packageWithMajorVersionConflict of options.templatePackagesWithMajorVersionConflicts) {
-				if (
-					options.gasolineDirPackageJson.dependencies?.[
-						packageWithMajorVersionConflict
-					] &&
-					options.templatePackageJson.dependencies?.[
-						packageWithMajorVersionConflict
-					]
-				) {
-					const newPackageMajorVersion =
-						options.templatePackageJson?.dependencies[
-							packageWithMajorVersionConflict
-						]
-							.split(".")[0]
-							.replace("^", "");
-
-					for (const item of mod.imports.$items) {
-						if (item.from === packageWithMajorVersionConflict) {
-							mod.imports.$add({
-								from: `${packageWithMajorVersionConflict}V${newPackageMajorVersion}`,
-								imported: item.local,
-							});
-						}
-					}
-				}
-			}
-
-			await writeFile(mod, options.templateIndexPath);
-
-			console.log("Replaced template imports with aliases");
-		} catch (error) {
-			console.error(error);
-			throw new Error("Unable to replace template imports with aliases");
-		}
-	}
-
-	type FsCopyDirOptions = {
-		excludedFiles?: string[];
-	};
-
-	async function fsCopyDirFiles(
-		dir: string,
-		targetDir: string,
-		options: FsCopyDirOptions = {},
-	) {
-		const { excludedFiles = [] } = options;
-		try {
-			console.log(`Copying ${dir} to ${targetDir}`);
-			await fsPromises.cp(dir, targetDir, {
-				recursive: true,
-				filter:
-					excludedFiles.length > 0
-						? (src) => {
-								const srcName = path.basename(src);
-								return !excludedFiles.includes(srcName);
-						  }
-						: undefined,
-			});
-			console.log(`Copied ${dir} to ${targetDir}`);
-		} catch (error) {
-			console.error(error);
-			throw new Error(`Unable to copy ${dir} to ${targetDir}`);
-		}
-	}
-
-	async function fsIsFilePresent(file: string) {
-		try {
-			console.log(`Checking if ${file} is present`);
-			await fsPromises.access(file);
-			console.log(`${file} is present`);
-			return true;
-		} catch (error) {
-			console.error(error);
-			console.log(`${file} is not present`);
-			return false;
+			throw new Error(`Unable to rename ${oldPath} to ${newPath}`);
 		}
 	}
 
 	type PackageManager = "npm" | "pnpm";
 
-	async function packageManagerGet(): Promise<PackageManager> {
+	async function getPackageManager(): Promise<PackageManager> {
 		try {
 			console.log("Getting package manager");
 			const packageManagers: Array<PackageManager> = ["npm", "pnpm"];
 			for (const packageManager of packageManagers) {
 				switch (packageManager) {
 					case "npm": {
-						const rootPackageJson = await fsReadJsonFile("package.json");
-						if ("workspaces" in rootPackageJson) {
+						const isPackageLockJsonPresent =
+							await isFilePresent("package-lock.json");
+						if (isPackageLockJsonPresent) {
 							console.log(`Got package manager -> ${packageManager}`);
 							return packageManager;
 						}
 						break;
 					}
 					case "pnpm": {
-						const isPnpmWorkspaceYamlPresent = await fsIsFilePresent(
-							"pnpm-workspace.yaml",
-						);
-						if (isPnpmWorkspaceYamlPresent) {
+						const isPnpmLockYamlPresent = await isFilePresent("pnpm-lock.yaml");
+						if (isPnpmLockYamlPresent) {
 							console.log(`Got package manager -> ${packageManager}`);
 							return packageManager;
 						}
@@ -514,51 +571,14 @@ async function commandsRunAdd(
 		}
 	}
 
-	function packageManagerSetInstallCommand(
+	async function installTemplatePackages(
+		dir: string,
 		packageManager: PackageManager,
-		packagesToInstall: string[],
 	) {
-		const command: string[] = [];
-		switch (packageManager) {
-			case "npm":
-				command.push("npm");
-				command.push("install");
-				break;
-			case "pnpm":
-				command.push("pnpm");
-				command.push("add");
-				break;
-			default: {
-				const never: never = packageManager;
-				throw new Error(`Unexpected package manager -> ${packageManager}`);
-			}
-		}
-		command.push(...packagesToInstall);
-		command.push("--save");
-		return command.join(" ");
-	}
-
-	async function fsRenameFile(oldPath: string, newPath: string) {
-		try {
-			console.log(`Renaming ${oldPath} to ${newPath}`);
-			await fsPromises.rename(oldPath, newPath);
-			console.log(`Renamed ${oldPath} to ${newPath}`);
-		} catch (error) {
-			console.error(error);
-			throw new Error(`Unable to rename ${oldPath} to ${newPath}`);
-		}
-	}
-
-	function resourcesSetDescriptor(command: string) {
-		if (command === "add:cloudflare:worker:api:hono") return "api";
-		throw new Error("Resource descriptor cannot be set for command");
-	}
-
-	async function packageManagerRunInstallCommand(command: string, dir: string) {
 		try {
 			console.log("Installing packages");
 			const promisifiedExec = promisify(exec);
-			await promisifiedExec(command, {
+			await promisifiedExec(`${packageManager} install`, {
 				cwd: dir,
 			});
 			console.log("Installed packages");
@@ -569,114 +589,85 @@ async function commandsRunAdd(
 	}
 
 	async function run() {
-		const gasolineDir =
-			typeof commandOptions.dir === "string"
-				? commandOptions.dir
-				: "./gasoline";
-		const templateDir = path.join(gasolineDir, ".store/templates");
-		const templateName = command.replace("add:", "").replace(/:/g, "-");
-		const templateIndexPath = path.join(
-			templateDir,
-			`${templateName}/index.ts`,
-		);
-		const templateSrc = `github:gasoline-dev/gasoline/templates/${templateName}`;
+		const config = await getConfig();
 
-		await fsEnsureDirIsPresent(gasolineDir);
-
-		const gasolineDirFiles = await fsReadDirFiles(gasolineDir, {
-			fileRegexToMatch: /^[^.]+\.[^.]+\.[^.]+\.[^.]+$/,
+		const resourceContainerDirs = setResourceContainerDirs({
+			commandDir: commandOptions.dir,
+			configDirs: config.dirs,
 		});
 
-		const resourceEntityGroupToEntitiesMap =
-			resourcesSetEntityGroupToEntitiesMap(gasolineDirFiles);
+		const resourceDirs = await getResourceDirs(resourceContainerDirs);
 
-		const resourceEntityGroup = await resourcesRunEntityGroupPrompt([
-			...resourceEntityGroupToEntitiesMap.keys(),
+		const resourceContainerDirToResourceDirsMap =
+			setResourceContainerDirToResourceDirsMap(
+				resourceContainerDirs,
+				resourceDirs,
+			);
+
+		const resourceFiles = await getResourceFiles(
+			resourceContainerDirToResourceDirsMap,
+		);
+
+		const resourceContainerDirToResourceFilesMap =
+			await setResourceContainerDirToResourceFilesMap(
+				resourceContainerDirs,
+				resourceFiles,
+			);
+
+		const resourceContainerDirToResourceGroupsMap =
+			setResourceContainerDirToResourceGroupsMap(
+				resourceContainerDirToResourceFilesMap,
+			);
+
+		let selectedResourceContainerDir = resourceContainerDirs[0];
+		if (resourceContainerDirs.length > 1) {
+			selectedResourceContainerDir = await runSelectResourceContainerDirPrompt(
+				resourceContainerDirs,
+			);
+		}
+
+		const resourceEntityGroup = await runResourceEntityGroupPrompt([
+			...(resourceContainerDirToResourceGroupsMap.get(
+				selectedResourceContainerDir,
+			) ?? []),
 		]);
 
-		const resourceEntity = await resourcesRunEntityPrompt(
+		const resourceEntityGroupToEntitiesMap =
+			setResourceEntityGroupToEntitiesMap(
+				resourceContainerDirToResourceFilesMap,
+			);
+
+		const resourceEntity = await runResourceEntityPrompt(
 			resourceEntityGroupToEntitiesMap,
 			resourceEntityGroup,
 		);
 
-		await fsEnsureDirIsPresent(templateDir);
+		const resourceDescriptor = setResourceDescriptor(command);
 
-		await templatesGet(templateDir, templateName, templateSrc);
+		const templateSrc = `github:gasoline-dev/gasoline/templates/${command
+			.replace("add:", "")
+			.replace(/:/g, "-")}`;
 
-		const [templatePackageJson, gasolineDirPackageJson] = await Promise.all([
-			fsReadJsonFile(path.join(templateDir, templateName, "package.json")),
-			fsReadJsonFile(path.join(gasolineDir, "package.json")),
-		]);
+		const templateTargetDir = path.join(
+			selectedResourceContainerDir,
+			`${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
+		);
 
-		const templatePackagesWithoutMajorVersionConflicts =
-			templatesSetPackagesWithoutMajorVersionConflicts(
-				templatePackageJson,
-				gasolineDirPackageJson,
-			);
+		await getTemplate(templateSrc, templateTargetDir);
 
-		const templatePackagesWithMajorVersionConflicts =
-			templatesSetPackagesWithMajorVersionConflicts(
-				templatePackageJson,
-				gasolineDirPackageJson,
-			);
-
-		const packagesToInstall: string[] = [];
-
-		if (templatePackagesWithMajorVersionConflicts.length > 0) {
-			const howToResolve =
-				await templatesRunHowToResolvePackagesWithMajorVersionConflictPrompt();
-			switch (howToResolve) {
-				case "Use aliases":
-					packagesToInstall.push(
-						...templatesSetPackageAliases(
-							templatePackageJson,
-							templatePackagesWithMajorVersionConflicts,
-							gasolineDirPackageJson,
-						),
-					);
-
-					await templatesReplaceImportsWithAliases({
-						gasolineDirPackageJson,
-						templateIndexPath,
-						templatePackageJson,
-						templatePackagesWithMajorVersionConflicts,
-					});
-
-					break;
-				case "Update outdated":
-					// TODO
-					break;
-				default: {
-					const never: never = howToResolve;
-					throw new Error(`Unexpected answer -> ${howToResolve}`);
-				}
-			}
-		}
-
-		packagesToInstall.push(...templatePackagesWithoutMajorVersionConflicts);
-
-		await fsCopyDirFiles(path.join(templateDir, templateName), gasolineDir, {
-			excludedFiles: ["package.json", "tsconfig.json"],
-		});
-
-		const resourceDescriptor = resourcesSetDescriptor(command);
-
-		await fsRenameFile(
-			path.join(gasolineDir, "index.ts"),
+		await renameFile(
+			path.join(templateTargetDir, "index.ts"),
 			path.join(
-				gasolineDir,
-				`${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
+				templateTargetDir,
+				`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
 			),
 		);
 
-		const packageManager = await packageManagerGet();
+		const packageManager = await getPackageManager();
 
-		const installCommand = packageManagerSetInstallCommand(
-			packageManager,
-			packagesToInstall,
-		);
+		await installTemplatePackages(templateTargetDir, packageManager);
 
-		await packageManagerRunInstallCommand(installCommand, gasolineDir);
+		console.log("Added template");
 	}
 
 	await run();
