@@ -69,9 +69,6 @@ importers:
       inquirer:
         specifier: ^9.2.12
         version: 9.2.13
-      xstate:
-        specifier: ^5.5.1
-        version: 5.6.0
     devDependencies:
       '@types/inquirer':
         specifier: ^9.0.7
@@ -6478,10 +6475,6 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
-
-  /xstate@5.6.0:
-    resolution: {integrity: sha512-l62p4ZHM/fkGl68574s1dFzFmY8B3BeOff9EqBZbuonTSOXGx1fWTnh4SHSrS8Vhr5wyRT9afqWliMoO6Q+hUQ==}
-    dev: false
 
   /xxhash-wasm@1.0.2:
     resolution: {integrity: sha512-ibF0Or+FivM9lNrg+HGJfVX8WJqgo+kCLDc4vx6xMeTce7Aj+DLttKbxxRR/gNLSAelRc1omAPlJ77N/Jem07A==}

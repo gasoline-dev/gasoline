@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import path from "node:path";
-import { assign, createActor, fromPromise, setup, waitFor } from "xstate";
 import fsPromises from "fs/promises";
 import inquirer from "inquirer";
 import { promisify } from "node:util";
@@ -24,14 +23,19 @@ async function main() {
 			options,
 		});
 
+		const helpMessage = `Usage:
+create-gasoline -> Initalize project
+
+Options:
+	--help, -h Print help`;
+
 		if (
 			parsedArgs.positionals.length === 0 &&
 			Object.keys(parsedArgs.values).length === 0
 		) {
 			await createProject();
 		} else {
-			logHelp();
-			process.exit(0);
+			console.log(helpMessage);
 		}
 	} catch (error) {
 		console.error(error);
@@ -39,65 +43,60 @@ async function main() {
 }
 
 async function createProject() {
-	const runSetDirPrompt = fromPromise(async () => {
+	async function runSetDirPrompt() {
 		try {
-			const { dirPath } = await inquirer.prompt([
+			const { dir } = await inquirer.prompt([
 				{
-					name: "dirPath",
+					name: "dir",
 					message: "Directory path:",
 					default: "./example",
 				},
 			]);
-			return dirPath;
+			return dir;
 		} catch (error) {
 			console.error(error);
 			throw new Error("Unable to set directory path");
 		}
-	});
+	}
 
-	const checkIfDirIsPresent = fromPromise(
-		async ({ input }: { input: { directory: string } }) => {
-			console.log("Checking if directory is present");
-			try {
-				const isDirPresent = await fsIsDirPresent(input.directory);
-				if (!isDirPresent) {
-					console.log("Directory is not present");
-					return false;
-				}
-				console.log("Directory is present");
-				return true;
-			} catch (error) {
-				console.error(error);
-				throw new Error("Unable to check if directory is present");
+	async function checkIfPathIsPresent(path: string) {
+		try {
+			await fsPromises.access(path);
+			return true;
+		} catch (error) {
+			return false;
+		}
+	}
+
+	async function checkIfDirIsPresent(dir: string) {
+		try {
+			console.log(`Checking if ${dir} is present`);
+			const isDirPresent = await checkIfPathIsPresent(dir);
+			if (!isDirPresent) {
+				console.log(`${dir} is not present`);
+				return false;
 			}
-		},
-	);
+			console.log(`${dir} is present`);
+			return true;
+		} catch (error) {
+			console.error(error);
+			throw new Error(`Unable to check if ${dir} is present`);
+		}
+	}
 
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const isDirPresent = (_: any, params: { isPresent: boolean }) => {
-		return params.isPresent;
-	};
+	async function getDirContents(dir: string) {
+		try {
+			console.log(`Getting ${dir} contents`);
+			const contents = await fsPromises.readdir(dir);
+			console.log(`Got ${dir} contents`);
+			return contents;
+		} catch (error) {
+			console.error(error);
+			throw new Error(`Unable to get ${dir} contents`);
+		}
+	}
 
-	const getDirContents = fromPromise(
-		async ({ input }: { input: { directory: string } }) => {
-			try {
-				console.log("Getting directory contents");
-				const contents = await fsPromises.readdir(input.directory);
-				console.log("Got directory contents");
-				return contents;
-			} catch (error) {
-				console.error(error);
-				throw new Error("Unable to get directory contents");
-			}
-		},
-	);
-
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const isDirEmpty = (_: any, params: { contents: string[] }) => {
-		return params.contents.length === 0;
-	};
-
-	const runEmptyDirContentsConfirmPrompt = fromPromise(async () => {
+	async function runEmptyDirContentsConfirmPrompt() {
 		try {
 			const { confirm } = await inquirer.prompt([
 				{
@@ -112,40 +111,27 @@ async function createProject() {
 			console.error(error);
 			throw new Error("Unable to confirm if directory should be emptied");
 		}
-	});
-
-	// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-	const isConfirmedToEmptyDir = (_: any, params: { confirm: boolean }) => {
-		return params.confirm;
-	};
-
-	const emptyDirContents = fromPromise(
-		async ({ input }: { input: { directory: Context["directory"] } }) => {
-			try {
-				console.log("Emptying directory contents");
-				const contents = await fsPromises.readdir(input.directory);
-				await Promise.all(
-					contents.map((file) => {
-						return fsPromises.rm(path.join(input.directory, file), {
-							recursive: true,
-						});
-					}),
-				);
-				console.log("Emptied directory contents");
-			} catch (error) {
-				console.error(error);
-				throw new Error("Unable to empty directory contents");
-			}
-		},
-	);
-
-	function logEmptyDirIsRequiredMessage() {
-		console.log(
-			"create-gasoline is for new projects and requires an empty directory",
-		);
 	}
 
-	const runSetPackageManagerPrompt = fromPromise(async () => {
+	async function emptyDirContents(dir: string) {
+		try {
+			console.log(`Emptying ${dir} contents`);
+			const contents = await fsPromises.readdir(dir);
+			await Promise.all(
+				contents.map((file) => {
+					return fsPromises.rm(path.join(dir, file), {
+						recursive: true,
+					});
+				}),
+			);
+			console.log(`Emptied ${dir} contents`);
+		} catch (error) {
+			console.error(error);
+			throw new Error(`Unable to empty ${dir} contents`);
+		}
+	}
+
+	async function runSetPackageManagerPrompt() {
 		try {
 			const { packageManager } = await inquirer.prompt([
 				{
@@ -161,402 +147,92 @@ async function createProject() {
 			console.error(error);
 			throw new Error("Unable to set package manager");
 		}
-	});
-
-	const isPackageManagerPnpm = (
-		// biome-ignore lint/suspicious/noExplicitAny: <explanation>
-		_: any,
-		params: { packageManager: Context["packageManager"] },
-	) => {
-		return params.packageManager === "pnpm";
-	};
-
-	const downloadMonorepoPnpmTemplate = fromPromise(
-		async ({ input }: { input: { directory: Context["directory"] } }) => {
-			try {
-				console.log("Downloading monorepo pnpm template");
-				await downloadTemplate(
-					"github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-pnpm",
-					{
-						dir: input.directory,
-					},
-				);
-				console.log("Downloaded monorepo pnpm template");
-			} catch (error) {
-				console.error(error);
-				throw new Error("Unable to download monorepo pnpm template");
-			}
-		},
-	);
-
-	const installPnpmDependencies = fromPromise(
-		async ({ input }: { input: { directory: Context["directory"] } }) => {
-			try {
-				console.log("Installing pnpm dependencies");
-				const promisifiedExec = promisify(exec);
-				await promisifiedExec("pnpm install", {
-					cwd: path.resolve(input.directory),
-				});
-				console.log("Installed pnpm dependencies");
-			} catch (error) {
-				console.error(error);
-				throw new Error("Unable to install pnpm dependencies");
-			}
-		},
-	);
-
-	const downloadMonorepoNpmTemplate = fromPromise(
-		async ({ input }: { input: { directory: Context["directory"] } }) => {
-			try {
-				console.log("Downloading monorepo npm template");
-				await downloadTemplate(
-					"github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-npm",
-					{
-						dir: input.directory,
-					},
-				);
-				console.log("Downloaded monorepo npm template");
-			} catch (error) {
-				console.error(error);
-				throw new Error("Unable to download monorepo npm template");
-			}
-		},
-	);
-
-	const installNpmDependencies = fromPromise(
-		async ({ input }: { input: { directory: Context["directory"] } }) => {
-			try {
-				console.log("Installing npm dependencies");
-				const promisifiedExec = promisify(exec);
-				await promisifiedExec("npm install", {
-					cwd: path.resolve(input.directory),
-				});
-				console.log("Installed npm dependencies");
-			} catch (error) {
-				console.error(error);
-				throw new Error("Unable to install npm dependencies");
-			}
-		},
-	);
-
-	type Context = {
-		directory: string;
-		packageManager: "npm" | "pnpm";
-	};
-
-	const machine = setup({
-		actions: {
-			logEmptyDirIsRequiredMessage,
-		},
-		actors: {
-			runSetDirPrompt,
-			checkIfDirIsPresent,
-			getDirContents,
-			runEmptyDirContentsConfirmPrompt,
-			emptyDirContents,
-			runSetPackageManagerPrompt,
-			downloadMonorepoPnpmTemplate,
-			installPnpmDependencies,
-			downloadMonorepoNpmTemplate,
-			installNpmDependencies,
-		},
-		guards: {
-			isDirPresent,
-			isDirEmpty,
-			isConfirmedToEmptyDir,
-			isPackageManagerPnpm,
-		},
-		types: {} as {
-			actions: {
-				type: "logEmptyDirIsRequiredMessage";
-			};
-			context: Context;
-			guards:
-				| { type: "isDirPresent" }
-				| {
-						type: "isDirEmpty";
-				  }
-				| {
-						type: "isConfirmedToEmptyDir";
-				  }
-				| {
-						type: "isPackageManagerPnpm";
-				  };
-		},
-	}).createMachine({
-		id: "root",
-		initial: "runningSetDirPrompt",
-		context: {
-			directory: "",
-			packageManager: "npm",
-		},
-		states: {
-			runningSetDirPrompt: {
-				invoke: {
-					id: "runningSetDirPrompt",
-					src: "runSetDirPrompt",
-					onDone: {
-						target: "checkingIfDirIsPresent",
-						actions: assign({
-							directory: ({ event }) => event.output,
-						}),
-					},
-					onError: {
-						target: "err",
-						actions: ({ context, event }) => console.error(event),
-					},
-				},
-			},
-			checkingIfDirIsPresent: {
-				invoke: {
-					id: "checkingIfDirIsPresent",
-					src: "checkIfDirIsPresent",
-					input: ({ context }) => ({
-						directory: context.directory,
-					}),
-					onDone: [
-						{
-							target: "#processingDirContents",
-							guard: {
-								type: "isDirPresent",
-								params: ({ event }) => ({
-									isPresent: event.output,
-								}),
-							},
-						},
-						{
-							target: "runningSetPackageManagerPrompt",
-						},
-					],
-					onError: {
-						target: "#root.err",
-						actions: ({ context, event }) => console.error(event),
-					},
-				},
-			},
-			processingDirContents: {
-				id: "processingDirContents",
-				initial: "gettingDirContents",
-				states: {
-					gettingDirContents: {
-						invoke: {
-							id: "gettingDirContents",
-							src: "getDirContents",
-							input: ({ context }) => ({
-								directory: context.directory,
-							}),
-							onDone: [
-								{
-									target: "#root.runningSetPackageManagerPrompt",
-									guard: {
-										type: "isDirEmpty",
-										params: ({ context, event }) => ({
-											contents: event.output,
-										}),
-									},
-								},
-								{
-									target: "runningEmptyDirContentsConfirmPrompt",
-								},
-							],
-							onError: {
-								target: "#root.err",
-								actions: ({ context, event }) => console.error(event),
-							},
-						},
-					},
-					runningEmptyDirContentsConfirmPrompt: {
-						invoke: {
-							id: "runningEmptyDirContentsConfirmPrompt",
-							src: "runEmptyDirContentsConfirmPrompt",
-							input: ({ context }) => ({
-								directory: context.directory,
-							}),
-							onDone: [
-								{
-									target: "emptyingDirContents",
-									guard: {
-										type: "isConfirmedToEmptyDir",
-										params: ({ event }) => ({
-											confirm: event.output,
-										}),
-									},
-								},
-								{
-									target: "emptyDirRequired",
-								},
-							],
-							onError: {
-								target: "#root.err",
-								actions: ({ context, event }) => console.error(event),
-							},
-						},
-					},
-					emptyingDirContents: {
-						invoke: {
-							id: "emptyingDirContents",
-							src: "emptyDirContents",
-							input: ({ context }) => ({
-								directory: context.directory,
-							}),
-							onDone: {
-								target: "#root.runningSetPackageManagerPrompt",
-							},
-							onError: {
-								target: "#root.err",
-								actions: ({ context, event }) => console.error(event),
-							},
-						},
-					},
-					emptyDirRequired: {
-						entry: {
-							type: "logEmptyDirIsRequiredMessage",
-						},
-						always: {
-							target: "#root.ok",
-						},
-					},
-				},
-			},
-			runningSetPackageManagerPrompt: {
-				invoke: {
-					id: "runningSetPackageManagerPrompt",
-					src: "runSetPackageManagerPrompt",
-					onDone: [
-						{
-							target: "#processingMonorepoPnpmTemplate",
-							guard: {
-								type: "isPackageManagerPnpm",
-								params: ({ event }) => ({
-									packageManager: event.output,
-								}),
-							},
-						},
-						{
-							target: "#processingMonorepoNpmTemplate",
-						},
-					],
-					onError: {
-						target: "err",
-						actions: ({ context, event }) => console.error(event),
-					},
-				},
-			},
-			processingMonorepoPnpmTemplate: {
-				id: "processingMonorepoPnpmTemplate",
-				initial: "downloadingMonorepoPnpmTemplate",
-				states: {
-					downloadingMonorepoPnpmTemplate: {
-						invoke: {
-							id: "downloadingMonorepoPnpmTemplate",
-							src: "downloadMonorepoPnpmTemplate",
-							input: ({ context }) => ({
-								directory: context.directory,
-							}),
-							onDone: {
-								target: "installingPnpmDependencies",
-							},
-							onError: {
-								target: "#root.err",
-								actions: ({ context, event }) => console.error(event),
-							},
-						},
-					},
-					installingPnpmDependencies: {
-						invoke: {
-							id: "installingPnpmDependencies",
-							src: "installPnpmDependencies",
-							input: ({ context }) => ({
-								directory: context.directory,
-							}),
-							onDone: {
-								target: "#root.ok",
-							},
-							onError: {
-								target: "#root.err",
-								actions: ({ context, event }) => console.error(event),
-							},
-						},
-					},
-				},
-			},
-			processingMonorepoNpmTemplate: {
-				id: "processingMonorepoNpmTemplate",
-				initial: "downloadingMonorepoNpmTemplate",
-				states: {
-					downloadingMonorepoNpmTemplate: {
-						invoke: {
-							id: "downloadingMonorepoNpmTemplate",
-							src: "downloadMonorepoNpmTemplate",
-							input: ({ context }) => ({
-								directory: context.directory,
-							}),
-							onDone: {
-								target: "installingNpmDependencies",
-							},
-							onError: {
-								target: "#root.err",
-								actions: ({ context, event }) => console.error(event),
-							},
-						},
-					},
-					installingNpmDependencies: {
-						invoke: {
-							id: "installingNpmDependencies",
-							src: "installNpmDependencies",
-							input: ({ context }) => ({
-								directory: context.directory,
-							}),
-							onDone: {
-								target: "#root.ok",
-							},
-							onError: {
-								target: "#root.err",
-								actions: ({ context, event }) => console.error(event),
-							},
-						},
-					},
-				},
-			},
-			ok: {
-				type: "final",
-			},
-			err: {
-				type: "final",
-			},
-		},
-	});
-
-	const actor = createActor(machine).start();
-
-	const snapshot = await waitFor(
-		actor,
-		(snapshot) => snapshot.matches("ok") || snapshot.matches("err"),
-		{
-			timeout: 3600_000,
-		},
-	);
-
-	if (snapshot.value === "err") {
-		throw new Error("Unable to create project");
 	}
 
-	process.exit(0);
-}
+	async function downloadMonorepoPnpmTemplate(dir: string) {
+		try {
+			console.log("Downloading monorepo pnpm template");
+			await downloadTemplate(
+				"github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-pnpm",
+				{
+					dir,
+				},
+			);
+			console.log("Downloaded monorepo pnpm template");
+		} catch (error) {
+			console.error(error);
+			throw new Error("Unable to download monorepo pnpm template");
+		}
+	}
 
-function logHelp() {
-	console.log(`Usage:
-create-gasoline -> Initalize project
+	async function downloadMonorepoNpmTemplate(dir: string) {
+		try {
+			console.log("Downloading monorepo npm template");
+			await downloadTemplate(
+				"github:gasoline-dev/gasoline/templates/create-gasoline-monorepo-npm",
+				{
+					dir,
+				},
+			);
+			console.log("Downloaded monorepo npm template");
+		} catch (error) {
+			console.error(error);
+			throw new Error("Unable to download monorepo npm template");
+		}
+	}
 
-Options:
- --help, -h Print help`);
-}
+	async function installPackages(packageManager: "npm" | "pnpm", dir: string) {
+		try {
+			console.log("Installing packages");
+			const promisifiedExec = promisify(exec);
+			await promisifiedExec(`${packageManager} install`, {
+				cwd: path.resolve(dir),
+			});
+			console.log("Installed packages");
+		} catch (error) {
+			console.error(error);
+			throw new Error("Unable to install packages");
+		}
+	}
 
-async function fsIsDirPresent(directory: string) {
+	async function run() {
+		const dir = await runSetDirPrompt();
+
+		const isDirPresent = await checkIfDirIsPresent(dir);
+
+		if (isDirPresent) {
+			const dirContents = await getDirContents(dir);
+
+			if (dirContents.length > 0) {
+				const confirmEmptyDirContents =
+					await runEmptyDirContentsConfirmPrompt();
+
+				if (confirmEmptyDirContents) {
+					await emptyDirContents(dir);
+				} else {
+					console.log(
+						"create-gasoline is for new projects and requires an empty directory",
+					);
+					process.exit(0);
+				}
+			}
+		}
+
+		const packageManager = await runSetPackageManagerPrompt();
+
+		if (packageManager === "pnpm") {
+			await downloadMonorepoPnpmTemplate(dir);
+		} else {
+			await downloadMonorepoNpmTemplate(dir);
+		}
+
+		await installPackages(packageManager, dir);
+	}
+
 	try {
-		await fsPromises.access(directory);
-		return true;
+		await run();
 	} catch (error) {
-		return false;
+		console.error(error);
+		console.error("Unable to create project");
 	}
 }
