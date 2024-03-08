@@ -233,6 +233,6 @@ async function createProject() {
 		await run();
 	} catch (error) {
 		console.error(error);
-		console.error("Unable to create project");
+		throw new Error("Unable to create project");
 	}
 }

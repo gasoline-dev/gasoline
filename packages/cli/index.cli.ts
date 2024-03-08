@@ -670,7 +670,12 @@ async function runAddCommand(
 		console.log("Added template");
 	}
 
-	await run();
+	try {
+		await run();
+	} catch (error) {
+		console.error(error);
+		throw new Error("Unable to add template");
+	}
 }
 
 async function commandsRunDev() {
