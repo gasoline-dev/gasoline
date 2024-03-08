@@ -237,7 +237,7 @@ async function createProject() {
 			await downloadMonorepoNpmTemplate(dir);
 		}
 
-		await deleteFile("gasoline/.gitkeep");
+		await deleteFile(path.join(dir, "gasoline/.gitkeep"));
 
 		await installPackages(packageManager, dir);
 	}
