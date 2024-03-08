@@ -596,11 +596,18 @@ async function runAddCommand(
 			configDirs: config.dirs,
 		});
 
-		const resourceDirs = await getResourceDirs(resourceContainerDirs);
+		let selectedResourceContainerDir = resourceContainerDirs[0];
+		if (resourceContainerDirs.length > 1) {
+			selectedResourceContainerDir = await runSelectResourceContainerDirPrompt(
+				resourceContainerDirs,
+			);
+		}
+
+		const resourceDirs = await getResourceDirs([selectedResourceContainerDir]);
 
 		const resourceContainerDirToResourceDirsMap =
 			setResourceContainerDirToResourceDirsMap(
-				resourceContainerDirs,
+				[selectedResourceContainerDir],
 				resourceDirs,
 			);
 
@@ -610,7 +617,7 @@ async function runAddCommand(
 
 		const resourceContainerDirToResourceFilesMap =
 			await setResourceContainerDirToResourceFilesMap(
-				resourceContainerDirs,
+				[selectedResourceContainerDir],
 				resourceFiles,
 			);
 
@@ -618,13 +625,6 @@ async function runAddCommand(
 			setResourceContainerDirToResourceGroupsMap(
 				resourceContainerDirToResourceFilesMap,
 			);
-
-		let selectedResourceContainerDir = resourceContainerDirs[0];
-		if (resourceContainerDirs.length > 1) {
-			selectedResourceContainerDir = await runSelectResourceContainerDirPrompt(
-				resourceContainerDirs,
-			);
-		}
 
 		const resourceEntityGroup = await runResourceEntityGroupPrompt([
 			...(resourceContainerDirToResourceGroupsMap.get(
