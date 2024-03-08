@@ -195,6 +195,17 @@ async function createProject() {
 		}
 	}
 
+	async function deleteFile(file: string) {
+		try {
+			console.log(`Deleting ${file}`);
+			await fsPromises.rm(file);
+			console.log(`Deleted ${file}`);
+		} catch (error) {
+			console.error(error);
+			throw new Error(`Unable to delete ${file}`);
+		}
+	}
+
 	async function run() {
 		const dir = await runSetDirPrompt();
 
@@ -225,6 +236,8 @@ async function createProject() {
 		} else {
 			await downloadMonorepoNpmTemplate(dir);
 		}
+
+		await deleteFile("gasoline/.gitkeep");
 
 		await installPackages(packageManager, dir);
 	}
