@@ -457,19 +457,13 @@ async function runAddCommand(
 		return result;
 	}
 
-	async function runSelectResourceEntityPrompt(
-		resourceEntityGroupToEntitiesMap: ResourceEntityGroupToEntitiesMap,
-		resourceEntityGroup: string,
-	) {
+	async function runSelectResourceEntityPrompt(resourceEntities: string[]) {
 		const { resourceEntity } = await inquirer.prompt([
 			{
 				type: "list",
 				name: "resourceEntity",
 				message: "Select resource entity",
-				choices: [
-					"Add new",
-					...(resourceEntityGroupToEntitiesMap.get(resourceEntityGroup) || []),
-				],
+				choices: ["Add new", ...resourceEntities],
 			},
 		]);
 		return resourceEntity;
@@ -486,14 +480,11 @@ async function runAddCommand(
 		return resourceEntity;
 	}
 
-	async function runResourceEntityPrompt(
-		resourceEntityGroupToEntitiesMap: ResourceEntityGroupToEntitiesMap,
-		resourceEntityGroup: string,
-	) {
-		let result = await runSelectResourceEntityPrompt(
-			resourceEntityGroupToEntitiesMap,
-			resourceEntityGroup,
-		);
+	async function runResourceEntityPrompt(resourceEntities: string[]) {
+		if (resourceEntities.length === 0) {
+			return await runAddResourceEntity();
+		}
+		let result = await runSelectResourceEntityPrompt(resourceEntities);
 		if (result === "Add new") {
 			result = await runAddResourceEntity();
 		}
@@ -638,8 +629,7 @@ async function runAddCommand(
 			);
 
 		const resourceEntity = await runResourceEntityPrompt(
-			resourceEntityGroupToEntitiesMap,
-			resourceEntityGroup,
+			resourceEntityGroupToEntitiesMap.get(resourceEntityGroup) ?? [],
 		);
 
 		const resourceDescriptor = setResourceDescriptor(command);
