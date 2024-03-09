@@ -601,18 +601,22 @@ async function runAddCommand(
 
 	async function downloadTsConfigCloudflareWorkerJson(targetDir: string) {
 		try {
-			console.log("Downloading tsconfig.cloudflare-worker.json");
-			await downloadTemplateFromGitHub(
-				"github:gasoline-dev/gasoline/templates/tsconfig.cloudflare-worker.json",
-				{
-					dir: targetDir,
-					forceClean: true,
-				},
+			console.log("Downloading tsconfig.cloudflare-workers.json");
+			const url =
+				"https://raw.githubusercontent.com/gasoline-dev/gasoline/main/templates/tsconfig-cloudflare-workers.json";
+			const response = await fetch(url);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+			}
+			const responseJson = await response.json();
+			await fsPromises.writeFile(
+				path.join(targetDir, "tsconfig.cloudflare-workers.json"),
+				JSON.stringify(responseJson, null, 2),
 			);
-			console.log("Downloaded tsconfig.cloudflare-worker.json");
+			console.log("Downloaded tsconfig.cloudflare-workers.json");
 		} catch (error) {
 			console.error(error);
-			throw new Error("Unable to download tsconfig.cloudflare-worker.json");
+			throw new Error("Unable to download tsconfig.cloudflare-workers.json");
 		}
 	}
 
@@ -711,12 +715,15 @@ async function runAddCommand(
 			path.join(templateTargetDir, "package.json"),
 		);
 
-		templatePackageJson.name = `${selectedResourceContainerDir}-${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`;
-		templatePackageJson.scripts.build.replace(
-			"index.x.x.x.ts",
-			`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
-		);
-		templatePackageJson.scripts.dev.replace(
+		templatePackageJson.name = `${path.basename(
+			selectedResourceContainerDir,
+		)}-${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`;
+		templatePackageJson.scripts.build =
+			templatePackageJson.scripts.build.replace(
+				"index.x.x.x.ts",
+				`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
+			);
+		templatePackageJson.scripts.dev = templatePackageJson.scripts.dev.replace(
 			"index.x.x.x.ts",
 			`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
 		);
@@ -726,17 +733,22 @@ async function runAddCommand(
 			templatePackageJson,
 		);
 
-		const packageManager = await getPackageManager();
-
-		const tsConfigCloudflareWorkerJsonIsPresent = await isFilePresent(
-			path.join(templateTargetDir, "./tsconfig.cloudflare-workers.json"),
-		);
-
-		if (!tsConfigCloudflareWorkerJsonIsPresent) {
-			await downloadTsConfigCloudflareWorkerJson(
-				path.join(templateTargetDir, "./tsconfig.cloudflare-workers.json"),
+		if (command.includes("cloudflare:worker")) {
+			const tsConfigCloudflareWorkerJsonIsPresent = await isFilePresent(
+				path.join(
+					selectedResourceContainerDir,
+					"tsconfig.cloudflare-workers.json",
+				),
 			);
+
+			if (!tsConfigCloudflareWorkerJsonIsPresent) {
+				await downloadTsConfigCloudflareWorkerJson(
+					selectedResourceContainerDir,
+				);
+			}
 		}
+
+		const packageManager = await getPackageManager();
 
 		await installTemplatePackages(templateTargetDir, packageManager);
 

@@ -9,9 +9,6 @@
 		"dev": {
 			"cache": false
 		},
-		"lint": {
-			"cache": true
-		},
 		"test": {
 			"cache": true
 		},

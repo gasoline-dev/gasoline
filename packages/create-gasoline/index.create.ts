@@ -225,6 +225,20 @@ async function createProject() {
 		}
 	}
 
+	async function savePackageJson(file: string, packageJson: PackageJson) {
+		try {
+			console.log(`Saving ${file}`);
+			await fsPromises.writeFile(
+				path.join(process.cwd(), file),
+				JSON.stringify(packageJson, null, 2),
+			);
+			console.log(`Saved ${file}`);
+		} catch (error) {
+			console.error(error);
+			throw new Error(`Unable to save ${file}`);
+		}
+	}
+
 	async function run() {
 		const dir = await runSetDirPrompt();
 
@@ -259,6 +273,8 @@ async function createProject() {
 		const packageJson = await getPackageJson(path.join(dir, "package.json"));
 
 		packageJson.name = "root";
+
+		await savePackageJson(path.join(dir, "package.json"), packageJson);
 
 		await deleteFile(path.join(dir, "gasoline/.gitkeep"));
 
