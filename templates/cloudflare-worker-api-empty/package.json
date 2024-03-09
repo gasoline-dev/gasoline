@@ -3,6 +3,12 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
+	"scripts": {
+		"build": "tsup index.x.x.x.ts --format=esm --clean --sourcemap",
+		"check": "npx @biomejs/biome check --apply",
+		"dev": "tsup index.x.x.x.ts --format=esm --clean --sourcemap --watch",
+		"test": "vitest"
+	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20231025.0",
 		"typescript": "^5.2.2"

@@ -206,6 +206,25 @@ async function createProject() {
 		}
 	}
 
+	type PackageJson = {
+		name: string;
+	};
+
+	async function getPackageJson(): Promise<PackageJson> {
+		try {
+			console.log("Getting package.json");
+			const packageJson = await fsPromises.readFile(
+				path.join(process.cwd(), "package.json"),
+				"utf-8",
+			);
+			console.log("Got package.json");
+			return JSON.parse(packageJson);
+		} catch (error) {
+			console.error(error);
+			throw new Error("Unable to get package.json");
+		}
+	}
+
 	async function run() {
 		const dir = await runSetDirPrompt();
 
@@ -236,6 +255,10 @@ async function createProject() {
 		} else {
 			await downloadMonorepoNpmTemplate(dir);
 		}
+
+		const packageJson = await getPackageJson();
+
+		packageJson.name = "root";
 
 		await deleteFile(path.join(dir, "gasoline/.gitkeep"));
 
