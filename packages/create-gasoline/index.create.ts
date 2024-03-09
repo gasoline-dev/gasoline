@@ -210,18 +210,18 @@ async function createProject() {
 		name: string;
 	};
 
-	async function getPackageJson(): Promise<PackageJson> {
+	async function getPackageJson(file: string): Promise<PackageJson> {
 		try {
-			console.log("Getting package.json");
+			console.log(`Getting ${file}`);
 			const packageJson = await fsPromises.readFile(
-				path.join(process.cwd(), "package.json"),
+				path.join(process.cwd(), file),
 				"utf-8",
 			);
-			console.log("Got package.json");
+			console.log(`Got ${file}`);
 			return JSON.parse(packageJson);
 		} catch (error) {
 			console.error(error);
-			throw new Error("Unable to get package.json");
+			throw new Error(`Unable to get ${file}`);
 		}
 	}
 
@@ -256,7 +256,7 @@ async function createProject() {
 			await downloadMonorepoNpmTemplate(dir);
 		}
 
-		const packageJson = await getPackageJson();
+		const packageJson = await getPackageJson(path.join(dir, "package.json"));
 
 		packageJson.name = "root";
 
