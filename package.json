@@ -4,12 +4,8 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"build": "nx run-many -t build",
-		"build:cli": "nx run @gasoline-dev/cli:build",
-		"build:create-gasoline": "nx run create-gasoline:build",
-		"dev": "nx run-many -t dev",
-		"dev:cli": "nx run @gasoline-dev/cli:dev",
-		"dev:create-gasoline": "nx run create-gasoline:dev",
+		"build": "nx run-many --target=build --projects=packages/*",
+		"dev": "nx run-many --target=dev --projects=packages/*",
 		"release": "pnpm run build && changeset publish"
 	},
 	"devDependencies": {

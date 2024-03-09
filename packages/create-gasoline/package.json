@@ -22,6 +22,7 @@
 	},
 	"scripts": {
 		"build": "tsup index.create.ts --format=esm --target=node18 --clean --config=tsconfig.json --sourcemap",
+		"check": "npx @biomjs/biome check --apply",
 		"dev": "tsup index.create.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --sourcemap"
 	},
 	"devDependencies": {
