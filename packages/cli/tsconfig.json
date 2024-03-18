@@ -11,5 +11,5 @@
 		"skipLibCheck": true,
 		"target": "ES2022",
 	},
-	"include": ["index.cli.ts", "index.cli.d.ts"]
+	"include": ["src/index.cli.ts", "src/index.cli.d.ts", "src/commands/*", "src/commons/*"]
 }

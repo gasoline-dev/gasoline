@@ -21,9 +21,9 @@
 		"directory": "packages/cli"
 	},
 	"scripts": {
-		"build": "tsup index.cli.ts --format=esm --target=node18 --clean --config=tsconfig.json --sourcemap",
+		"build": "tsup src/index.cli.ts --format=esm --target=node18 --clean --config=tsconfig.json --sourcemap",
 		"check": "npx @biomjs/biome check --apply",
-		"dev": "tsup index.cli.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --sourcemap"
+		"dev": "tsup src/index.cli.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --sourcemap"
 	},
 	"devDependencies": {
 		"@types/inquirer": "^9.0.7",
@@ -31,12 +31,11 @@
 	},
 	"dependencies": {
 		"@hono/node-server": "^1.8.1",
-		"chokidar": "^3.6.0",
-		"esbuild": "^0.20.1",
 		"giget": "^1.2.1",
 		"hono": "^3.12.10",
 		"inquirer": "^9.2.12",
 		"magicast": "^0.3.3",
-		"miniflare": "^3.20240208.0"
+		"miniflare": "^3.20240208.0",
+		"ora": "^8.0.1"
 	}
 }
