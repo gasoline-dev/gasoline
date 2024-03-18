@@ -81,10 +81,10 @@ export async function runAddCommand(
 		spin.start("Adjusting template");
 
 		await renameFile(
-			path.join(templateTargetDir, "index.ts"),
+			path.join(templateTargetDir, "src/index.ts"),
 			path.join(
 				templateTargetDir,
-				`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
+				`src/index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
 			),
 		);
 
