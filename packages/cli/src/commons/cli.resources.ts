@@ -23,7 +23,7 @@ async function getResourceDirs(
 	return resourceDirs.flat();
 }
 
-type ResourceFiles = string[];
+export type ResourceFiles = string[];
 
 /**
  * Returns an array of resource files.
