@@ -1,6 +1,6 @@
 {
 	"name": "create-gasoline",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Create a new Gasoline project",
 	"type": "module",
 	"bin": {
