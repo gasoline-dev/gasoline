@@ -139,6 +139,7 @@ export function setResourceEntityGroupEntities(resourceFiles: ResourceFiles) {
  * ```
  */
 export function setResourceDescriptor(cliCommand: string) {
+	if (cliCommand === "add:cloudflare:dns:zone") return "zone";
 	if (cliCommand === "add:cloudflare:worker:api:hono") return "api";
 	throw new Error(
 		`Resource descriptor cannot be set for CLI command: ${cliCommand}`,

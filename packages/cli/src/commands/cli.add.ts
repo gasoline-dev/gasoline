@@ -20,6 +20,7 @@ import { isFilePresent, readJsonFile, renameFile } from "../commons/cli.fs.js";
 import { PackageJson, getPackageManager } from "../commons/cli.packages.js";
 import { promisify } from "util";
 import { exec } from "node:child_process";
+import { loadFile, writeFile } from "magicast";
 
 export async function runAddCommand(
 	cliCommand: string,
@@ -53,15 +54,26 @@ export async function runAddCommand(
 
 		spin.stop();
 
-		const resourceEntityGroup =
-			await runSetResourceEntityGroupPrompt(resourceEntityGroups);
+		let resourceEntityGroup = "";
+		let resourceEntityGroupEntities = [];
+		let resourceEntity = "";
 
-		const resourceEntityGroupEntities =
-			setResourceEntityGroupEntities(resourceFiles);
+		let resourceDnsZoneName = "";
 
-		const resourceEntity = await runSetResourceEntityPrompt(
-			resourceEntityGroupEntities,
-		);
+		switch (cliCommand) {
+			case "add:cloudflare:dns:zone":
+				resourceDnsZoneName = await runSetDnsZoneNamePrompt();
+				break;
+			default:
+				resourceEntityGroup =
+					await runSetResourceEntityGroupPrompt(resourceEntityGroups);
+				resourceEntityGroupEntities =
+					setResourceEntityGroupEntities(resourceFiles);
+				resourceEntity = await runSetResourceEntityPrompt(
+					resourceEntityGroupEntities,
+				);
+				break;
+		}
 
 		const resourceDescriptor = setResourceDescriptor(cliCommand);
 
@@ -69,10 +81,16 @@ export async function runAddCommand(
 			.replace("add:", "")
 			.replace(/:/g, "-")}`;
 
-		const templateTargetDir = path.join(
-			selectedResourceContainerDir,
-			`${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
-		);
+		const templateTargetDir =
+			cliCommand === "add:cloudflare:dns:zone"
+				? path.join(
+						selectedResourceContainerDir,
+						`_${resourceDnsZoneName.replace(/\./g, "-")}-dns-zone`,
+				  )
+				: path.join(
+						selectedResourceContainerDir,
+						`_${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
+				  );
 
 		spin.start("Downloading template");
 		await downloadTemplate(templateSrc, templateTargetDir);
@@ -80,32 +98,95 @@ export async function runAddCommand(
 
 		spin.start("Adjusting template");
 
+		const newTemplateIndexFileName =
+			cliCommand === "add:cloudflare:dns:zone"
+				? path.join(
+						templateTargetDir,
+						`src/index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.ts`,
+				  )
+				: path.join(
+						templateTargetDir,
+						`src/index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
+				  );
+
 		await renameFile(
 			path.join(templateTargetDir, "src/index.ts"),
-			path.join(
-				templateTargetDir,
-				`src/index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
-			),
+			newTemplateIndexFileName,
 		);
+
+		if (cliCommand === "add:cloudflare:dns:zone") {
+			const mod = await loadFile(newTemplateIndexFileName);
+			mod.exports.config.name = resourceDnsZoneName;
+			const camelCaseDomain = resourceDnsZoneName
+				.split(".")
+				.map((part, index) =>
+					index === 0
+						? part.toLowerCase()
+						: part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
+				)
+				.join("");
+			mod.exports[`${camelCaseDomain}DnsZoneConfig`] = mod.exports.config;
+			// biome-ignore lint/performance/noDelete: magicast won't work without
+			delete mod.exports.config;
+			await writeFile(mod, newTemplateIndexFileName);
+		}
 
 		const templatePackageJson = await readJsonFile<PackageJson>(
 			path.join(templateTargetDir, "package.json"),
 		);
 
-		templatePackageJson.name = `${path.basename(
-			selectedResourceContainerDir,
-		)}-${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`;
+		templatePackageJson.name =
+			cliCommand === "add:cloudflare:dns:zone"
+				? `${path.basename(
+						selectedResourceContainerDir,
+				  )}-${resourceDnsZoneName.replace(/\./g, "-")}-dns-zone`
+				: `${path.basename(
+						selectedResourceContainerDir,
+				  )}-${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`;
+
+		templatePackageJson.main =
+			cliCommand === "add:cloudflare:dns:zone"
+				? templatePackageJson.main.replace(
+						"index.x.x.x.js",
+						`index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.js`,
+				  )
+				: templatePackageJson.main.replace(
+						"index.x.x.x.js",
+						`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.js`,
+				  );
+
+		templatePackageJson.types =
+			cliCommand === "add:cloudflare:dns:zone"
+				? templatePackageJson.types.replace(
+						"index.x.x.x.d.ts",
+						`index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.d.ts`,
+				  )
+				: templatePackageJson.types.replace(
+						"index.x.x.x.d.ts",
+						`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.d.ts`,
+				  );
 
 		templatePackageJson.scripts.build =
-			templatePackageJson.scripts.build.replace(
-				"index.x.x.x.ts",
-				`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
-			);
+			cliCommand === "add:cloudflare:dns:zone"
+				? templatePackageJson.scripts.build.replace(
+						"index.x.x.x.ts",
+						`index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.ts`,
+				  )
+				: templatePackageJson.scripts.build.replace(
+						"index.x.x.x.ts",
+						`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
+				  );
 
-		templatePackageJson.scripts.dev = templatePackageJson.scripts.dev.replace(
-			"index.x.x.x.ts",
-			`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
-		);
+		templatePackageJson.scripts.dev =
+			cliCommand === "add:cloudflare:dns:zone"
+				? templatePackageJson.scripts.dev.replace(
+						"index.x.x.x.ts",
+						`index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.ts`,
+				  )
+				: templatePackageJson.scripts.dev.replace(
+						"index.x.x.x.ts",
+						`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
+				  );
 
 		await fsPromises.writeFile(
 			path.join(templateTargetDir, "package.json"),
@@ -229,4 +310,15 @@ async function runSetResourceEntityPrompt(resourceEntities: string[]) {
 		result = await runAddResourceEntity();
 	}
 	return result;
+}
+
+async function runSetDnsZoneNamePrompt() {
+	const { dnsZoneName } = await inquirer.prompt([
+		{
+			type: "input",
+			name: "dnsZoneName",
+			message: "Enter DNS zone name (example.com)",
+		},
+	]);
+	return dnsZoneName;
 }

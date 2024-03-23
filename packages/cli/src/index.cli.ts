@@ -39,6 +39,7 @@ async function main() {
 gasoline [command] -> Run command
 
 Commands:
+ add:cloudflare:dns:zone         Add Cloudflare DNS zone
  add:cloudflare:worker:api:empty Add Cloudflare Worker API
 
 Options:
@@ -51,6 +52,7 @@ Options:
 
 			if (cliCommand.includes("add:")) {
 				const availableAddCommands = [
+					"add:cloudflare:dns:zone",
 					"add:cloudflare:worker:api:empty",
 					"add:cloudflare:worker:api:hono",
 				];

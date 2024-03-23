@@ -2,6 +2,8 @@ import { isFilePresent } from "./cli.fs.js";
 
 export type PackageJson = {
 	name: string;
+	main: string;
+	types: string;
 	scripts: {
 		build: string;
 		dev: string;
