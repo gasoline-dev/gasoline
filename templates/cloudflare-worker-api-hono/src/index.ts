@@ -1,13 +1,6 @@
 import { Hono } from "hono";
+const app = new Hono();
 
-export interface Env {}
+app.get("/", (c) => c.text("Hello, World!"));
 
-export default {
-	async fetch(
-		request: Request,
-		env: Env,
-		ctx: ExecutionContext,
-	): Promise<Response> {
-		return new Response("Hello, World!");
-	},
-};
+export default app;
