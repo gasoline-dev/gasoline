@@ -44,10 +44,6 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# NX
-
-.nx
-
 # PNPM
 
 .pnpm-store
@@ -56,6 +52,10 @@ lerna-debug.log*
 
 .DS_Store
 Thumbs.db
+
+# Turbo repo
+
+.turbo
 
 # Wrangler project
 

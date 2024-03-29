@@ -6,8 +6,8 @@
 	"main": "dist/index.x.x.x.js",
 	"types": "dist/index.x.x.x.d.ts",
 	"scripts": {
-		"build": "tsup src/index.x.x.x.ts --format=esm --clean --sourcemap",
+		"build": "esbuild src/index.x.x.x.ts --outdir=dist --format=esm",
 		"check": "npx @biomejs/biome check --apply",
-		"dev": "tsup src/index.x.x.x.ts --format=esm --clean --sourcemap --dts --watch"
+		"dev": "esbuild src/index.x.x.x.ts --outdir=dist --format=esm --watch"
 	}
 }
