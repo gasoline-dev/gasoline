@@ -89,7 +89,7 @@ export async function runAddCommand(
 				  )
 				: path.join(
 						selectedResourceContainerDir,
-						`_${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
+						`${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
 				  );
 
 		spin.start("Downloading template");
