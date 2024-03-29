@@ -4,16 +4,15 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
-		"build": "nx run-many --target=build --projects=packages/*",
-		"dev": "nx run-many --target=dev --projects=packages/*",
+		"build": "turbo run build --filter='./packages/*'",
+		"dev": "turbo run dev --filter='./packages/*'",
 		"release": "pnpm run build && changeset publish"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.5.3",
 		"@changesets/cli": "^2.27.1",
-		"@nx/js": "^17.2.8",
-		"nx": "^17.2.8",
 		"tsup": "^8.0.1",
+		"turbo": "^1.13.0",
 		"typescript": "^5.3.2"
 	}
 }
