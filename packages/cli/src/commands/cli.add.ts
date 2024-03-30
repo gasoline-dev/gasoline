@@ -318,6 +318,14 @@ async function runSetDnsZoneNamePrompt() {
 			type: "input",
 			name: "dnsZoneName",
 			message: "Enter DNS zone name (example.com)",
+			validate: (input) => {
+				const domainRegex =
+					/^(?=.{1,253}$)([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,6}(\.[a-zA-Z]{2,6})?$/;
+				if (!domainRegex.test(input)) {
+					return "Needs to be a valid domain";
+				}
+				return true;
+			},
 		},
 	]);
 	return dnsZoneName;
