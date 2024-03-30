@@ -120,11 +120,19 @@ export async function runAddCommand(
 			const camelCaseDomain = resourceDnsZoneName
 				.split(".")
 				.map((part, index) =>
-					index === 0
-						? part.toLowerCase()
-						: part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
+					part
+						.split("-")
+						.map((segment, segmentIndex) =>
+							index === 0 && segmentIndex === 0
+								? segment.toLowerCase()
+								: segment.charAt(0).toUpperCase() +
+								  segment.slice(1).toLowerCase(),
+						)
+						.join("-"),
 				)
-				.join("");
+				.join("")
+				.replaceAll("-", "");
+
 			mod.exports[`${camelCaseDomain}DnsZoneConfig`] = mod.exports.config;
 			// biome-ignore lint/performance/noDelete: magicast won't work without
 			delete mod.exports.config;
