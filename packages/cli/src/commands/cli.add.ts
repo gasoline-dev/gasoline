@@ -328,5 +328,5 @@ async function runSetDnsZoneNamePrompt() {
 			},
 		},
 	]);
-	return dnsZoneName;
+	return dnsZoneName.toLowerCase();
 }
