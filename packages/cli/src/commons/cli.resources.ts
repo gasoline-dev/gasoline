@@ -40,7 +40,7 @@ export async function getResourceIndexFiles(
 			const getDirFilesResult = await getDirFiles(`${resourceDir}/src`, {
 				fileRegexToMatch: /^_[^.]+\.[^.]+\.[^.]+\.[^.]+\.[^.]+$/,
 			});
-			return getDirFilesResult.map((file) => `${resourceDir}/${file}`);
+			return getDirFilesResult.map((file) => `${resourceDir}/src/${file}`);
 		}),
 	);
 	return resourceIndexFiles.flat();

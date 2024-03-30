@@ -61,3 +61,4 @@ Thumbs.db
 
 .dev.vars
 .wrangler/
+.wrangler.toml

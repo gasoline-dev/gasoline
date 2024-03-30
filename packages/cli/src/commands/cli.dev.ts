@@ -11,6 +11,7 @@ import { CliParsedArgs } from "../index.cli.js";
 import express, { Express } from "express";
 import { Miniflare } from "miniflare";
 import { Readable } from "stream";
+import fsPromises from "fs/promises";
 
 export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 	//spin.start("Getting resources");
@@ -26,23 +27,41 @@ export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 			resourceContainerDirs,
 		);
 
-		console.log(resourceIndexFiles);
+		let startingPort = 8787;
+		for (const resourceIndexFile of resourceIndexFiles) {
+			console.log(resourceIndexFile);
+			const splitResourceIndexFile = path
+				.basename(resourceIndexFile)
+				.split(".");
+			const resourceEntityGroup = splitResourceIndexFile[0].replace("_", "");
+			const resourceEntity = splitResourceIndexFile[1];
+			const resourceDescriptor = splitResourceIndexFile[2];
+			if (resourceDescriptor === "api") {
+				const availablePort = await findAvailablePort(startingPort);
+				const name = `${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`;
+				const main = `src/${path.basename(resourceIndexFile)}`;
 
-		// loop over resourceIndexFiles
-		// for each resource that has a descriptor of "api", create a .wrangler.toml file at
-		// gasoline/core-base-api/.wrangler.toml.
-		// set name, main, compatibility_date, and dev -> port
-		/*
-			name = "my-worker"
-			main = "src/index.core.base.api.ts"
-			compatibility_date = "2022-07-12"
+				const wranglerBody = `name = "${name}"
+main = "${main}"
 
-			[dev]
-			port = 8081
-		*/
+[dev]
+port = ${availablePort}
+`;
+
+				const resourceDir = path.dirname(path.dirname(resourceIndexFile));
+
+				await fsPromises.writeFile(
+					path.join(resourceDir, ".wrangler.toml"),
+					wranglerBody,
+				);
+
+				startingPort = availablePort + 1;
+			}
+		}
 
 		return;
 
+		/*
 		const resourceDistFiles = setResourceIndexDistFiles(resourceIndexFiles);
 
 		const resourceDistFileExports =
@@ -58,9 +77,11 @@ export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 		const devIdToMiniflareInstanceMap = setDevIdToMiniflareMap();
 
 		const devIdToExpressInstanceMap = setDevIdToExpressInstanceMap();
+		*/
 
 		//spin.stop();
 
+		/*
 		let devId = 0;
 		let startingPort = 8787;
 		for (const [
@@ -103,6 +124,7 @@ export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 
 			startingPort = availablePort + 1;
 		}
+		*/
 	} catch (error) {
 		//spin.stop();
 		log.error(error);
