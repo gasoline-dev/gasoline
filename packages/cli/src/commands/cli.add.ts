@@ -3,7 +3,7 @@ import { CliParsedArgs } from "../index.cli.js";
 import { getConfig } from "../commons/cli.config.js";
 import {
 	ResourceContainerDirs,
-	getResourceFiles,
+	getResourceIndexFiles,
 	setResourceContainerDirs,
 	setResourceDescriptor,
 	setResourceEntityGroupEntities,
@@ -46,7 +46,7 @@ export async function runAddCommand(
 
 		spin.start("Getting resources");
 
-		const resourceFiles = await getResourceFiles([
+		const resourceFiles = await getResourceIndexFiles([
 			selectedResourceContainerDir,
 		]);
 
@@ -102,11 +102,11 @@ export async function runAddCommand(
 			cliCommand === "add:cloudflare:dns:zone"
 				? path.join(
 						templateTargetDir,
-						`src/index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.ts`,
+						`src/_${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.index.ts`,
 				  )
 				: path.join(
 						templateTargetDir,
-						`src/index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
+						`src/_${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.index.ts`,
 				  );
 
 		await renameFile(
@@ -155,45 +155,45 @@ export async function runAddCommand(
 		templatePackageJson.main =
 			cliCommand === "add:cloudflare:dns:zone"
 				? templatePackageJson.main.replace(
-						"index.x.x.x.js",
-						`index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.js`,
+						"z.z.z.index.js",
+						`_${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.index.js`,
 				  )
 				: templatePackageJson.main.replace(
-						"index.x.x.x.js",
-						`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.js`,
+						"z.z.z.index.js",
+						`_${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.index.js`,
 				  );
 
 		templatePackageJson.types =
 			cliCommand === "add:cloudflare:dns:zone"
 				? templatePackageJson.types.replace(
-						"index.x.x.x.d.ts",
-						`index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.d.ts`,
+						"z.z.z.index.d.ts",
+						`_${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.index.d.ts`,
 				  )
 				: templatePackageJson.types.replace(
-						"index.x.x.x.d.ts",
-						`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.d.ts`,
+						"z.z.z.index.d.ts",
+						`_${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.index.d.ts`,
 				  );
 
 		templatePackageJson.scripts.build =
 			cliCommand === "add:cloudflare:dns:zone"
 				? templatePackageJson.scripts.build.replace(
-						"index.x.x.x.ts",
-						`index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.ts`,
+						"z.z.z.index.ts",
+						`_${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.index.ts`,
 				  )
 				: templatePackageJson.scripts.build.replace(
-						"index.x.x.x.ts",
-						`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
+						"z.z.z.index.ts",
+						`_${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.index.ts`,
 				  );
 
 		templatePackageJson.scripts.dev =
 			cliCommand === "add:cloudflare:dns:zone"
 				? templatePackageJson.scripts.dev.replace(
-						"index.x.x.x.ts",
-						`index.${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.ts`,
+						"z.z.z.index.ts",
+						`_${resourceDnsZoneName.replace(/\./g, "-")}.dns.zone.index.ts`,
 				  )
 				: templatePackageJson.scripts.dev.replace(
-						"index.x.x.x.ts",
-						`index.${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.ts`,
+						"z.z.z.index.ts",
+						`_${resourceEntityGroup}.${resourceEntity}.${resourceDescriptor}.index.ts`,
 				  );
 
 		await fsPromises.writeFile(

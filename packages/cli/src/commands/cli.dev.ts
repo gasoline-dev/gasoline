@@ -3,8 +3,8 @@ import http from "http";
 import { getConfig } from "../commons/cli.config.js";
 import { log, spin } from "../commons/cli.log.js";
 import {
-	ResourceFiles,
-	getResourceFiles,
+	ResourceIndexFiles,
+	getResourceIndexFiles,
 	setResourceContainerDirs,
 } from "../commons/cli.resources.js";
 import { CliParsedArgs } from "../index.cli.js";
@@ -13,7 +13,7 @@ import { Miniflare } from "miniflare";
 import { Readable } from "stream";
 
 export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
-	spin.start("Getting resources");
+	//spin.start("Getting resources");
 	try {
 		const config = await getConfig();
 
@@ -22,9 +22,28 @@ export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 			config.resourceContainerDirs,
 		);
 
-		const resourceFiles = await getResourceFiles(resourceContainerDirs);
+		const resourceIndexFiles = await getResourceIndexFiles(
+			resourceContainerDirs,
+		);
 
-		const resourceDistFiles = setResourceDistFiles(resourceFiles);
+		console.log(resourceIndexFiles);
+
+		// loop over resourceIndexFiles
+		// for each resource that has a descriptor of "api", create a .wrangler.toml file at
+		// gasoline/core-base-api/.wrangler.toml.
+		// set name, main, compatibility_date, and dev -> port
+		/*
+			name = "my-worker"
+			main = "src/index.core.base.api.ts"
+			compatibility_date = "2022-07-12"
+
+			[dev]
+			port = 8081
+		*/
+
+		return;
+
+		const resourceDistFiles = setResourceIndexDistFiles(resourceIndexFiles);
 
 		const resourceDistFileExports =
 			await getResourceDistFileExports(resourceDistFiles);
@@ -40,7 +59,7 @@ export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 
 		const devIdToExpressInstanceMap = setDevIdToExpressInstanceMap();
 
-		spin.stop();
+		//spin.stop();
 
 		let devId = 0;
 		let startingPort = 8787;
@@ -85,7 +104,7 @@ export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 			startingPort = availablePort + 1;
 		}
 	} catch (error) {
-		spin.stop();
+		//spin.stop();
 		log.error(error);
 	}
 }
@@ -104,8 +123,10 @@ type ResourceDistFiles = string[];
  * ['gasoline/core-base-api/dist/index.core.base.api.js']
  * ```
  */
-function setResourceDistFiles(resourceFiles: ResourceFiles): ResourceDistFiles {
-	return resourceFiles.map((resourceFile) =>
+function setResourceIndexDistFiles(
+	resourceIndexFiles: ResourceIndexFiles,
+): ResourceDistFiles {
+	return resourceIndexFiles.map((resourceFile) =>
 		path.join(
 			resourceFile.replace(path.basename(resourceFile), ""),
 			"dist",
@@ -132,7 +153,7 @@ type ResourceDistFileExports = Record<string, unknown>[];
  * ]
  */
 async function getResourceDistFileExports(
-	resourceDistFiles: ResourceFiles,
+	resourceDistFiles: ResourceIndexFiles,
 ): Promise<ResourceDistFileExports> {
 	return Promise.all(
 		resourceDistFiles.map(

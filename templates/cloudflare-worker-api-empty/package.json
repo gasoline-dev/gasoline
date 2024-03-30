@@ -3,11 +3,11 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
-	"main": "dist/index.x.x.x.js",
-	"types": "dist/index.x.x.x.d.ts",
+	"main": "dist/z.z.z.index.js",
+	"types": "dist/z.z.z.index.d.ts",
 	"scripts": {
-		"build": "esbuild src/index.x.x.x.ts --outdir=dist --format=esm",
+		"build": "esbuild src/z.z.z.index.ts --outdir=dist --format=esm",
 		"check": "npx @biomejs/biome check --apply",
-		"dev": "esbuild src/index.x.x.x.ts --outdir=dist --format=esm --watch"
+		"dev": "wrangler dev --config=.wrangler.toml --show-interactive-dev-session=false"
 	}
 }

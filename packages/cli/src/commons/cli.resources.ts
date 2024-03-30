@@ -23,29 +23,27 @@ async function getResourceDirs(
 	return resourceDirs.flat();
 }
 
-export type ResourceFiles = string[];
+export type ResourceIndexFiles = string[];
 
 /**
- * Returns an array of resource files.
- *
  * @example
  * ```ts
- * ['gasoline/core-base-api/src/index.core.base.api.ts']
+ * ['gasoline/core-base-api/src/_core.base.api.index.ts']
  * ```
  */
-export async function getResourceFiles(
+export async function getResourceIndexFiles(
 	resourceContainerDirs: ResourceContainerDirs,
-): Promise<ResourceFiles> {
+): Promise<ResourceIndexFiles> {
 	const resourceDirs = await getResourceDirs(resourceContainerDirs);
-	const resourceFiles = await Promise.all(
+	const resourceIndexFiles = await Promise.all(
 		resourceDirs.map(async (resourceDir) => {
 			const getDirFilesResult = await getDirFiles(`${resourceDir}/src`, {
-				fileRegexToMatch: /^[^.]+\.[^.]+\.[^.]+\.[^.]+\.[^.]+$/,
+				fileRegexToMatch: /^_[^.]+\.[^.]+\.[^.]+\.[^.]+\.[^.]+$/,
 			});
 			return getDirFilesResult.map((file) => `${resourceDir}/${file}`);
 		}),
 	);
-	return resourceFiles.flat();
+	return resourceIndexFiles.flat();
 }
 
 export type ResourceContainerDirs = string[];
@@ -87,16 +85,20 @@ type ResourceEntityGroups = string[];
  * @example
  * ```ts
  * // given resource files of:
- * ['gasoline/core-base-api/index.core.base.api.ts']
+ * ['gasoline/core-base-api/_core.base.api.index.ts']
  * // return:
  * ['core']
  * ```
  */
-export function setResourceEntityGroups(resourceFiles: ResourceFiles) {
+export function setResourceEntityGroups(
+	resourceIndexFiles: ResourceIndexFiles,
+) {
 	const result: ResourceEntityGroups = [];
-	for (const resourceFile of resourceFiles) {
-		const group = path.basename(resourceFile).split(".")[1];
-		if (!result.includes(group)) result.push(group);
+	for (const resourceIndexFile of resourceIndexFiles) {
+		if (!resourceIndexFile.includes(".dns.zone.")) {
+			const group = path.basename(resourceIndexFile).split(".")[0];
+			if (!result.includes(group)) result.push(group.replace("_", ""));
+		}
 	}
 	return result;
 }
@@ -104,21 +106,23 @@ export function setResourceEntityGroups(resourceFiles: ResourceFiles) {
 type ResourceEntityGroupEntities = string[];
 
 /**
- * Returns an array of resource entity group entities.
- *
  * @example
  * ```ts
  * // given resource files of:
- * ['gasoline/core-base-api/index.core.base.api.ts']
+ * ['gasoline/core-base-api/_core.base.api.index.ts']
  * // return:
  * ['base']
  * ```
  */
-export function setResourceEntityGroupEntities(resourceFiles: ResourceFiles) {
+export function setResourceEntityGroupEntities(
+	resourceIndexFiles: ResourceIndexFiles,
+) {
 	const result: ResourceEntityGroupEntities = [];
-	for (const resourceFile of resourceFiles) {
-		const entity = path.basename(resourceFile).split(".")[2];
-		if (!result.includes(entity)) result.push(entity);
+	for (const resourceIndexFile of resourceIndexFiles) {
+		if (!resourceIndexFile.includes(".dns.zone.")) {
+			const entity = path.basename(resourceIndexFile).split(".")[1];
+			if (!result.includes(entity)) result.push(entity);
+		}
 	}
 	return result;
 }
