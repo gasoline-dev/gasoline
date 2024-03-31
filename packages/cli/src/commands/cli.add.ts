@@ -147,13 +147,6 @@ export async function runAddCommand(
 			)}_${resourceEntity}_KV`.toUpperCase();
 			const mod = await loadFile(newTemplateIndexFileName);
 			mod.exports.config.namespace = resourceKvNamespace;
-			const camelCaseKvNamespace = resourceKvNamespace
-				.split("-")
-				.map(
-					(part, index) =>
-						part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
-				)
-				.join("");
 			mod.exports[
 				`${resourceEntityGroup}${resourceEntity
 					.charAt(0)
