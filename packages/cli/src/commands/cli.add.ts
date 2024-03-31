@@ -65,11 +65,6 @@ export async function runAddCommand(
 			case "add:cloudflare:dns:zone":
 				resourceDnsZoneName = await runSetDnsZoneNamePrompt();
 				break;
-			case "add:cloudflare:kv":
-				resourceKvNamespace = `${resourceEntityGroup
-					.replace(/-/g, "_")
-					.toUpperCase()}_${resourceEntity}_KV`;
-				break;
 			default:
 				resourceEntityGroup =
 					await runSetResourceEntityGroupPrompt(resourceEntityGroups);
@@ -146,6 +141,10 @@ export async function runAddCommand(
 		}
 
 		if (cliCommand === "add:cloudflare:kv") {
+			resourceKvNamespace = `${resourceEntityGroup.replace(
+				/-/g,
+				"_",
+			)}_${resourceEntity}_KV`.toUpperCase();
 			const mod = await loadFile(newTemplateIndexFileName);
 			mod.exports.config.namespace = resourceKvNamespace;
 			const camelCaseKvNamespace = resourceKvNamespace
@@ -155,8 +154,13 @@ export async function runAddCommand(
 						part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
 				)
 				.join("");
-			mod.exports[`${camelCaseKvNamespace}KvNamespaceConfig`] =
-				mod.exports.config;
+			mod.exports[
+				`${resourceEntityGroup}${resourceEntity
+					.charAt(0)
+					.toUpperCase()}${resourceEntity.slice(1)}${resourceDescriptor
+					.charAt(0)
+					.toUpperCase()}${resourceDescriptor.slice(1)}Config`
+			] = mod.exports.config;
 			// biome-ignore lint/performance/noDelete: magicast won't work without
 			delete mod.exports.config;
 			await writeFile(mod, newTemplateIndexFileName);
