@@ -59,10 +59,16 @@ export async function runAddCommand(
 		let resourceEntity = "";
 
 		let resourceDnsZoneName = "";
+		let resourceKvNamespace = "";
 
 		switch (cliCommand) {
 			case "add:cloudflare:dns:zone":
 				resourceDnsZoneName = await runSetDnsZoneNamePrompt();
+				break;
+			case "add:cloudflare:kv":
+				resourceKvNamespace = `${resourceEntityGroup
+					.replace(/-/g, "_")
+					.toUpperCase()}_${resourceEntity}_KV`;
 				break;
 			default:
 				resourceEntityGroup =
@@ -134,6 +140,23 @@ export async function runAddCommand(
 				.replaceAll("-", "");
 
 			mod.exports[`${camelCaseDomain}DnsZoneConfig`] = mod.exports.config;
+			// biome-ignore lint/performance/noDelete: magicast won't work without
+			delete mod.exports.config;
+			await writeFile(mod, newTemplateIndexFileName);
+		}
+
+		if (cliCommand === "add:cloudflare:kv") {
+			const mod = await loadFile(newTemplateIndexFileName);
+			mod.exports.config.namespace = resourceKvNamespace;
+			const camelCaseKvNamespace = resourceKvNamespace
+				.split("-")
+				.map(
+					(part, index) =>
+						part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
+				)
+				.join("");
+			mod.exports[`${camelCaseKvNamespace}KvNamespaceConfig`] =
+				mod.exports.config;
 			// biome-ignore lint/performance/noDelete: magicast won't work without
 			delete mod.exports.config;
 			await writeFile(mod, newTemplateIndexFileName);
@@ -337,4 +360,22 @@ async function runSetDnsZoneNamePrompt() {
 		},
 	]);
 	return dnsZoneName.toLowerCase();
+}
+
+async function runSetKvNamespacePrompt() {
+	const { kvName } = await inquirer.prompt([
+		{
+			type: "input",
+			name: "kvName",
+			message: "Enter KV namespace name",
+			validate: (input) => {
+				const kvNameRegex = /^[a-zA-Z0-9_]{1,64}$/;
+				if (!kvNameRegex.test(input)) {
+					return "Needs to be a valid KV namespace name";
+				}
+				return true;
+			},
+		},
+	]);
+	return kvName.toLowerCase();
 }
