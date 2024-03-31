@@ -40,7 +40,9 @@ gasoline [command] -> Run command
 
 Commands:
  add:cloudflare:dns:zone         Add Cloudflare DNS zone
+ add:cloudflare:kv               Add Cloudflare KV storage
  add:cloudflare:worker:api:empty Add Cloudflare Worker API
+ add:cloudflare:worker:api:hono  Add Cloudflare Worker Hono API
 
 Options:
  --help, -h Print help`;
@@ -53,6 +55,7 @@ Options:
 			if (cliCommand.includes("add:")) {
 				const availableAddCommands = [
 					"add:cloudflare:dns:zone",
+					"add:cloudflare:kv",
 					"add:cloudflare:worker:api:empty",
 					"add:cloudflare:worker:api:hono",
 				];
