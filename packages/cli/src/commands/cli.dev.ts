@@ -12,6 +12,7 @@ import express, { Express } from "express";
 import { Miniflare } from "miniflare";
 import { Readable } from "stream";
 import fsPromises from "fs/promises";
+import chokidar from "chokidar";
 
 export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 	//spin.start("Getting resources");
@@ -29,7 +30,6 @@ export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 
 		let startingPort = 8787;
 		for (const resourceIndexFile of resourceIndexFiles) {
-			console.log(resourceIndexFile);
 			const splitResourceIndexFile = path
 				.basename(resourceIndexFile)
 				.split(".");
@@ -58,6 +58,19 @@ port = ${availablePort}
 				startingPort = availablePort + 1;
 			}
 		}
+
+		const watcher = chokidar.watch(
+			"gasoline/*/.wrangler/tmp/dev-**/*.*.*.index.js",
+			{
+				ignoreInitial: true,
+				persistent: true,
+			},
+		);
+
+		watcher
+			.on("add", (path) => console.log(`File ${path} has been added`))
+			.on("change", (path) => console.log(`File ${path} has been changed`))
+			.on("unlink", (path) => console.log(`File ${path} has been removed`));
 
 		return;
 
