@@ -13,6 +13,9 @@ import { Miniflare } from "miniflare";
 import { Readable } from "stream";
 import fsPromises from "fs/promises";
 import chokidar from "chokidar";
+import { getPackageManager } from "../commons/cli.packages.js";
+import { spawn } from "child_process";
+import { loadFile, writeFile } from "magicast";
 
 export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 	//spin.start("Getting resources");
@@ -60,7 +63,10 @@ port = ${availablePort}
 		}
 
 		const watcher = chokidar.watch(
-			"gasoline/*/.wrangler/tmp/dev-**/*.*.*.index.js",
+			[
+				"gasoline/*/.wrangler/tmp/dev-**/*.*.*.index.js",
+				"gasoline/*/dist/*.*.*.index.js",
+			],
 			{
 				ignoreInitial: true,
 				persistent: true,
@@ -68,9 +74,83 @@ port = ${availablePort}
 		);
 
 		watcher
-			.on("add", (path) => console.log(`File ${path} has been added`))
-			.on("change", (path) => console.log(`File ${path} has been changed`))
+			.on("add", async (watchedPath) => {
+				console.log(`File ${watchedPath} has been added`);
+			})
+			.on("change", async (watchedPath) => {
+				console.log(`File ${watchedPath} has been changed`);
+
+				// Normalize the path to ensure it's in a standard format
+				const normalizedPath = path.normalize(watchedPath);
+
+				// Split the path into parts using path.sep as the separator to account for different OS path separators
+				const parts = normalizedPath.split(path.sep);
+
+				// The first directory name; parts[0] would be the root on absolute paths, so parts[1] is typically the first directory
+				const resourceContainerDir = parts[0];
+
+				console.log("resourceContainerDir");
+				console.log(resourceContainerDir);
+
+				const splitWatchedPath = path.basename(watchedPath).split(".");
+
+				const resourceEntityGroup = splitWatchedPath[0].replace("_", "");
+				const resourceEntity = splitWatchedPath[1];
+				const resourceDescriptor = splitWatchedPath[2];
+
+				const resourceIndexTsFile = path.join(
+					resourceContainerDir,
+					`${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
+					"src",
+					path.basename(watchedPath).replace(".js", ".ts"),
+				);
+
+				console.log("resourceIndexTsFile");
+				console.log(resourceIndexTsFile);
+
+				// user -> updates _core.base.kv.index.ts ->
+				// core-base-api is dependent on core-base-kv, so ...
+				// wrangler updates core-base-api/.wrangler.toml because
+				// core-base-api/_core.base.api.index.ts changes.
+				// gasoline dev is watching core-base-api/.wrangler/tmp/dev-abc/_core.base.api.index.js
+				// and then updates core-base-api/.wrangler.toml.
+
+				const mod = await loadFile(resourceIndexTsFile);
+
+				for (const modExport in mod.exports) {
+					if (mod.exports[modExport].type && mod.exports[modExport].id) {
+						//
+					}
+				}
+
+				/*
+				if (path === "gasoline/core-base-kv/dist/_core.base.kv.index.js") {
+					console.log("hello");
+					const mod = await loadFile(
+						"gasoline/core-base-kv/src/_core.base.kv.index.ts",
+					);
+					mod.exports.coreBaseKvConfig.namespace = "CORE_BASE_KV_TEST";
+					await writeFile(
+						mod,
+						"gasoline/core-base-kv/src/_core.base.kv.index.ts",
+					);
+				}
+				*/
+			})
 			.on("unlink", (path) => console.log(`File ${path} has been removed`));
+
+		//const packageManager = await getPackageManager();
+
+		/*
+		const process = spawn(packageManager, ["run", "dev:all"], {
+			shell: true,
+			stdio: "inherit",
+		});
+
+		process.on("exit", (code) => {
+			console.log(`Child process exited with code ${code}`);
+		});
+		*/
 
 		return;
 
