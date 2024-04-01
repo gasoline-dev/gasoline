@@ -108,13 +108,47 @@ port = ${availablePort}
 				console.log("resourceIndexTsFile");
 				console.log(resourceIndexTsFile);
 
+				/*
+					// _core.base.kv.index.d.ts
+					export type KvConfig = {
+						type: "cloudflare-kv";
+						id: string;
+						namespace: string;
+					};
+
+					export const coreBaseKvConfig: KvConfig;
+				*/
+
+				// p add gasoline-core-base-kv@workspace:* --filter=gasoline-core-base-api
+				// in _core.base.api.index.ts ->
 				// user -> updates _core.base.kv.index.ts ->
 				// core-base-api is dependent on core-base-kv, so ...
 				// wrangler updates core-base-api/.wrangler.toml because
 				// core-base-api/_core.base.api.index.ts changes.
 				// gasoline dev is watching core-base-api/.wrangler/tmp/dev-abc/_core.base.api.index.js
-				// and then updates core-base-api/.wrangler.toml.
+				// pulls in its imports, then updates core-base-api/.wrangler.toml.
 
+				const imports = (await import(
+					path.join(process.cwd(), watchedPath)
+				)) as Promise<Record<string, unknown>>;
+
+				console.log("imports");
+				console.log(imports);
+				// the above returns:
+				/*
+					[Module: null prototype] {
+  					coreBaseApiConfig: {
+    				resource: 'cloudflare-worker',
+    				id: 'core:base:cloudflare-worker:api:v1:12345',
+    				domain: { variant: 'workers.dev' },
+    				kv: [ [Object] ]
+  				},
+  				default: { fetch: [Function: fetch] }
+				}
+
+				*/
+
+				/*
 				const mod = await loadFile(resourceIndexTsFile);
 
 				for (const modExport in mod.exports) {
@@ -122,6 +156,7 @@ port = ${availablePort}
 						//
 					}
 				}
+				*/
 
 				/*
 				if (path === "gasoline/core-base-kv/dist/_core.base.kv.index.js") {
