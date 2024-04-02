@@ -31,7 +31,20 @@ export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 			resourceContainerDirs,
 		);
 
+		// TODO: copy types
+		/*
+			// _core.base.kv.index.d.ts
+			export type KvConfig = {
+				type: "cloudflare-kv";
+				id: string;
+				namespace: string;
+			};
+
+			export const coreBaseKvConfig: KvConfig;
+		*/
+
 		let startingPort = 8787;
+		const resourceToPortMap = new Map<string, number>();
 		for (const resourceIndexFile of resourceIndexFiles) {
 			const splitResourceIndexFile = path
 				.basename(resourceIndexFile)
@@ -58,6 +71,11 @@ port = ${availablePort}
 					wranglerBody,
 				);
 
+				resourceToPortMap.set(
+					`${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
+					availablePort,
+				);
+
 				startingPort = availablePort + 1;
 			}
 		}
@@ -74,118 +92,92 @@ port = ${availablePort}
 		);
 
 		watcher
-			.on("add", async (watchedPath) => {
-				console.log(`File ${watchedPath} has been added`);
-			})
+			// TODO: add
+			//.on("add", async (watchedPath) => {
+			//console.log(`File ${watchedPath} has been added`);
+			//})
 			.on("change", async (watchedPath) => {
 				console.log(`File ${watchedPath} has been changed`);
 
-				// Normalize the path to ensure it's in a standard format
-				const normalizedPath = path.normalize(watchedPath);
+				if (watchedPath.includes(".wrangler")) {
+					const splitWatchedPath = path.normalize(watchedPath).split(path.sep);
 
-				// Split the path into parts using path.sep as the separator to account for different OS path separators
-				const parts = normalizedPath.split(path.sep);
+					const resourceContainerDir = splitWatchedPath[0];
 
-				// The first directory name; parts[0] would be the root on absolute paths, so parts[1] is typically the first directory
-				const resourceContainerDir = parts[0];
+					const splitWatchedBasename = path.basename(watchedPath).split(".");
 
-				console.log("resourceContainerDir");
-				console.log(resourceContainerDir);
+					const resourceEntityGroup = splitWatchedBasename[0].replace("_", "");
+					const resourceEntity = splitWatchedBasename[1];
+					const resourceDescriptor = splitWatchedBasename[2];
 
-				const splitWatchedPath = path.basename(watchedPath).split(".");
+					const resourceIndexTsFile = path.join(
+						resourceContainerDir,
+						`${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
+						"src",
+						path.basename(watchedPath).replace(".js", ".ts"),
+					);
 
-				const resourceEntityGroup = splitWatchedPath[0].replace("_", "");
-				const resourceEntity = splitWatchedPath[1];
-				const resourceDescriptor = splitWatchedPath[2];
+					const moduleImports = (await import(
+						path.join(process.cwd(), watchedPath)
+					)) as Record<string, any>;
 
-				const resourceIndexTsFile = path.join(
-					resourceContainerDir,
-					`${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
-					"src",
-					path.basename(watchedPath).replace(".js", ".ts"),
-				);
+					const availablePort = resourceToPortMap.get(
+						`${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
+					);
+					const name = `${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`;
+					const main = `src/${path.basename(resourceIndexTsFile)}`;
 
-				console.log("resourceIndexTsFile");
-				console.log(resourceIndexTsFile);
+					let wranglerBody = `name = "${name}"
+main = "${main}"
 
-				/*
-					// _core.base.kv.index.d.ts
-					export type KvConfig = {
-						type: "cloudflare-kv";
-						id: string;
-						namespace: string;
-					};
+[dev]
+port = ${availablePort}
 
-					export const coreBaseKvConfig: KvConfig;
-				*/
+`;
 
-				// p add gasoline-core-base-kv@workspace:* --filter=gasoline-core-base-api
-				// in _core.base.api.index.ts ->
-				// user -> updates _core.base.kv.index.ts ->
-				// core-base-api is dependent on core-base-kv, so ...
-				// wrangler updates core-base-api/.wrangler.toml because
-				// core-base-api/_core.base.api.index.ts changes.
-				// gasoline dev is watching core-base-api/.wrangler/tmp/dev-abc/_core.base.api.index.js
-				// pulls in its imports, then updates core-base-api/.wrangler.toml.
-
-				const imports = (await import(
-					path.join(process.cwd(), watchedPath)
-				)) as Promise<Record<string, unknown>>;
-
-				console.log("imports");
-				console.log(imports);
-				// the above returns:
-				/*
-					[Module: null prototype] {
-  					coreBaseApiConfig: {
-    				resource: 'cloudflare-worker',
-    				id: 'core:base:cloudflare-worker:api:v1:12345',
-    				domain: { variant: 'workers.dev' },
-    				kv: [ [Object] ]
-  				},
-  				default: { fetch: [Function: fetch] }
-				}
-
-				*/
-
-				/*
-				const mod = await loadFile(resourceIndexTsFile);
-
-				for (const modExport in mod.exports) {
-					if (mod.exports[modExport].type && mod.exports[modExport].id) {
-						//
+					for (const moduleImport in moduleImports) {
+						if (
+							moduleImports[moduleImport].type &&
+							moduleImports[moduleImport].id
+						) {
+							const type = moduleImports[moduleImport].type;
+							const kv = moduleImports[moduleImport].kv;
+							if (type === "cloudflare-worker") {
+								if (kv) {
+									for (const item of kv) {
+										wranglerBody += `[[kv_namespaces]]
+binding = "${item.binding}"
+id = "<GAS_DEV_PLACEHOLDER>"
+`;
+									}
+								}
+							}
+						}
 					}
-				}
-				*/
 
-				/*
-				if (path === "gasoline/core-base-kv/dist/_core.base.kv.index.js") {
-					console.log("hello");
-					const mod = await loadFile(
-						"gasoline/core-base-kv/src/_core.base.kv.index.ts",
-					);
-					mod.exports.coreBaseKvConfig.namespace = "CORE_BASE_KV_TEST";
-					await writeFile(
-						mod,
-						"gasoline/core-base-kv/src/_core.base.kv.index.ts",
+					await fsPromises.writeFile(
+						path.join(
+							resourceContainerDir,
+							`${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`,
+							".wrangler.toml",
+						),
+						wranglerBody,
 					);
 				}
-				*/
-			})
-			.on("unlink", (path) => console.log(`File ${path} has been removed`));
+			});
+		// TODO: delete
+		// .on("unlink", (path) => console.log(`File ${path} has been removed`));
 
-		//const packageManager = await getPackageManager();
+		const packageManager = await getPackageManager();
 
-		/*
-		const process = spawn(packageManager, ["run", "dev:all"], {
+		const devAllProcess = spawn(packageManager, ["run", "dev:all"], {
 			shell: true,
 			stdio: "inherit",
 		});
 
-		process.on("exit", (code) => {
+		devAllProcess.on("exit", (code) => {
 			console.log(`Child process exited with code ${code}`);
 		});
-		*/
 
 		return;
 
