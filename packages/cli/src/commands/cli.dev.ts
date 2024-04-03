@@ -56,9 +56,11 @@ export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 				const availablePort = await findAvailablePort(startingPort);
 				const name = `${resourceEntityGroup}-${resourceEntity}-${resourceDescriptor}`;
 				const main = `src/${path.basename(resourceIndexFile)}`;
+				const compatibilityDate = "2024-04-03";
 
 				const wranglerBody = `name = "${name}"
 main = "${main}"
+compatibility_date = "${compatibilityDate}"
 
 [dev]
 port = ${availablePort}
@@ -80,17 +82,18 @@ port = ${availablePort}
 			}
 		}
 
-		const watcher = chokidar.watch(
-			[
-				"gasoline/*/.wrangler/tmp/dev-**/*.*.*.index.js",
-				"gasoline/*/dist/*.*.*.index.js",
-			],
-			{
-				ignoreInitial: true,
-				persistent: true,
-			},
-		);
+		//const watcher = chokidar.watch(
+		//[
+		//"gasoline/*/.wrangler/tmp/dev-**/*.*.*.index.js",
+		//"gasoline/*/dist/*.*.*.index.js",
+		//],
+		//	{
+		//	ignoreInitial: true,
+		//	persistent: true,
+		//},
+		//);
 
+		/*
 		watcher
 			// TODO: add
 			//.on("add", async (watchedPath) => {
@@ -167,7 +170,9 @@ id = "<GAS_DEV_PLACEHOLDER>"
 			});
 		// TODO: delete
 		// .on("unlink", (path) => console.log(`File ${path} has been removed`));
+		*/
 
+		/*
 		const packageManager = await getPackageManager();
 
 		const devAllProcess = spawn(packageManager, ["run", "dev:all"], {
@@ -178,6 +183,7 @@ id = "<GAS_DEV_PLACEHOLDER>"
 		devAllProcess.on("exit", (code) => {
 			console.log(`Child process exited with code ${code}`);
 		});
+		*/
 
 		return;
 

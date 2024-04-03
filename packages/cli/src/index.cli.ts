@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { runAddCommand } from "./commands/cli.add.js";
 import { printVerboseLogs } from "./commons/cli.log.js";
 import { runDevCommand } from "./commands/cli.dev.js";
+import { runTurboInitCommand } from "./commands/cli.turbo-init.js";
 
 const cliOptions = {
 	help: {
@@ -67,6 +68,17 @@ Options:
 				}
 			} else if (cliCommand === "dev") {
 				await runDevCommand(cliParsedArgs);
+			} else if (cliCommand.includes("turbo:")) {
+				const availableTurboCommands = ["turbo:init"];
+
+				if (
+					availableTurboCommands.includes(cliCommand) &&
+					cliCommand === "turbo:init"
+				) {
+					await runTurboInitCommand(cliParsedArgs);
+				} else {
+					console.log(commandDoesNotExistMessage);
+				}
 			} else {
 				console.log(commandDoesNotExistMessage);
 			}
