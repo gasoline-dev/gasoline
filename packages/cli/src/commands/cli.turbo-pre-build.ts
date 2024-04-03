@@ -8,7 +8,7 @@ import {
 import { CliParsedArgs } from "../index.cli.js";
 import fsPromises from "fs/promises";
 
-export async function runTurboInitCommand(cliParsedArgs: CliParsedArgs) {
+export async function runTurboPreBuildCommand(cliParsedArgs: CliParsedArgs) {
 	try {
 		const config = await getConfig();
 

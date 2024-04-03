@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { runAddCommand } from "./commands/cli.add.js";
 import { printVerboseLogs } from "./commons/cli.log.js";
 import { runDevCommand } from "./commands/cli.dev.js";
-import { runTurboInitCommand } from "./commands/cli.turbo-init.js";
+import { runTurboPreBuildCommand } from "./commands/cli.turbo-pre-build.js";
 
 const cliOptions = {
 	help: {
@@ -69,13 +69,13 @@ Options:
 			} else if (cliCommand === "dev") {
 				await runDevCommand(cliParsedArgs);
 			} else if (cliCommand.includes("turbo:")) {
-				const availableTurboCommands = ["turbo:init"];
+				const availableTurboCommands = ["turbo:pre-build"];
 
 				if (
 					availableTurboCommands.includes(cliCommand) &&
-					cliCommand === "turbo:init"
+					cliCommand === "turbo:pre-build"
 				) {
-					await runTurboInitCommand(cliParsedArgs);
+					await runTurboPreBuildCommand(cliParsedArgs);
 				} else {
 					console.log(commandDoesNotExistMessage);
 				}
