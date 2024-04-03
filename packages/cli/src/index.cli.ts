@@ -4,6 +4,8 @@ import { runAddCommand } from "./commands/cli.add.js";
 import { printVerboseLogs } from "./commons/cli.log.js";
 import { runDevCommand } from "./commands/cli.dev.js";
 import { runTurboPreBuildCommand } from "./commands/cli.turbo-pre-build.js";
+import { runTurboPreDevCommand } from "./commands/cli.turbo-pre-dev.js";
+import { runTurboInitCommand } from "./commands/cli.turbo-init.js";
 
 const cliOptions = {
 	help: {
@@ -69,13 +71,22 @@ Options:
 			} else if (cliCommand === "dev") {
 				await runDevCommand(cliParsedArgs);
 			} else if (cliCommand.includes("turbo:")) {
-				const availableTurboCommands = ["turbo:pre-build"];
+				const availableTurboCommands = [
+					"turbo:init",
+					"turbo:pre-build",
+					"turbo:pre-dev",
+				];
 
 				if (
 					availableTurboCommands.includes(cliCommand) &&
-					cliCommand === "turbo:pre-build"
+					cliCommand === "turbo:init"
 				) {
-					await runTurboPreBuildCommand(cliParsedArgs);
+					await runTurboInitCommand(cliParsedArgs);
+				} else if (
+					availableTurboCommands.includes(cliCommand) &&
+					cliCommand === "turbo:pre-dev"
+				) {
+					await runTurboPreDevCommand(cliParsedArgs);
 				} else {
 					console.log(commandDoesNotExistMessage);
 				}

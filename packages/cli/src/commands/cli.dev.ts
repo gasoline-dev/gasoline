@@ -20,6 +20,9 @@ import { loadFile, writeFile } from "magicast";
 export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 	//spin.start("Getting resources");
 	try {
+		console.log("ran");
+		return;
+
 		const config = await getConfig();
 
 		const resourceContainerDirs = setResourceContainerDirs(
