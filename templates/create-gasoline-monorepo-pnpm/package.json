@@ -5,8 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"build": "turbo run build",
-		"dev": "gasoline dev",
-		"dev:all": "turbo run dev",
+		"gasoline:turbo:init": "gasoline turbo:init",
+		"dev": "turbo run dev",
 		"release": "pnpm run build && changeset publish"
 	},
 	"devDependencies": {

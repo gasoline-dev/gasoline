@@ -6,8 +6,9 @@
 	"main": "dist/z.z.z.index.js",
 	"types": "dist/z.z.z.index.d.ts",
 	"scripts": {
-		"build": "esbuild src/z.z.z.index.ts --outdir=dist --format=esm",
+		"build": "wrangler deploy --outdir=dist --config=.wrangler.toml --dry-run && tsc --declaration --emitDeclarationOnly --declarationDir dist",
 		"check": "npx @biomejs/biome check --apply",
+		"pre-dev": "gasoline turbo:pre-dev",
 		"dev": "wrangler dev --config=.wrangler.toml --show-interactive-dev-session=false"
 	},
 	"dependencies": {

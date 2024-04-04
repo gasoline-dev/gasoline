@@ -6,7 +6,7 @@
 	"main": "dist/z.z.z.index.js",
 	"types": "dist/z.z.z.index.d.ts",
 	"scripts": {
-		"build": "esbuild src/z.z.z.index.ts --outdir=dist --format=esm",
+		"build": "esbuild src/z.z.z.index.ts --outdir=dist --format=esm && tsc src/z.z.z.index.ts --declaration",
 		"check": "npx @biomejs/biome check --apply",
 		"dev": "esbuild src/z.z.z.index.ts --outdir=dist --format=esm --watch"
 	}
