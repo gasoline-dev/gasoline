@@ -1,3 +1,10 @@
+import { KVNamespace } from "@cloudflare/workers-types";
+
+export type KvBindings<T extends ReadonlyArray<{ readonly binding: string }>> =
+	{
+		[P in T[number]["binding"]]: KVNamespace;
+	};
+
 type CloudflareKv = {
 	id: string;
 	namespace: string;

@@ -22,5 +22,8 @@
 		"build": "tsup src/index.resources.ts --format=esm --target=node18 --clean --config=tsconfig.json --dts",
 		"check": "npx @biomjs/biome check --apply",
 		"dev": "tsup src/index.resources.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --dts"
+	},
+	"dependencies": {
+		"@cloudflare/workers-types": "^4.0.0"
 	}
 }
