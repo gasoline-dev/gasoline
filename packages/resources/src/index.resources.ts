@@ -7,7 +7,7 @@ export type KvBindings<T extends ReadonlyArray<{ readonly binding: string }>> =
 
 type CloudflareKv = {
 	id: string;
-	namespace: string;
+	name: string;
 };
 
 export function setCloudflareKv<T extends CloudflareKv>(resource: T): T {
