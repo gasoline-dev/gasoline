@@ -3,6 +3,7 @@ import { setCloudflareWorker } from "@gasoline-dev/resources";
 
 export const config = setCloudflareWorker({
 	id: "core:base:cf-worker:api:v1:12345",
+	name: "",
 } as const);
 
 type Bindings = {};

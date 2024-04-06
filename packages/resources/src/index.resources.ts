@@ -16,6 +16,7 @@ export function setCloudflareKv<T extends CloudflareKv>(resource: T): T {
 
 type CloudflareWorker = {
 	id: string;
+	name: string;
 	kv: Array<{
 		binding: string;
 	}>;
