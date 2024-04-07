@@ -274,19 +274,19 @@ type ResourceDistFiles = string[];
  * ['gasoline/core-base-api/dist/index.core.base.api.js']
  * ```
  */
-function setResourceIndexDistFiles(
+export function setResourceIndexDistFiles(
 	resourceIndexFiles: ResourceIndexFiles,
 ): ResourceDistFiles {
 	return resourceIndexFiles.map((resourceFile) =>
 		path.join(
-			resourceFile.replace(path.basename(resourceFile), ""),
+			resourceFile.replace("/src", "").replace(path.basename(resourceFile), ""),
 			"dist",
 			path.basename(resourceFile).replace(".ts", ".js"),
 		),
 	);
 }
 
-type ResourceDistFileExports = Record<string, unknown>[];
+type ResourceIndexDistFileExportedConfigs = any[];
 
 /**
  * @example
@@ -303,18 +303,40 @@ type ResourceDistFileExports = Record<string, unknown>[];
  *   }
  * ]
  */
-async function getResourceDistFileExports(
+export async function getResourceIndexDistFileExportedConfigs(
 	resourceDistFiles: ResourceIndexFiles,
-): Promise<ResourceDistFileExports> {
+): Promise<ResourceIndexDistFileExportedConfigs> {
+	return Promise.all(
+		resourceDistFiles.map((resourceDistFile) =>
+			import(path.join(process.cwd(), resourceDistFile)).then((fileExports) => {
+				for (const fileExport in fileExports) {
+					const exportedItem = fileExports[fileExport];
+					if (
+						exportedItem.id &&
+						/^[^:]*:[^:]*:[^:]*:[^:]*$/.test(exportedItem.id)
+					) {
+						return exportedItem;
+					}
+				}
+			}),
+		),
+	);
+}
+
+/*
+export async function getResourceIndexDistFileExports(
+	resourceDistFiles: ResourceIndexFiles,
+): Promise<ResourceIndexDistFileExports> {
 	return Promise.all(
 		resourceDistFiles.map(
-			async (resourceDistFile) =>
+			(resourceDistFile) =>
 				import(path.join(process.cwd(), resourceDistFile)) as Promise<
 					Record<string, unknown>
 				>,
 		),
 	);
 }
+*/
 
 type ResourceDistFileToConfigMap = Map<string, Record<string, unknown>>;
 
@@ -330,7 +352,7 @@ type ResourceDistFileToConfigMap = Map<string, Record<string, unknown>>;
  */
 function setResourceDistFileToConfigMap(
 	resourceDistFiles: ResourceDistFiles,
-	resourceDistFileExports: ResourceDistFileExports,
+	resourceDistFileExports: ResourceIndexDistFileExportedConfigs,
 ) {
 	const result: ResourceDistFileToConfigMap = new Map();
 	resourceDistFiles.forEach((resourceDistFile, index) => {

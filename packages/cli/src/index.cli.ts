@@ -1,11 +1,20 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { runAddCommand } from "./commands/cli.add.js";
-import { printVerboseLogs } from "./commons/cli.log.js";
-import { runDevCommand } from "./commands/cli.dev.js";
+import { log, printVerboseLogs } from "./commons/cli.log.js";
+import {
+	getResourceIndexDistFileExportedConfigs,
+	runDevCommand,
+	setResourceIndexDistFiles,
+} from "./commands/cli.dev.js";
 import { runTurboPreBuildCommand } from "./commands/cli.turbo-pre-build.js";
 import { runTurboPreDevCommand } from "./commands/cli.turbo-pre-dev.js";
 import { runTurboInitCommand } from "./commands/cli.turbo-init.js";
+import { getConfig } from "./commons/cli.config.js";
+import {
+	getResourceIndexFiles,
+	setResourceContainerDirs,
+} from "./commons/cli.resources.js";
 
 const cliOptions = {
 	help: {
@@ -46,6 +55,7 @@ Commands:
  add:cloudflare:kv               Add Cloudflare KV storage
  add:cloudflare:worker:api:empty Add Cloudflare Worker API
  add:cloudflare:worker:api:hono  Add Cloudflare Worker Hono API
+ deploy                          Deploy system to the cloud
 
 Options:
  --help, -h Print help`;
@@ -68,6 +78,8 @@ Options:
 				} else {
 					console.log(commandDoesNotExistMessage);
 				}
+			} else if (cliCommand === "deploy") {
+				await runDeployCommand();
 			} else if (cliCommand === "dev") {
 				await runDevCommand(cliParsedArgs);
 			} else if (cliCommand.includes("turbo:")) {
@@ -98,6 +110,34 @@ Options:
 		}
 	} catch (error) {
 		console.error(error);
+	}
+}
+
+async function runDeployCommand() {
+	try {
+		const config = await getConfig();
+
+		const resourceContainerDirs = setResourceContainerDirs(
+			cliParsedArgs.values.resourceContainerDir,
+			config.resourceContainerDirs,
+		);
+
+		const resourceContainerDir = resourceContainerDirs[0];
+
+		const resourceIndexFiles = await getResourceIndexFiles([
+			resourceContainerDir,
+		]);
+
+		const resourceIndexDistFiles =
+			setResourceIndexDistFiles(resourceIndexFiles);
+		console.log(resourceIndexDistFiles);
+
+		const resourceIndexDistFileExportedConfigs =
+			await getResourceIndexDistFileExportedConfigs(resourceIndexDistFiles);
+
+		console.log(resourceIndexDistFileExportedConfigs);
+	} catch (error) {
+		log.error(error);
 	}
 }
 
