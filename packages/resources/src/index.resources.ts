@@ -23,7 +23,7 @@ export function setCloudflareKv<T extends CloudflareKv>(resource: T): T {
 type CloudflarePages = {
 	id: string;
 	name: string;
-	services: Array<{
+	services?: Array<{
 		binding: string;
 	}>;
 };
@@ -35,7 +35,7 @@ export function setCloudflarePages<T extends CloudflarePages>(resource: T): T {
 type CloudflareWorker = {
 	id: string;
 	name: string;
-	kv: Array<{
+	kv?: Array<{
 		binding: string;
 	}>;
 };
