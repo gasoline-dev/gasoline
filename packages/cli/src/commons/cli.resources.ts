@@ -3,6 +3,8 @@ import { CliParsedArgs } from "../index.cli.js";
 import { Config } from "./cli.config.js";
 import { getDirFiles, getDirs } from "./cli.fs.js";
 
+export type ResourceDirs = string[];
+
 /**
  * Returns an array of resource dirs.
  *
@@ -11,9 +13,9 @@ import { getDirFiles, getDirs } from "./cli.fs.js";
  * ['gasoline/core-base-api']
  * ```
  */
-async function getResourceDirs(
+export async function getResourceDirs(
 	resourceContainerDirs: string[],
-): Promise<string[]> {
+): Promise<ResourceDirs> {
 	const resourceDirs = await Promise.all(
 		resourceContainerDirs.map(async (resourceContainerDir) => {
 			const getDirsResult = await getDirs(resourceContainerDir);

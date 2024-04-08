@@ -8,6 +8,8 @@ export type PackageJson = {
 		build: string;
 		dev: string;
 	};
+	dependencies?: Record<string, string>;
+	devDependencies?: Record<string, string>;
 };
 
 type PackageManager = "npm" | "pnpm";
