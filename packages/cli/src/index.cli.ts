@@ -140,27 +140,17 @@ async function runDeployCommand() {
 		const resourceIndexDistFileExportedConfigs =
 			await getResourceIndexDistFileExportedConfigs(resourceIndexDistFiles);
 
-		console.log(resourceIndexDistFileExportedConfigs);
-
 		const resourceDirs = await getResourceDirs(resourceContainerDirs);
-
-		console.log(resourceDirs);
 
 		const resourcePackageJsons = await getResourcePackageJsons(resourceDirs);
 
-		console.log(resourcePackageJsons);
-
 		const resourcePackageNamesSet =
 			setResourcePackageNamesSet(resourcePackageJsons);
-
-		console.log(resourcePackageNamesSet);
 
 		const packageJsonNameToResourceIdMap = setPackageJsonNameToResourceIdMap(
 			resourcePackageJsons,
 			resourceIndexDistFileExportedConfigs,
 		);
-
-		console.log(packageJsonNameToResourceIdMap);
 
 		const resourceInternalDependencies = setResourceInternalDependencies(
 			resourcePackageJsons,
@@ -168,14 +158,14 @@ async function runDeployCommand() {
 			resourcePackageNamesSet,
 		);
 
-		console.log(resourceInternalDependencies);
-
 		const resourceManifest = setResourceManifest(
 			resourceIndexDistFileExportedConfigs,
 			resourceInternalDependencies,
 		);
 
 		console.log(JSON.stringify(resourceManifest, null, 2));
+
+		// await deploy({}, resourceManifest);
 	} catch (error) {
 		log.error(error);
 	}
@@ -252,101 +242,48 @@ function setResourceInternalDependencies(
 	return result;
 }
 
+function ensurePath(obj: any, path: (string | number)[]) {
+	return path.reduce((acc, key) => {
+		if (!acc[key]) acc[key] = {};
+		return acc[key];
+	}, obj);
+}
+
 type ResourceManifest = any;
 
 function setResourceManifest(
 	resourceIndexDistFileExportedConfigs: any,
 	resourceInternalDependencies: ResourceInternalDependencies,
 ): ResourceManifest {
-	const result: ResourceManifest = {};
-	result.entityGroups = {};
-	for (const [
-		index,
-		config,
-	] of resourceIndexDistFileExportedConfigs.entries()) {
-		const splitId = config.id.split(":");
-		const entityGroup = splitId[0];
-		const entity = splitId[1];
-		const resourceType = splitId[2];
+	const result: ResourceManifest = { entityGroups: {} };
+
+	resourceIndexDistFileExportedConfigs.forEach((config: any, index: number) => {
+		const [entityGroup, entity, resourceType] = config.id.split(":");
 		const region = "NONE";
-		if (!result.entityGroups[entityGroup]) {
-			result.entityGroups[entityGroup] = {};
-		}
-		if (!result.entityGroups[entityGroup].entities) {
-			result.entityGroups[entityGroup].entities = {};
-		}
-		if (!result.entityGroups[entityGroup].entities[entity]) {
-			result.entityGroups[entityGroup].entities[entity] = {};
-		}
-		if (!result.entityGroups[entityGroup].entities[entity].resourceTypes) {
-			result.entityGroups[entityGroup].entities[entity].resourceTypes = {};
-		}
-		if (
-			!result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			]
-		) {
-			result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			] = {};
-		}
-		if (
-			!result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions
-		) {
-			result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions = {};
-		}
-		if (
-			!result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region]
-		) {
-			result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region] = {};
-		}
-		if (
-			!result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region].resources
-		) {
-			result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region].resources = {};
-		}
-		if (
-			!result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region].resources[config.id]
-		) {
-			result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region].resources[config.id] = {};
-		}
-		if (
-			!result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region].resources[config.id].config
-		) {
-			result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region].resources[config.id].config = config;
-		}
-		if (
-			!result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region].resources[config.id].dependsOn
-		) {
-			result.entityGroups[entityGroup].entities[entity].resourceTypes[
-				resourceType
-			].regions[region].resources[config.id].dependsOn =
-				resourceInternalDependencies[index];
-		}
-	}
+
+		const resourcePath = [
+			"entityGroups",
+			entityGroup,
+			"entities",
+			entity,
+			"resourceTypes",
+			resourceType,
+			"regions",
+			region,
+			"resources",
+			config.id,
+		];
+
+		const resourceConfig = ensurePath(result, resourcePath);
+		resourceConfig.config = config;
+		resourceConfig.dependsOn = resourceInternalDependencies[index];
+	});
+
 	return result;
+}
+
+async function deploy(prevResourceManifest: any, currResourceManifest: any) {
+	//
 }
 
 await main();
