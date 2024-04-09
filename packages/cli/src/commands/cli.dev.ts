@@ -287,7 +287,7 @@ export function setResourceIndexDistFiles(
 	);
 }
 
-export type ResourceIndexDistFileExports = Resources[];
+export type ResourceExports = Resources[];
 
 /**
  * @example
@@ -304,9 +304,9 @@ export type ResourceIndexDistFileExports = Resources[];
  *   }
  * ]
  */
-export async function getResourceIndexDistFileExports(
+export async function getResourceExports(
 	resourceDistFiles: ResourceIndexFiles,
-): Promise<ResourceIndexDistFileExports> {
+): Promise<ResourceExports> {
 	return Promise.all(
 		resourceDistFiles.map((resourceDistFile) =>
 			import(path.join(process.cwd(), resourceDistFile)).then((fileExports) => {
@@ -353,7 +353,7 @@ type ResourceDistFileToConfigMap = Map<string, Record<string, unknown>>;
  */
 function setResourceDistFileToConfigMap(
 	resourceDistFiles: ResourceDistFiles,
-	resourceDistFileExports: ResourceIndexDistFileExports,
+	resourceDistFileExports: ResourceExports,
 ) {
 	const result: ResourceDistFileToConfigMap = new Map();
 	resourceDistFiles.forEach((resourceDistFile, index) => {
