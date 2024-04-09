@@ -29,6 +29,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@gasoline-dev/resources':
+        specifier: workspace:^
+        version: link:../resources
       chokidar:
         specifier: ^3.6.0
         version: 3.6.0

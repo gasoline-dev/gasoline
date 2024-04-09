@@ -16,6 +16,7 @@ import chokidar from "chokidar";
 import { getPackageManager } from "../commons/cli.packages.js";
 import { spawn } from "child_process";
 import { loadFile, writeFile } from "magicast";
+import { Resources } from "@gasoline-dev/resources";
 
 export async function runDevCommand(cliParsedArgs: CliParsedArgs) {
 	//spin.start("Getting resources");
@@ -286,7 +287,7 @@ export function setResourceIndexDistFiles(
 	);
 }
 
-type ResourceIndexDistFileExportedConfigs = any[];
+export type ResourceIndexDistFileExports = Resources[];
 
 /**
  * @example
@@ -303,9 +304,9 @@ type ResourceIndexDistFileExportedConfigs = any[];
  *   }
  * ]
  */
-export async function getResourceIndexDistFileExportedConfigs(
+export async function getResourceIndexDistFileExports(
 	resourceDistFiles: ResourceIndexFiles,
-): Promise<ResourceIndexDistFileExportedConfigs> {
+): Promise<ResourceIndexDistFileExports> {
 	return Promise.all(
 		resourceDistFiles.map((resourceDistFile) =>
 			import(path.join(process.cwd(), resourceDistFile)).then((fileExports) => {
@@ -352,7 +353,7 @@ type ResourceDistFileToConfigMap = Map<string, Record<string, unknown>>;
  */
 function setResourceDistFileToConfigMap(
 	resourceDistFiles: ResourceDistFiles,
-	resourceDistFileExports: ResourceIndexDistFileExportedConfigs,
+	resourceDistFileExports: ResourceIndexDistFileExports,
 ) {
 	const result: ResourceDistFileToConfigMap = new Map();
 	resourceDistFiles.forEach((resourceDistFile, index) => {
