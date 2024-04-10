@@ -4,7 +4,7 @@
 	"description": "CLI for interacting with Gasoline projects",
 	"type": "module",
 	"bin": {
-		"gasoline": "dist/index.cli.js"
+		"gasoline": "dist/_cli.index.js"
 	},
 	"engines": {
 		"node": ">=18.0.0"
@@ -21,9 +21,9 @@
 		"directory": "packages/cli"
 	},
 	"scripts": {
-		"build": "tsup src/index.cli.ts --format=esm --target=node18 --clean --config=tsconfig.json --sourcemap",
+		"build": "tsup src/_cli.index.ts --format=esm --target=node18 --clean --config=tsconfig.json --sourcemap",
 		"check": "npx @biomjs/biome check --apply",
-		"dev": "tsup src/index.cli.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --sourcemap"
+		"dev": "tsup src/_cli.index.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --sourcemap"
 	},
 	"devDependencies": {
 		"@types/express": "^4.17.21",
@@ -31,7 +31,6 @@
 		"@types/node": "^18.0.0"
 	},
 	"dependencies": {
-		"@gasoline-dev/resources": "workspace:^",
 		"chokidar": "^3.6.0",
 		"express": "^4.18.3",
 		"giget": "^1.2.1",

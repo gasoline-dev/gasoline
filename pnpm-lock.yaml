@@ -29,9 +29,6 @@ importers:
 
   packages/cli:
     dependencies:
-      '@gasoline-dev/resources':
-        specifier: workspace:^
-        version: link:../resources
       chokidar:
         specifier: ^3.6.0
         version: 3.6.0
@@ -79,12 +76,6 @@ importers:
       '@types/node':
         specifier: ^18.0.0
         version: 18.19.14
-
-  packages/resources:
-    dependencies:
-      '@cloudflare/workers-types':
-        specifier: ^4.0.0
-        version: 4.20240129.0
 
   templates/cloudflare-dns-zone: {}
 
@@ -567,6 +558,7 @@ packages:
 
   /@cloudflare/workers-types@4.20240129.0:
     resolution: {integrity: sha512-VyHbih/bqh/RN2FRxnXznG0bpBIg9RfSP1ldbAVnCXFinjOdv0zm2P/RWqOVN9+FgU5sanRltwwT7jGngxZy8w==}
+    dev: true
 
   /@cspotcode/source-map-support@0.8.1:
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
