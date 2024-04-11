@@ -1,0 +1,29 @@
+{
+	"name": "@gasoline-dev/resources",
+	"version": "0.0.0",
+	"type": "module",
+	"main": "dist/index.resources.js",
+	"types": "dist/index.resources.d.ts",
+	"engines": {
+		"node": ">=18.0.0"
+	},
+	"files": [
+		"dist/",
+		"LICENSE.md"
+	],
+	"homepage": "https://gasoline.dev",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/gasoline-dev/gasoline",
+		"directory": "packages/resources"
+	},
+	"scripts": {
+		"build": "tsup src/index.resources.ts --format=esm --target=node18 --clean --config=tsconfig.json --dts",
+		"check": "npx @biomjs/biome check --apply",
+		"dev": "tsup src/index.resources.ts --format=esm --target=node18 --clean --watch --config=tsconfig.json --dts"
+	},
+	"dependencies": {
+		"@cloudflare/workers-types": "^4.0.0"
+	}
+}
