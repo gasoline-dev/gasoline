@@ -32,6 +32,8 @@ func init() {
 }
 
 func initConfig() {
+	viper.SetDefault("resourceContainerDir", "gas")
+
 	if configFile != "" {
 		viper.SetConfigFile(configFile)
 	} else {
@@ -42,10 +44,13 @@ func initConfig() {
 
 	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err == nil {
-		//fmt.Println("Using config file:", viper.ConfigFileUsed())
-	} else {
-		fmt.Printf("Error reading config file: %s\n", err)
-		os.Exit(1)
-	}
+	viper.ReadInConfig()
+
+	/*
+		err := viper.ReadInConfig()
+		if err != nil {
+			fmt.Printf("Error: unable to read config file: %s\n", err)
+			os.Exit(1)
+		}
+	*/
 }

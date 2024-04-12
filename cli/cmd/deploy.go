@@ -3,8 +3,10 @@ package cmd
 import (
 	"fmt"
 	resources "gas/internal"
+	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var deployCmd = &cobra.Command{
@@ -12,11 +14,35 @@ var deployCmd = &cobra.Command{
 	Short: "Deploy resources to the cloud",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Deploying resources to the cloud")
-		resourceContainerSubDirs, err := resources.GetContainerSubDirs("./gasoline")
+
+		resourceContainerSubDirPaths, err := resources.GetContainerSubDirPaths(viper.GetString("resourceContainerDir"))
 		if err != nil {
-			fmt.Printf("Error getting container subdirs: %s\n", err)
+			fmt.Println("Error:", err)
+			os.Exit(1)
 			return
 		}
-		fmt.Println("Resource container subdirs:", resourceContainerSubDirs)
+
+		fmt.Println(resourceContainerSubDirPaths)
+
+		err = resources.ValidateContainerSubDirContents(resourceContainerSubDirPaths)
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+			return
+		}
+
+		resourceIndexBuildFilePaths, err := resources.GetIndexBuildFilePaths(resourceContainerSubDirPaths)
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+			return
+		}
+
+		err = resources.GetIndexBuildFileExports(resourceIndexBuildFilePaths)
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+			return
+		}
 	},
 }
