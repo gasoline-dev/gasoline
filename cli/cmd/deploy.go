@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"gas/internal/helpers"
 	resources "gas/internal/resources"
 	"os"
 
@@ -15,59 +16,70 @@ var deployCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Deploying resources to the cloud")
 
-		resourceContainerSubDirPaths, err := resources.GetContainerSubDirPaths(viper.GetString("resourceContainerDir"))
+		currResourceContainerSubDirPaths, err := resources.GetContainerSubDirPaths(viper.GetString("resourceContainerDir"))
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 			return
 		}
 
-		err = resources.ValidateContainerSubDirContents(resourceContainerSubDirPaths)
+		err = resources.ValidateContainerSubDirContents(currResourceContainerSubDirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 			return
 		}
 
-		resourceIndexBuildFilePaths, err := resources.GetIndexBuildFilePaths(resourceContainerSubDirPaths)
+		currResourceIndexBuildFilePaths, err := resources.GetIndexBuildFilePaths(currResourceContainerSubDirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 			return
 		}
 
-		resourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(resourceIndexBuildFilePaths)
+		currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(currResourceIndexBuildFilePaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 			return
 		}
 
-		fmt.Println(resourceIndexBuildFileConfigs)
+		fmt.Println(currResourceIndexBuildFileConfigs)
 
-		resourcePackageJsons, err := resources.GetPackageJsons(resourceContainerSubDirPaths)
+		currResourcePackageJsons, err := resources.GetPackageJsons(currResourceContainerSubDirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 			return
 		}
 
-		fmt.Println(resourcePackageJsons)
+		fmt.Println(currResourcePackageJsons)
 
-		resourcePackageJsonsNameSet := resources.SetPackageJsonsNameSet(resourcePackageJsons)
+		currResourcePackageJsonsNameSet := resources.SetPackageJsonsNameSet(currResourcePackageJsons)
 
-		fmt.Println(resourcePackageJsonsNameSet)
+		fmt.Println(currResourcePackageJsonsNameSet)
 
-		resourcePackageJsonsNameToResourceIdMap := resources.SetPackageJsonNameToResourceIdMap(resourcePackageJsons, resourceIndexBuildFileConfigs)
+		currResourcePackageJsonsNameToResourceIdMap := resources.SetPackageJsonNameToResourceIdMap(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
 
-		fmt.Println(resourcePackageJsonsNameToResourceIdMap)
+		fmt.Println(currResourcePackageJsonsNameToResourceIdMap)
 
-		resourceDependencyIDs := resources.SetDependencyIDs(resourcePackageJsons, resourcePackageJsonsNameToResourceIdMap, resourcePackageJsonsNameSet)
+		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonsNameToResourceIdMap, currResourcePackageJsonsNameSet)
 
-		fmt.Println(resourceDependencyIDs)
+		fmt.Println(currResourceDependencyIDs)
 
-		resourceMap := resources.SetMap(resourceIndexBuildFileConfigs, resourceDependencyIDs)
+		currResourceIDMap := resources.SetIDMap(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
 
-		fmt.Println(resourceMap)
+		// TODO: All of the above needs to be done for prevResource as well.
+		// Then merge prevResourceMap with currResourceMap using the
+		// mergeMaps helper. They can be merged as resourcesMap.
+		// The reason they'll be merged is because prev may have deleted
+		// keys that don't exist in curr. Those deleted keys have to be
+		// accounted for.
+
+		fmt.Println(currResourceIDMap)
+
+		resourceIDToUpstreamDependenciesMap := resources.SetResourceIDToUpstreamDependenciesMap(currResourceIDMap)
+
+		helpers.PrettyPrint(resourceIDToUpstreamDependenciesMap)
 	},
 }

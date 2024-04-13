@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"gas/internal/helpers"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -208,17 +209,17 @@ func SetDependencyIDs(packageJsons PackageJsons, packageJsonNameToResourceIdMap 
 	return result
 }
 
-type Map map[string]struct {
+type ResourceIDMap map[string]struct {
 	Type         string
 	Config       Config
 	Dependencies []string
 }
 
 /*
-SetMap returns a map of resource IDs to resource types, configs, and dependencies.
+SetIDMap returns a map of resource IDs to resource types, configs, and dependencies.
 */
-func SetMap(indexBuildFileConfigs IndexBuildFileConfigs, dependencyIDs DependencyIDs) Map {
-	result := make(Map)
+func SetIDMap(indexBuildFileConfigs IndexBuildFileConfigs, dependencyIDs DependencyIDs) ResourceIDMap {
+	result := make(ResourceIDMap)
 	for index, config := range indexBuildFileConfigs {
 		result[config.ID] = struct {
 			Type         string
@@ -269,6 +270,54 @@ func SetPackageJsonsNameSet(packageJsons PackageJsons) PackageJsonsNameSet {
 	for _, packageJson := range packageJsons {
 		result[packageJson.Name] = true
 	}
+	return result
+}
+
+type ResourceIDToUpstreamDependenciesMap map[string][]string
+
+/*
+SetResourceIDToUpstreamDependenciesMap returns a map of resource IDs
+to their upstream dependencies.
+
+Upstream dependencies are resources that are ascendant, excluding
+branches, in a keyed resource's directed acyclic graph.
+
+For example, in a graph of A, B->A, C->B->A, D->A, D->B, X, the upstream
+dependency slices are: A -> [], B -> [A], C -> [A,B], D -> [A,B], X -> [].
+
+Inspired by:
+https://www.electricmonk.nl/docs/dependency_resolving_algorithm/dependency_resolving_algorithm.html
+*/
+func SetResourceIDToUpstreamDependenciesMap(resourceIDMap ResourceIDMap) ResourceIDToUpstreamDependenciesMap {
+	result := make(ResourceIDToUpstreamDependenciesMap)
+	memo := make(map[string][]string)
+	for resource := range resourceIDMap {
+		result[resource] = walkDependencies(resource, resourceIDMap, memo)
+	}
+	return result
+}
+
+func walkDependencies(resourceID string, resourceIDMap ResourceIDMap, memo map[string][]string) []string {
+	if result, found := memo[resourceID]; found {
+		return result
+	}
+
+	result := make([]string, 0)
+	if resourceDetail, exists := resourceIDMap[resourceID]; exists {
+		dependencies := resourceDetail.Dependencies
+		for _, dependency := range dependencies {
+			if !helpers.IsInSlice(result, dependency) {
+				result = append(result, dependency)
+				for _, transitiveDependency := range walkDependencies(dependency, resourceIDMap, memo) {
+					if !helpers.IsInSlice(result, transitiveDependency) {
+						result = append(result, transitiveDependency)
+					}
+				}
+			}
+		}
+	}
+	memo[resourceID] = result
+
 	return result
 }
 
