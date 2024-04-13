@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	resources "gas/internal"
+	resources "gas/internal/resources"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -44,5 +44,30 @@ var deployCmd = &cobra.Command{
 		}
 
 		fmt.Println(resourceIndexBuildFileConfigs)
+
+		resourcePackageJsons, err := resources.GetPackageJsons(resourceContainerSubDirPaths)
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+			return
+		}
+
+		fmt.Println(resourcePackageJsons)
+
+		resourcePackageJsonsNameSet := resources.SetPackageJsonsNameSet(resourcePackageJsons)
+
+		fmt.Println(resourcePackageJsonsNameSet)
+
+		resourcePackageJsonsNameToResourceIdMap := resources.SetPackageJsonNameToResourceIdMap(resourcePackageJsons, resourceIndexBuildFileConfigs)
+
+		fmt.Println(resourcePackageJsonsNameToResourceIdMap)
+
+		resourceDependencyIDs := resources.SetDependencyIDs(resourcePackageJsons, resourcePackageJsonsNameToResourceIdMap, resourcePackageJsonsNameSet)
+
+		fmt.Println(resourceDependencyIDs)
+
+		resourceMap := resources.SetMap(resourceIndexBuildFileConfigs, resourceDependencyIDs)
+
+		fmt.Println(resourceMap)
 	},
 }

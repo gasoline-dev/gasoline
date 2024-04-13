@@ -17,7 +17,7 @@ var getIndexBuildFileConfigsEmbed embed.FS
 
 /*
 GetContainerSubDirPaths returns a list of subdirectory paths in the
-resource container directory. For example, ["gas/core-base-api"].
+container directory. For example, ["gas/core-base-api"].
 */
 func GetContainerSubDirPaths(containerDir string) ([]string, error) {
 	var result []string
@@ -37,8 +37,8 @@ func GetContainerSubDirPaths(containerDir string) ([]string, error) {
 }
 
 /*
-GetIndexFilePaths returns a list of index file paths in the resource
-container subdirectories. For example,
+GetIndexFilePaths returns a list of index file paths in the container
+subdirectories. For example,
 ["gas/core-base-api/src/_core-base-api.v1.api.index.ts"].
 */
 func GetIndexFilePaths(containerSubDirPaths []string) ([]string, error) {
@@ -65,6 +65,8 @@ func GetIndexFilePaths(containerSubDirPaths []string) ([]string, error) {
 	return result, nil
 }
 
+type IndexBuildFileConfigs = []Config
+
 type Config struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -78,7 +80,7 @@ GetIndexBuildFileConfigs returns a list of index build file configs.
 For example, [{"id":"core:base:cloudflare-worker:12345",
 "name":"CORE_BASE_API","kv":[{"binding":"CORE_BASE_KV"}]}].
 */
-func GetIndexBuildFileConfigs(indexBuildFilePaths []string) ([]Config, error) {
+func GetIndexBuildFileConfigs(indexBuildFilePaths []string) (IndexBuildFileConfigs, error) {
 	var result []Config
 
 	embedPath := "embed/get-index-build-file-configs.js"
@@ -116,7 +118,8 @@ func GetIndexBuildFileConfigs(indexBuildFilePaths []string) ([]Config, error) {
 }
 
 /*
-GetIndexBuildFilePaths returns a list of index build file paths in the resource container subdirectories. For example,
+GetIndexBuildFilePaths returns a list of index build file
+paths in the container subdirectories. For example,
 ["gas/core-base-api/build/_core-base-api.v1.api.index.js"].
 */
 func GetIndexBuildFilePaths(containerSubDirPaths []string) ([]string, error) {
@@ -142,8 +145,135 @@ func GetIndexBuildFilePaths(containerSubDirPaths []string) ([]string, error) {
 	return result, nil
 }
 
+type PackageJson struct {
+	Name            string            `json:"name"`
+	Main            string            `json:"main"`
+	Types           string            `json:"types"`
+	Scripts         map[string]string `json:"scripts"`
+	Dependencies    map[string]string `json:"dependencies,omitempty"`
+	DevDependencies map[string]string `json:"devDependencies,omitempty"`
+}
+
+type PackageJsons []PackageJson
+
 /*
-ValidateContainerSubDirContents checks if the resource container subdirectories
+GetPackageJsons returns a list of package.json objects
+in the container subdirectories.
+*/
+func GetPackageJsons(resourceContainerSubDirPaths []string) (PackageJsons, error) {
+	var result PackageJsons
+
+	for _, subDirPath := range resourceContainerSubDirPaths {
+		packageJsonPath := filepath.Join(subDirPath, "package.json")
+
+		data, err := os.ReadFile(packageJsonPath)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read file %s\n%v", packageJsonPath, err)
+		}
+
+		var packageJson PackageJson
+		err = json.Unmarshal(data, &packageJson)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse %s\n%v", packageJsonPath, err)
+		}
+
+		result = append(result, packageJson)
+	}
+
+	return result, nil
+}
+
+type DependencyIDs [][]string
+
+/*
+SetDependencyIDs returns a list of resource dependency
+IDs.
+
+Resource dependencies are resources a resource depends on.
+For example, resource core:base:cloudflare-worker:12345 might
+depend on core:base:cloudflare-kv:12345.
+*/
+func SetDependencyIDs(packageJsons PackageJsons, packageJsonNameToResourceIdMap PackageJsonNameToResourceIdMap, packageJsonsNameSet PackageJsonsNameSet) DependencyIDs {
+	var result DependencyIDs
+	for _, packageJson := range packageJsons {
+		var internalDependencies []string
+		for dependency := range packageJson.Dependencies {
+			resourceID, ok := packageJsonNameToResourceIdMap[dependency]
+			if ok && packageJsonsNameSet[dependency] {
+				internalDependencies = append(internalDependencies, resourceID)
+			}
+		}
+		result = append(result, internalDependencies)
+	}
+	return result
+}
+
+type Map map[string]struct {
+	Type         string
+	Config       Config
+	Dependencies []string
+}
+
+/*
+SetMap returns a map of resource IDs to resource types, configs, and dependencies.
+*/
+func SetMap(indexBuildFileConfigs IndexBuildFileConfigs, dependencyIDs DependencyIDs) Map {
+	result := make(Map)
+	for index, config := range indexBuildFileConfigs {
+		result[config.ID] = struct {
+			Type         string
+			Config       Config
+			Dependencies []string
+		}{
+			Type:         strings.Split(config.ID, ":")[2],
+			Config:       config,
+			Dependencies: dependencyIDs[index],
+		}
+	}
+	return result
+}
+
+type PackageJsonNameToResourceIdMap map[string]string
+
+/*
+SetPackageJsonNameToResourceIdMap returns a map of package.json names
+to resource IDs.
+
+Resource relationships are managed via each resource's package.json. For example,
+package core-base-kv might be a dependency of package core-base-api. Therefore,
+core-base-kv would exist in core-base-api's package.json's dependencies.
+
+When core-base-api's package.json is processed and the core-base-kv dependency
+is found, this map can look up core-base-kv's resource ID -- establishing
+that resource core:base:cloudflare-kv:12345 is a dependency of
+core:base:cloudflare-worker:12345.
+*/
+func SetPackageJsonNameToResourceIdMap(packageJsons PackageJsons, indexBuildFileConfigs IndexBuildFileConfigs) PackageJsonNameToResourceIdMap {
+	result := make(map[string]string)
+	for index, packageJson := range packageJsons {
+		result[packageJson.Name] = indexBuildFileConfigs[index].ID
+	}
+	return result
+}
+
+type PackageJsonsNameSet map[string]bool
+
+/*
+SetPackageJsonsNameSet returns a set of package.json names.
+
+This can be used to tell if a dependency is an internal resource
+or not when looping over a resource's package.json dependencies.
+*/
+func SetPackageJsonsNameSet(packageJsons PackageJsons) PackageJsonsNameSet {
+	result := make(map[string]bool)
+	for _, packageJson := range packageJsons {
+		result[packageJson.Name] = true
+	}
+	return result
+}
+
+/*
+ValidateContainerSubDirContents checks if the container subdirectories
 contain the required files. The required files are: package.json in the
 root, an index.ts file in the src directory, and an index.js file in the
 build directory.
