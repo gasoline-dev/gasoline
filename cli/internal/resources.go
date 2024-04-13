@@ -3,6 +3,7 @@ package resources
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,8 +12,8 @@ import (
 	"strings"
 )
 
-//go:embed embed/get-index-build-file-exports.js
-var getIndexBuildFileExportsEmbed embed.FS
+//go:embed embed/get-index-build-file-configs.js
+var getIndexBuildFileConfigsEmbed embed.FS
 
 /*
 GetContainerSubDirPaths returns a list of subdirectory paths in the
@@ -64,37 +65,54 @@ func GetIndexFilePaths(containerSubDirPaths []string) ([]string, error) {
 	return result, nil
 }
 
-func GetIndexBuildFileExports(indexBuildFilePaths []string) error {
-	embedPath := "embed/get-index-build-file-exports.js"
+type Config struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	KV   []struct {
+		Binding string `json:"binding"`
+	} `json:"kv,omitempty"`
+}
 
-	for _, filePath := range indexBuildFilePaths {
-		fmt.Println(filePath)
-		content, err := getIndexBuildFileExportsEmbed.ReadFile(embedPath)
-		if err != nil {
-			return fmt.Errorf("unable to read embed %s", embedPath)
-		}
+/*
+GetIndexBuildFileConfigs returns a list of index build file configs.
+For example, [{"id":"core:base:cloudflare-worker:12345",
+"name":"CORE_BASE_API","kv":[{"binding":"CORE_BASE_KV"}]}].
+*/
+func GetIndexBuildFileConfigs(indexBuildFilePaths []string) ([]Config, error) {
+	var result []Config
 
-		nodeCmd := exec.Command("node", "--input-type=module")
-		nodeCmd.Stdin = bytes.NewReader(content)
-		output, err := nodeCmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("unable to execute embed %s", embedPath)
-		}
+	embedPath := "embed/get-index-build-file-configs.js"
 
-		strOutput := string(output)
-
-		jsError := "Error: unable to get exports\n"
-
-		if strings.Contains(strOutput, jsError) {
-			strOutput = strings.Replace(strOutput, jsError, "", 1)
-
-			return fmt.Errorf("unable to get exports in file %s\n%s", filePath, strOutput)
-		}
-
-		fmt.Println(strOutput)
+	content, err := getIndexBuildFileConfigsEmbed.ReadFile(embedPath)
+	if err != nil {
+		return result, fmt.Errorf("unable to read embed %s", embedPath)
 	}
 
-	return nil
+	nodeCmd := exec.Command("node", "--input-type=module")
+	filePaths := strings.Join(indexBuildFilePaths, ",")
+	nodeCmd.Env = append(nodeCmd.Env, "FILE_PATHS="+filePaths)
+	nodeCmd.Stdin = bytes.NewReader(content)
+	output, err := nodeCmd.CombinedOutput()
+	if err != nil {
+		return result, fmt.Errorf("unable to execute embed %s\n%s", embedPath, output)
+	}
+
+	strOutput := strings.TrimSpace((string(output)))
+
+	jsError := "Error: unable to get exports\n"
+
+	if strings.Contains(strOutput, jsError) {
+		strOutput = strings.Replace(strOutput, jsError, "", 1)
+
+		return result, fmt.Errorf("unable to get exports in file %s\n%s", "some file path", strOutput)
+	}
+
+	err = json.Unmarshal([]byte(strOutput), &result)
+	if err != nil {
+		return result, fmt.Errorf("unable to parse JSON\n%v", err)
+	}
+
+	return result, nil
 }
 
 /*

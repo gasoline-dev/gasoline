@@ -22,8 +22,6 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println(resourceContainerSubDirPaths)
-
 		err = resources.ValidateContainerSubDirContents(resourceContainerSubDirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -38,11 +36,13 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		err = resources.GetIndexBuildFileExports(resourceIndexBuildFilePaths)
+		resourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(resourceIndexBuildFilePaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 			return
 		}
+
+		fmt.Println(resourceIndexBuildFileConfigs)
 	},
 }
