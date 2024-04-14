@@ -2,11 +2,27 @@
 
 ![Red gasoline can](gas-can.png)
 
-## Introduction
+# Introduction
 
 Gas.dev is an open source framework for building Cloudflare-based APIs, apps, bots, cron jobs, and webhooks.
 
-## Architecture
+## Getting started
+
+## Quick start
+
+### Creating a project
+
+TODO
+
+### Project structure
+
+TODO
+
+### Monorepo-default
+
+TODO
+
+# Architecture
 
 ### Projects
 
