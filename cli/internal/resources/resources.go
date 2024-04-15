@@ -205,7 +205,7 @@ func SetMap(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependencyIDs R
 
 type PackageJsonNameToResourceIdMap map[string]string
 
-func SetPackageJsonNameToResourceIdMap(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceIdMap {
+func SetPackageJsonNameToIdMap(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceIdMap {
 	result := make(PackageJsonNameToResourceIdMap)
 	for index, packageJson := range packageJsons {
 		result[packageJson.Name] = indexBuildFileConfigs[index].ID

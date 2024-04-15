@@ -53,9 +53,9 @@ var deployCmd = &cobra.Command{
 
 		currResourcePackageJsonsNameSet := resources.SetPackageJsonsNameSet(currResourcePackageJsons)
 
-		currResourcePackageJsonsNameToResourceIdMap := resources.SetPackageJsonNameToResourceIdMap(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
+		currResourcePackageJsonsNameToIdMap := resources.SetPackageJsonNameToIdMap(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
 
-		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonsNameToResourceIdMap, currResourcePackageJsonsNameSet)
+		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonsNameToIdMap, currResourcePackageJsonsNameSet)
 
 		currResourceMap := resources.SetMap(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
 
