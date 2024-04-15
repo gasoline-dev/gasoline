@@ -5,9 +5,6 @@ import (
 	"fmt"
 )
 
-/*
-IsInSlice checks if an item is in a slice.
-*/
 func IsInSlice(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
@@ -17,13 +14,10 @@ func IsInSlice(slice []string, item string) bool {
 	return false
 }
 
-/*
-MergeMaps merges two maps.
+type MergeMap map[string]interface{}
 
-map1 will overwrite keys in map2.
-*/
-func MergeMaps(map1, map2 map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+func MergeMaps(map1, map2 MergeMap) MergeMap {
+	result := make(MergeMap)
 	for key, value := range map1 {
 		result[key] = value
 	}
@@ -33,9 +27,6 @@ func MergeMaps(map1, map2 map[string]interface{}) map[string]interface{} {
 	return result
 }
 
-/*
-PrettyPrint prints data in a pretty format.
-*/
 func PrettyPrint(data interface{}) error {
 	jsonData, err := json.MarshalIndent(data, "", "    ")
 	if err != nil {
