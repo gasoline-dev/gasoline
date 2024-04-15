@@ -57,7 +57,9 @@ var deployCmd = &cobra.Command{
 
 		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonsNameToResourceIdMap, currResourcePackageJsonsNameSet)
 
-		currResourceIDMap := resources.SetIDMap(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
+		currResourceMap := resources.SetMap(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
+
+		helpers.PrettyPrint(currResourceMap)
 
 		// TODO: All of the above needs to be done for prevResource as well.
 		// Then merge prevResourceMap with currResourceMap using the
@@ -66,7 +68,7 @@ var deployCmd = &cobra.Command{
 		// keys that don't exist in curr. Those deleted keys have to be
 		// accounted for.
 
-		resourceGraph := resources.NewGraph(currResourceIDMap)
+		resourceGraph := resources.NewGraph(currResourceMap)
 
 		err = resourceGraph.CalculateLevels()
 		if err != nil {
