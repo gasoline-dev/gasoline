@@ -273,6 +273,92 @@ func SetPackageJsonsNameSet(packageJsons PackageJsons) PackageJsonsNameSet {
 	return result
 }
 
+type ResourceGraph struct {
+	AdjacenciesMap map[string][]string
+	InDegreesMap   map[string]int
+	LevelsMap      map[int][]string
+}
+
+/*
+NewGraph returns a resource graph.
+*/
+func NewGraph(resourceIdMap ResourceIDMap) *ResourceGraph {
+	result := &ResourceGraph{
+		AdjacenciesMap: make(map[string][]string),
+		InDegreesMap:   make(map[string]int),
+		LevelsMap:      make(map[int][]string),
+	}
+
+	for resourceId, resource := range resourceIdMap {
+		for _, dependency := range resource.Dependencies {
+			result.AddEdge(resourceId, dependency)
+		}
+	}
+
+	// Set in degrees to 0 for nodes that are only ever
+	// source nodes and never neighbor nodes.
+	for node := range result.AdjacenciesMap {
+		if _, exists := result.InDegreesMap[node]; !exists {
+			result.InDegreesMap[node] = 0
+		}
+	}
+
+	return result
+}
+
+func (resourceGraph *ResourceGraph) AddEdge(sourceNode, neighborNode string) {
+	resourceGraph.AdjacenciesMap[sourceNode] = append(resourceGraph.AdjacenciesMap[sourceNode], neighborNode)
+	resourceGraph.InDegreesMap[neighborNode]++
+}
+
+func (resourceGraph *ResourceGraph) CalculateLevels() error {
+	queue := make([]string, 0)
+	processedCount := 0
+
+	// Map to hold temporary levels with reversed order
+	tempLevels := make(map[int][]string)
+
+	// Start with nodes that have no incoming edges
+	for node, inDegree := range resourceGraph.InDegreesMap {
+		if inDegree == 0 {
+			queue = append(queue, node)
+			tempLevels[0] = append(tempLevels[0], node) // Initially no dependencies
+		}
+	}
+
+	level := 0
+	for len(queue) > 0 {
+		nextLevelNodes := make([]string, 0)
+		for _, node := range queue {
+			processedCount++
+			for _, neighborNode := range resourceGraph.AdjacenciesMap[node] {
+				resourceGraph.InDegreesMap[neighborNode]--
+				if resourceGraph.InDegreesMap[neighborNode] == 0 {
+					nextLevelNodes = append(nextLevelNodes, neighborNode)
+				}
+			}
+		}
+		if len(nextLevelNodes) > 0 {
+			level++
+			tempLevels[level] = nextLevelNodes
+			queue = nextLevelNodes
+		} else {
+			queue = nil
+		}
+	}
+
+	// Reverse the keys for tempLevels to correct order
+	maxLevel := level // Get the highest level assigned
+	for l := 0; l <= maxLevel; l++ {
+		resourceGraph.LevelsMap[maxLevel-l] = tempLevels[l]
+	}
+
+	if processedCount != len(resourceGraph.InDegreesMap) {
+		return fmt.Errorf("unable to calculate levels because the graph contains a cycle")
+	}
+	return nil
+}
+
 type ResourceIDToUpstreamDependenciesMap map[string][]string
 
 /*

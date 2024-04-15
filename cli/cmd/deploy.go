@@ -44,8 +44,6 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println(currResourceIndexBuildFileConfigs)
-
 		currResourcePackageJsons, err := resources.GetPackageJsons(currResourceContainerSubDirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -53,19 +51,11 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println(currResourcePackageJsons)
-
 		currResourcePackageJsonsNameSet := resources.SetPackageJsonsNameSet(currResourcePackageJsons)
-
-		fmt.Println(currResourcePackageJsonsNameSet)
 
 		currResourcePackageJsonsNameToResourceIdMap := resources.SetPackageJsonNameToResourceIdMap(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
 
-		fmt.Println(currResourcePackageJsonsNameToResourceIdMap)
-
 		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonsNameToResourceIdMap, currResourcePackageJsonsNameSet)
-
-		fmt.Println(currResourceDependencyIDs)
 
 		currResourceIDMap := resources.SetIDMap(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
 
@@ -76,10 +66,15 @@ var deployCmd = &cobra.Command{
 		// keys that don't exist in curr. Those deleted keys have to be
 		// accounted for.
 
-		fmt.Println(currResourceIDMap)
+		resourceGraph := resources.NewGraph(currResourceIDMap)
 
-		resourceIDToUpstreamDependenciesMap := resources.SetResourceIDToUpstreamDependenciesMap(currResourceIDMap)
+		err = resourceGraph.CalculateLevels()
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+			return
+		}
 
-		helpers.PrettyPrint(resourceIDToUpstreamDependenciesMap)
+		helpers.PrettyPrint(resourceGraph)
 	},
 }
