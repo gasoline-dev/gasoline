@@ -169,12 +169,12 @@ func GetPackageJsons(resourceContainerSubDirPaths ResourceContainerSubDirPaths) 
 
 type ResourceDependencyIDs [][]string
 
-func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIdMap PackageJsonNameToResourceIdMap, packageJsonsNameSet PackageJsonsNameSet) ResourceDependencyIDs {
+func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIDMap PackageJsonNameToResourceIDMap, packageJsonsNameSet PackageJsonsNameSet) ResourceDependencyIDs {
 	var result ResourceDependencyIDs
 	for _, packageJson := range packageJsons {
 		var internalDependencies []string
 		for dependency := range packageJson.Dependencies {
-			resourceID, ok := packageJsonNameToResourceIdMap[dependency]
+			resourceID, ok := packageJsonNameToResourceIDMap[dependency]
 			if ok && packageJsonsNameSet[dependency] {
 				internalDependencies = append(internalDependencies, resourceID)
 			}
@@ -204,10 +204,10 @@ func SetMap(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependencyIDs R
 	return result
 }
 
-type PackageJsonNameToResourceIdMap map[string]string
+type PackageJsonNameToResourceIDMap map[string]string
 
-func SetPackageJsonNameToIdMap(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceIdMap {
-	result := make(PackageJsonNameToResourceIdMap)
+func SetPackageJsonNameToIDMap(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceIDMap {
+	result := make(PackageJsonNameToResourceIDMap)
 	for index, packageJson := range packageJsons {
 		result[packageJson.Name] = indexBuildFileConfigs[index].ID
 	}
@@ -283,9 +283,9 @@ func NewGraph(resourceMap ResourceMap) *ResourceGraph {
 		LevelsMap:      make(map[int][]string),
 	}
 
-	for resourceId, resource := range resourceMap {
+	for resourceID, resource := range resourceMap {
 		for _, dependency := range resource.Dependencies {
-			result.AddEdge(resourceId, dependency)
+			result.AddEdge(resourceID, dependency)
 		}
 	}
 
