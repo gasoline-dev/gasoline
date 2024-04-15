@@ -5,6 +5,7 @@ import (
 	"gas/internal/helpers"
 	resources "gas/internal/resources"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -81,5 +82,38 @@ var deployCmd = &cobra.Command{
 
 		resourceStateMap := resources.SetStateMap(make(resources.ResourceMap), currResourceMap)
 		fmt.Println(resourceStateMap)
+
+		// Create a map to keep track of which tasks are complete
+		completionChannels := make(map[string]chan bool)
+		for _, tasks := range resourceGraph.LevelsMap {
+			for _, task := range tasks {
+				completionChannels[task] = make(chan bool)
+			}
+		}
+
+		// Start the tasks for level 0
+		for _, resourceID := range resourceGraph.LevelsMap[0] {
+			go processTask(resourceID, completionChannels[resourceID])
+		}
+
+		// Listen for task completions and trigger subsequent tasks
+		for level := 0; level < len(resourceGraph.LevelsMap); level++ {
+			tasks := resourceGraph.LevelsMap[level]
+			for _, task := range tasks {
+				<-completionChannels[task] // Wait for each task to complete
+				fmt.Printf("Task %s completed\n", task)
+				if level+1 < len(resourceGraph.LevelsMap) {
+					for _, nextTask := range resourceGraph.LevelsMap[level+1] {
+						go processTask(nextTask, completionChannels[nextTask])
+					}
+				}
+			}
+		}
 	},
+}
+
+func processTask(resourceID string, doneChan chan bool) {
+	fmt.Printf("Processing resource ID %s\n", resourceID)
+	time.Sleep(time.Second)
+	doneChan <- true
 }
