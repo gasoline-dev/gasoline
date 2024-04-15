@@ -46,11 +46,11 @@ func initConfig() {
 
 	viper.ReadInConfig()
 
-	/*
-		err := viper.ReadInConfig()
-		if err != nil {
-			fmt.Printf("Error: unable to read config file: %s\n", err)
-			os.Exit(1)
-		}
-	*/
+	fmt.Println(viper.ConfigFileUsed())
+
+	err := viper.ReadInConfig()
+	if err != nil {
+		fmt.Printf("Error: unable to read config file: %s\n", err)
+		os.Exit(1)
+	}
 }
