@@ -52,6 +52,10 @@ TODO
 
 TODO: Entity groups, entities, resources, etc.
 
+# Terminology
+
+TODO
+
 # Guides
 
 TODO
