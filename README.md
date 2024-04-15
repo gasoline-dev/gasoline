@@ -4,9 +4,33 @@
 
 # Introduction
 
+## What is it
+
 Gas.dev is an open source framework for building Cloudflare-based APIs, apps, bots, cron jobs, and webhooks.
 
-## Getting started
+### 60 second demo
+
+TODO: Quick video introduction
+
+### Features
+
+#### Monorepo by default
+
+TODO
+
+#### CICD-ready
+
+TODO
+
+#### Graph-based deployments
+
+TODO
+
+#### Powerful CLI
+
+TODO
+
+# Getting started
 
 ## Quick start
 
@@ -15,6 +39,24 @@ Gas.dev is an open source framework for building Cloudflare-based APIs, apps, bo
 TODO
 
 ### Project structure
+
+TODO
+
+# References
+
+## CLI
+
+TODO
+
+## gas.config.json
+
+TODO
+
+## Naming conventions
+
+TODO: Entity groups, entities, resources, etc.
+
+# Guides
 
 TODO
 
@@ -130,3 +172,9 @@ export default app;
 ### Gas directory
 
 Gas.dev projects are stored
+
+# Notes
+
+## Graphs
+
+TODO
