@@ -78,5 +78,8 @@ var deployCmd = &cobra.Command{
 		}
 
 		helpers.PrettyPrint(resourceGraph)
+
+		resourceStateMap := resources.SetStateMap(make(resources.ResourceMap), currResourceMap)
+		fmt.Println(resourceStateMap)
 	},
 }

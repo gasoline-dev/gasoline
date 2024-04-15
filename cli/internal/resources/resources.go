@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 )
@@ -183,13 +184,13 @@ func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResour
 	return result
 }
 
+type ResourceMap map[string]Resource
+
 type Resource struct {
 	Type         string
 	Config       Config
 	Dependencies []string
 }
-
-type ResourceMap map[string]Resource
 
 func SetMap(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependencyIDs ResourceDependencyIDs) ResourceMap {
 	result := make(ResourceMap)
@@ -221,6 +222,52 @@ func SetPackageJsonsNameSet(packageJsons ResourcePackageJsons) PackageJsonsNameS
 		result[packageJson.Name] = true
 	}
 	return result
+}
+
+type State string
+
+const (
+	Created State = "CREATED"
+	Deleted State = "DELETED"
+	Updated State = "UPDATED"
+)
+
+type StateMap map[string]State
+
+func SetStateMap(prevResourceMap, currResourceMap ResourceMap) StateMap {
+	result := make(StateMap)
+
+	for prevResourceID := range prevResourceMap {
+		if _, exists := currResourceMap[prevResourceID]; !exists {
+			result[prevResourceID] = "DELETED"
+		}
+	}
+
+	for currResourceID, currResource := range currResourceMap {
+		if _, exists := prevResourceMap[currResourceID]; !exists {
+			result[currResourceID] = "CREATED"
+		} else {
+			prevResource := prevResourceMap[currResourceID]
+			if !isResourceEqual(prevResource, currResource) {
+				result[currResourceID] = "UPDATED"
+			}
+		}
+	}
+
+	return result
+}
+
+func isResourceEqual(resource1, resource2 Resource) bool {
+	if resource1.Type != resource2.Type {
+		return false
+	}
+	if !reflect.DeepEqual(resource1.Config, resource2.Config) {
+		return false
+	}
+	if !reflect.DeepEqual(resource1.Dependencies, resource2.Dependencies) {
+		return false
+	}
+	return true
 }
 
 type ResourceGraph struct {
