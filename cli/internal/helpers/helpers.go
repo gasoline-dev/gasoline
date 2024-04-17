@@ -3,7 +3,19 @@ package helpers
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 )
+
+func IsFilePresent(file string) bool {
+	_, err := os.Stat(file)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
+}
 
 func IsInSlice(slice []string, item string) bool {
 	for _, s := range slice {
