@@ -1,11 +1,9 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"gas/internal/helpers"
 	resources "gas/internal/resources"
-	"log"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -66,15 +64,6 @@ var deployCmd = &cobra.Command{
 
 		currResourceMap := resources.SetMap(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
 
-		helpers.PrettyPrint(currResourceMap)
-
-		// TODO: All of the above needs to be done for prevResource as well.
-		// Then merge prevResourceMap with currResourceMap using the
-		// mergeMaps helper. They can be merged as resourcesMap.
-		// The reason they'll be merged is because prev may have deleted
-		// keys that don't exist in curr. Those deleted keys have to be
-		// accounted for.
-
 		resourceGraph := resources.NewGraph(currResourceMap)
 
 		err = resourceGraph.CalculateLevels()
@@ -86,88 +75,31 @@ var deployCmd = &cobra.Command{
 
 		helpers.PrettyPrint(resourceGraph)
 
-		//resourceStateMap := resources.SetStateMap(make(resources.ResourceMap), currResourceMap)
-		//fmt.Println(resourceStateMap)
-
-		// TODO: All the this stuff can be in resources.go as Up.
-
 		// TODO: json path can be configged?
+		// TODO: Or implement up -> driver -> local | gh in the config?
 		resourcesUpJsonPath := "gas.up.json"
 
 		isResourcesUpJsonPresent := helpers.IsFilePresent(resourcesUpJsonPath)
 
 		if !isResourcesUpJsonPresent {
-			file, err := os.Create(resourcesUpJsonPath)
+			err = helpers.WriteFile(resourcesUpJsonPath, "{}")
 			if err != nil {
-				fmt.Printf("Error: unable to open %s\n%v", resourcesUpJsonPath, err)
+				fmt.Println("Error:", err)
 				os.Exit(1)
 				return
 			}
-
-			_, err = file.WriteString("{}")
-			if err != nil {
-				fmt.Printf("Error: unable to write %s\n%v", resourcesUpJsonPath, err)
-			}
-
-			if err = file.Close(); err != nil {
-				log.Fatalf("Error: failed to close %s\n%v", resourcesUpJsonPath, err)
-			}
 		}
 
-		data, err := os.ReadFile(resourcesUpJsonPath)
+		resourcesUpJson, err := resources.GetUpJson(resourcesUpJsonPath)
 		if err != nil {
-			fmt.Printf("Error: unable to read %s\n%v", resourcesUpJsonPath, err)
+			fmt.Println("Error:", err)
 			os.Exit(1)
 			return
 		}
+		helpers.PrettyPrint(resourcesUpJson)
 
-		var ResourcesUpMap ResourcesUpMap
-		err = json.Unmarshal(data, &ResourcesUpMap)
-		if err != nil {
-			fmt.Printf("Error: unable to parse %s\n%v", resourcesUpJsonPath, err)
-			os.Exit(1)
-			return
-		}
-
-		helpers.PrettyPrint(ResourcesUpMap)
-
-		// TODO: Merge this into SetStateMap
-		// use the ResourceUpMap type
-		// the isresourceEqual func will have to
-		// ignore State on the ResourceUpMap
-
-		testStateMap := make(resources.StateMap)
-
-		for resourceID := range ResourcesUpMap {
-			if _, ok := currResourceMap[resourceID]; !ok {
-				if ResourcesUpMap[resourceID].State == "CREATED" || ResourcesUpMap[resourceID].State == "UPDATED" {
-					testStateMap[resourceID] = "DELETED"
-				}
-			}
-		}
-
-		for currResourceID := range currResourceMap {
-			if _, ok := ResourcesUpMap[currResourceID]; !ok {
-				testStateMap[currResourceID] = "CREATED"
-			} else {
-				//
-			}
-		}
-
-		//for currResourceID := range currResourceMap {
-		//if _, exists := resourcesJson[currResourceID]; !exists {
-		//testStateMap[currResourceID] = "CREATED"
-		///} else {
-		// prevResource := prevResourceMap[currResourceID]
-		/*
-			if !isResourceEqual(prevResource, currResource) {
-				testStateMap[currResourceID] = "UPDATED"
-			}
-		*/
-		//}
-		//}
-
-		helpers.PrettyPrint(testStateMap)
+		resourceStateMap := resources.SetStateMap(resourcesUpJson, currResourceMap)
+		helpers.PrettyPrint(resourceStateMap)
 
 		/*
 				// Create a map to keep track of which tasks are complete

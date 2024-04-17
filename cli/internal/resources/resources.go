@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"gas/internal/helpers"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -167,6 +168,17 @@ func GetPackageJsons(resourceContainerSubDirPaths ResourceContainerSubDirPaths) 
 	return result, nil
 }
 
+type ResourcesUpJson ResourceMap
+
+func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
+	var result ResourcesUpJson
+	err := helpers.UnmarshallFile(resourcesUpJsonPath, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 type ResourceDependencyIDs [][]string
 
 func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIDMap PackageJsonNameToResourceIDMap, packageJsonsNameSet PackageJsonsNameSet) ResourceDependencyIDs {
@@ -234,21 +246,21 @@ const (
 
 type StateMap map[string]State
 
-func SetStateMap(prevResourceMap, currResourceMap ResourceMap) StateMap {
+func SetStateMap(upJson ResourcesUpJson, currResourceMap ResourceMap) StateMap {
 	result := make(StateMap)
 
-	for prevResourceID := range prevResourceMap {
-		if _, exists := currResourceMap[prevResourceID]; !exists {
-			result[prevResourceID] = "DELETED"
+	for upJsonResourceID := range upJson {
+		if _, exists := currResourceMap[upJsonResourceID]; !exists {
+			result[upJsonResourceID] = "DELETED"
 		}
 	}
 
 	for currResourceID, currResource := range currResourceMap {
-		if _, exists := prevResourceMap[currResourceID]; !exists {
+		if _, exists := upJson[currResourceID]; !exists {
 			result[currResourceID] = "CREATED"
 		} else {
-			prevResource := prevResourceMap[currResourceID]
-			if !isResourceEqual(prevResource, currResource) {
+			upResource := upJson[currResourceID]
+			if !isResourceEqual(upResource, currResource) {
 				result[currResourceID] = "UPDATED"
 			}
 		}

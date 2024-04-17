@@ -6,8 +6,8 @@ import (
 	"os"
 )
 
-func IsFilePresent(file string) bool {
-	_, err := os.Stat(file)
+func IsFilePresent(filePath string) bool {
+	_, err := os.Stat(filePath)
 	if err == nil {
 		return true
 	}
@@ -45,5 +45,42 @@ func PrettyPrint(data interface{}) error {
 		return err
 	}
 	fmt.Println(string(jsonData))
+	return nil
+}
+
+func ReadFile(filePath string) ([]byte, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read %s\n%v", filePath, err)
+	}
+	return data, nil
+}
+
+func UnmarshallFile(filePath string, pointer any) error {
+	data, err := ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(data, pointer)
+	if err != nil {
+		return fmt.Errorf("unable to parse %s\n%v", filePath, err)
+	}
+
+	return nil
+}
+
+func WriteFile(filePath, data string) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("unable to open %s\n%v", filePath, err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(data)
+	if err != nil {
+		return fmt.Errorf("unable to write %s\n%v", filePath, err)
+	}
+
 	return nil
 }
