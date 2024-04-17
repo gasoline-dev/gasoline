@@ -3,7 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -42,15 +44,35 @@ func initConfig() {
 		viper.AddConfigPath(".")
 	}
 
-	viper.AutomaticEnv()
-
-	viper.ReadInConfig()
-
-	fmt.Println(viper.ConfigFileUsed())
-
 	err := viper.ReadInConfig()
 	if err != nil {
 		fmt.Printf("Error: unable to read config file: %s\n", err)
 		os.Exit(1)
+		return
 	}
+
+	godotenv.Load()
+
+	viper.AutomaticEnv()
+
+	requiredEnvVars := []string{"CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"}
+	err = ValidateRequiredEnvVars(requiredEnvVars)
+	if err != nil {
+		fmt.Println("Error:", err)
+		os.Exit(1)
+		return
+	}
+}
+
+func ValidateRequiredEnvVars(keys []string) error {
+	var missingVars []string
+	for _, key := range keys {
+		if viper.GetString(key) == "" {
+			missingVars = append(missingVars, key)
+		}
+	}
+	if len(missingVars) > 0 {
+		return fmt.Errorf("the following required environment variables are not set -> %s", strings.Join(missingVars, ", "))
+	}
+	return nil
 }

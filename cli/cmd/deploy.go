@@ -10,16 +10,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-type ResourcesUpMap map[string]struct {
-	resources.Resource
-	State string
-}
-
 var deployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Deploy resources to the cloud",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Deploying resources to the cloud")
+		fmt.Println(viper.GetString("CLOUDFLARE_ACCOUNT_ID"))
 
 		currResourceContainerSubDirPaths, err := resources.GetContainerSubDirPaths(viper.GetString("resourceContainerDir"))
 		if err != nil {
@@ -102,7 +98,7 @@ var deployCmd = &cobra.Command{
 		helpers.PrettyPrint(resourceStateMap)
 
 		/*
-				// Create a map to keep track of which tasks are complete
+			// Create a map to keep track of which tasks are complete
 			completionChannels := make(map[string]chan bool)
 			for _, tasks := range resourceGraph.LevelsMap {
 				for _, task := range tasks {
@@ -110,24 +106,24 @@ var deployCmd = &cobra.Command{
 				}
 			}
 
-				// Start the tasks for level 0
-				for _, resourceID := range resourceGraph.LevelsMap[0] {
-					go processTask(resourceID, completionChannels[resourceID])
-				}
+			// Start the tasks for level 0
+			for _, resourceID := range resourceGraph.LevelsMap[0] {
+				go processTask(resourceID, completionChannels[resourceID])
+			}
 
-				// Listen for task completions and trigger subsequent tasks
-				for level := 0; level < len(resourceGraph.LevelsMap); level++ {
-					tasks := resourceGraph.LevelsMap[level]
-					for _, task := range tasks {
-						<-completionChannels[task] // Wait for each task to complete
-						fmt.Printf("Task %s completed\n", task)
-						if level+1 < len(resourceGraph.LevelsMap) {
-							for _, nextTask := range resourceGraph.LevelsMap[level+1] {
-								go processTask(nextTask, completionChannels[nextTask])
-							}
+			// Listen for task completions and trigger subsequent tasks
+			for level := 0; level < len(resourceGraph.LevelsMap); level++ {
+				tasks := resourceGraph.LevelsMap[level]
+				for _, task := range tasks {
+					<-completionChannels[task] // Wait for each task to complete
+					fmt.Printf("Task %s completed\n", task)
+					if level+1 < len(resourceGraph.LevelsMap) {
+						for _, nextTask := range resourceGraph.LevelsMap[level+1] {
+							go processTask(nextTask, completionChannels[nextTask])
 						}
 					}
 				}
+			}
 		*/
 	},
 }
