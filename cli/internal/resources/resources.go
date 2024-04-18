@@ -244,10 +244,10 @@ const (
 	Updated State = "UPDATED"
 )
 
-type StateMap map[string]State
+type ResourcesStateMap map[string]State
 
-func SetStateMap(upJson ResourcesUpJson, currResourceMap ResourceMap) StateMap {
-	result := make(StateMap)
+func SetStateMap(upJson ResourcesUpJson, currResourceMap ResourceMap) ResourcesStateMap {
+	result := make(ResourcesStateMap)
 
 	for upJsonResourceID := range upJson {
 		if _, exists := currResourceMap[upJsonResourceID]; !exists {

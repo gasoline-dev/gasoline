@@ -5,6 +5,7 @@ import (
 	"gas/internal/helpers"
 	resources "gas/internal/resources"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -98,40 +99,64 @@ var deployCmd = &cobra.Command{
 		helpers.PrettyPrint(resourceStateMap)
 
 		/*
-			// Create a map to keep track of which tasks are complete
-			completionChannels := make(map[string]chan bool)
-			for _, tasks := range resourceGraph.LevelsMap {
-				for _, task := range tasks {
-					completionChannels[task] = make(chan bool)
-				}
+			api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
+			if err != nil {
+				log.Fatal(err)
 			}
 
-			// Start the tasks for level 0
-			for _, resourceID := range resourceGraph.LevelsMap[0] {
-				go processTask(resourceID, completionChannels[resourceID])
-			}
+			// Most API calls require a Context
+			ctx := context.Background()
 
-			// Listen for task completions and trigger subsequent tasks
-			for level := 0; level < len(resourceGraph.LevelsMap); level++ {
-				tasks := resourceGraph.LevelsMap[level]
-				for _, task := range tasks {
-					<-completionChannels[task] // Wait for each task to complete
-					fmt.Printf("Task %s completed\n", task)
-					if level+1 < len(resourceGraph.LevelsMap) {
-						for _, nextTask := range resourceGraph.LevelsMap[level+1] {
-							go processTask(nextTask, completionChannels[nextTask])
-						}
+			// Fetch user details on the account
+			u, err := api.UserDetails(ctx)
+			if err != nil {
+				log.Fatal(err)
+			}
+			// Print user details
+			fmt.Println(u)
+		*/
+
+		logPreDeploymentStates(resourceGraph, resourceStateMap)
+
+		resourceToDoneChannelMap := make(map[string]chan bool)
+		for _, resources := range resourceGraph.LevelsMap {
+			for _, resource := range resources {
+				resourceToDoneChannelMap[resource] = make(chan bool)
+			}
+		}
+
+		// Start the tasks for level 0
+		for _, resourceID := range resourceGraph.LevelsMap[0] {
+			go processResource(resourceID, resourceToDoneChannelMap[resourceID])
+		}
+
+		// Listen for task completions and trigger subsequent tasks
+		for level := 0; level < len(resourceGraph.LevelsMap); level++ {
+			resources := resourceGraph.LevelsMap[level]
+			for _, resource := range resources {
+				<-resourceToDoneChannelMap[resource] // Wait for each task to complete
+				fmt.Printf("Resource %s completed\n", resource)
+				if level+1 < len(resourceGraph.LevelsMap) {
+					for _, nextTask := range resourceGraph.LevelsMap[level+1] {
+						go processResource(nextTask, resourceToDoneChannelMap[nextTask])
 					}
 				}
 			}
-		*/
+		}
 	},
 }
 
-/*
-func processTask(resourceID string, doneChan chan bool) {
+func processResource(resourceID string, doneChan chan bool) {
 	fmt.Printf("Processing resource ID %s\n", resourceID)
 	time.Sleep(time.Second)
 	doneChan <- true
 }
-*/
+
+func logPreDeploymentStates(resourceGraph *resources.ResourceGraph, resourceStateMap resources.ResourcesStateMap) {
+	fmt.Println("# Pre-deployment states:")
+	for level := 0; level < len(resourceGraph.LevelsMap); level++ {
+		for _, resource := range resourceGraph.LevelsMap[level] {
+			fmt.Printf("Level %d -> %s -> %s\n", level, resource, resourceStateMap[resource])
+		}
+	}
+}
