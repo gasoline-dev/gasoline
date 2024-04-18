@@ -260,7 +260,7 @@ func SetStateMap(upJson ResourcesUpJson, currResourceMap ResourceMap) ResourcesS
 			result[currResourceID] = "CREATED"
 		} else {
 			upResource := upJson[currResourceID]
-			if !isResourceEqual(upResource, currResource) {
+			if !IsResourceEqual(upResource, currResource) {
 				result[currResourceID] = "UPDATED"
 			}
 		}
@@ -269,7 +269,7 @@ func SetStateMap(upJson ResourcesUpJson, currResourceMap ResourceMap) ResourcesS
 	return result
 }
 
-func isResourceEqual(resource1, resource2 Resource) bool {
+func IsResourceEqual(resource1, resource2 Resource) bool {
 	if resource1.Type != resource2.Type {
 		return false
 	}
