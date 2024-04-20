@@ -296,18 +296,30 @@ func NewGraph(resourceMap ResourceMap) *ResourceGraph {
 	}
 
 	for resourceID, resource := range resourceMap {
-		for _, dependency := range resource.Dependencies {
-			result.AddEdge(resourceID, dependency)
+		/*
+			if len(resource.Dependencies) > 0 {
+				for _, dependencyResourceID := range resource.Dependencies {
+					result.AddEdge(resourceID, dependencyResourceID)
+					// replace with actual
+				}
+			} else {
+				result.InDegreesMap[resourceID] = 0
+			}
+		*/
+		for _, dependencyResourceID := range resource.Dependencies {
+			result.AddEdge(resourceID, dependencyResourceID)
 		}
 	}
 
-	// Set in degrees to 0 for nodes that are only ever
-	// source nodes and never neighbor nodes.
-	for node := range result.AdjacenciesMap {
-		if _, exists := result.InDegreesMap[node]; !exists {
-			result.InDegreesMap[node] = 0
+	// Set in degrees to 0 for resources that are only ever
+	// source nodes and never neighbor resources.
+	/*
+		for resource := range result.AdjacenciesMap {
+			if _, exists := result.InDegreesMap[resource]; !exists {
+				result.InDegreesMap[resource] = 0
+			}
 		}
-	}
+	*/
 
 	return result
 }

@@ -16,7 +16,6 @@ var deployCmd = &cobra.Command{
 	Short: "Deploy resources to the cloud",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Deploying resources to the cloud")
-		fmt.Println(viper.GetString("CLOUDFLARE_ACCOUNT_ID"))
 
 		currResourceContainerSubDirPaths, err := resources.GetContainerSubDirPaths(viper.GetString("resourceContainerDir"))
 		if err != nil {
@@ -38,6 +37,7 @@ var deployCmd = &cobra.Command{
 			os.Exit(1)
 			return
 		}
+		fmt.Println(currResourceIndexBuildFilePaths)
 
 		currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(currResourceIndexBuildFilePaths)
 		if err != nil {
@@ -61,14 +61,18 @@ var deployCmd = &cobra.Command{
 
 		currResourceMap := resources.SetMap(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
 
+		helpers.PrettyPrint(currResourceMap)
+
 		resourceGraph := resources.NewGraph(currResourceMap)
 
-		err = resourceGraph.CalculateLevels()
-		if err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-			return
-		}
+		/*
+			err = resourceGraph.CalculateLevels()
+			if err != nil {
+				fmt.Println("Error:", err)
+				os.Exit(1)
+				return
+			}
+		*/
 
 		helpers.PrettyPrint(resourceGraph)
 
@@ -87,13 +91,15 @@ var deployCmd = &cobra.Command{
 			}
 		}
 
-		resourcesUpJson, err := resources.GetUpJson(resourcesUpJsonPath)
-		if err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-			return
-		}
-		helpers.PrettyPrint(resourcesUpJson)
+		/*
+			resourcesUpJson, err := resources.GetUpJson(resourcesUpJsonPath)
+			if err != nil {
+				fmt.Println("Error:", err)
+				os.Exit(1)
+				return
+			}
+			helpers.PrettyPrint(resourcesUpJson)
+		*/
 
 		//resourceStateMap := resources.SetStateMap(resourcesUpJson, currResourceMap)
 		//helpers.PrettyPrint(resourceStateMap)
@@ -115,42 +121,40 @@ var deployCmd = &cobra.Command{
 			// Print user details
 			fmt.Println(u)
 		*/
+		/*
+			resourceToDeployStateMap := setDeployStateMap(resourcesUpJson, currResourceMap)
 
-		resourceToDeployStateMap := setDeployStateMap(resourcesUpJson, currResourceMap)
+			resourceIDToGraphLevelMap := setResourceIDToGraphLevelMap(resourceGraph)
 
-		resourceIDToGraphLevelMap := setResourceIDToGraphLevelMap(resourceGraph)
+			logResourcePreDeployStates(resourceGraph, resourceToDeployStateMap)
 
-		logResourcePreDeployStates(resourceGraph, resourceToDeployStateMap)
-
-		resourceToDoneChannelMap := make(map[string]chan bool)
-		for _, resources := range resourceGraph.LevelsMap {
-			for _, resource := range resources {
-				resourceToDoneChannelMap[resource] = make(chan bool)
+			resourceToDoneChannelMap := make(map[string]chan bool)
+			for _, resources := range resourceGraph.LevelsMap {
+				for _, resource := range resources {
+					resourceToDoneChannelMap[resource] = make(chan bool)
+				}
 			}
-		}
 
-		// Start the tasks for level 0
-		for _, resourceID := range resourceGraph.LevelsMap[0] {
-			transitionResourceToDeployStateMapOnStart(resourceID, resourceToDeployStateMap)
-			logResourceDeployState(resourceID, resourceToDeployStateMap, resourceIDToGraphLevelMap)
-			go processResource(resourceID, resourceToDoneChannelMap[resourceID])
-		}
+			for _, resourceID := range resourceGraph.LevelsMap[0] {
+				transitionResourceToDeployStateMapOnStart(resourceID, resourceToDeployStateMap)
+				logResourceDeployState(resourceID, resourceToDeployStateMap, resourceIDToGraphLevelMap)
+				go processResource(resourceID, resourceToDoneChannelMap[resourceID])
+			}
 
-		// Listen for task completions and trigger subsequent tasks
-		for level := 0; level < len(resourceGraph.LevelsMap); level++ {
-			resources := resourceGraph.LevelsMap[level]
-			for _, resource := range resources {
-				<-resourceToDoneChannelMap[resource] // Wait for each task to complete
-				fmt.Printf("Resource %s completed\n", resource)
-				if level+1 < len(resourceGraph.LevelsMap) {
-					for _, nextResourceID := range resourceGraph.LevelsMap[level+1] {
-						transitionResourceToDeployStateMapOnStart(nextResourceID, resourceToDeployStateMap)
-						logResourceDeployState(nextResourceID, resourceToDeployStateMap, resourceIDToGraphLevelMap)
-						go processResource(nextResourceID, resourceToDoneChannelMap[nextResourceID])
+			for level := 0; level < len(resourceGraph.LevelsMap); level++ {
+				for _, resource := range resourceGraph.LevelsMap[level] {
+					<-resourceToDoneChannelMap[resource]
+					fmt.Printf("Resource %s completed\n", resource)
+					if level+1 < len(resourceGraph.LevelsMap) {
+						for _, nextResourceID := range resourceGraph.LevelsMap[level+1] {
+							transitionResourceToDeployStateMapOnStart(nextResourceID, resourceToDeployStateMap)
+							logResourceDeployState(nextResourceID, resourceToDeployStateMap, resourceIDToGraphLevelMap)
+							go processResource(nextResourceID, resourceToDoneChannelMap[nextResourceID])
+						}
 					}
 				}
 			}
-		}
+		*/
 	},
 }
 
@@ -169,6 +173,12 @@ const (
 	CreateInProgress DeployState = "CREATE_IN_PROGRESS"
 	DeleteInProgress DeployState = "DELETE_IN_PROGRESS"
 	UpdateInProgress DeployState = "UPDATE_IN_PROGRESS"
+	CreateFailed     DeployState = "CREATE_FAILED"
+	DeleteFailed     DeployState = "DELETE_FAILED"
+	UpdateFailed     DeployState = "UPDATE_FAILED"
+	CreateSuccess    DeployState = "CREATE_SUCCESS"
+	DeleteSuccess    DeployState = "DELETE_SUCCESS"
+	UpdateSuccess    DeployState = "UPDATE_SUCCESS"
 )
 
 type ResourceToDeployStateMap = map[string]DeployState
