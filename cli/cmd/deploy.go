@@ -63,18 +63,8 @@ var deployCmd = &cobra.Command{
 
 		helpers.PrettyPrint(currResourceMap)
 
-		resourceGraph := resources.NewGraph(currResourceMap)
-
-		/*
-			err = resourceGraph.CalculateLevels()
-			if err != nil {
-				fmt.Println("Error:", err)
-				os.Exit(1)
-				return
-			}
-		*/
-
-		helpers.PrettyPrint(resourceGraph)
+		resourceToInDegreesMap := resources.SetInDegreesMap(currResourceMap)
+		helpers.PrettyPrint(resourceToInDegreesMap)
 
 		// TODO: json path can be configged?
 		// TODO: Or implement up -> driver -> local | gh in the config?
@@ -91,18 +81,41 @@ var deployCmd = &cobra.Command{
 			}
 		}
 
-		/*
-			resourcesUpJson, err := resources.GetUpJson(resourcesUpJsonPath)
-			if err != nil {
-				fmt.Println("Error:", err)
-				os.Exit(1)
-				return
-			}
-			helpers.PrettyPrint(resourcesUpJson)
-		*/
+		resourcesUpJson, err := resources.GetUpJson(resourcesUpJsonPath)
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+			return
+		}
+		helpers.PrettyPrint(resourcesUpJson)
 
-		//resourceStateMap := resources.SetStateMap(resourcesUpJson, currResourceMap)
-		//helpers.PrettyPrint(resourceStateMap)
+		resourceToDeployStateMap := setDeployStateMap(resourcesUpJson, currResourceMap)
+		helpers.PrettyPrint(resourceToDeployStateMap)
+
+		type ProcessResourceChan chan any
+
+		processResourceChan := make(ProcessResourceChan)
+
+		processResource := func(processResourceChan ProcessResourceChan, resourceID string) {
+			fmt.Printf("processing resource: %s\n", resourceID)
+			time.Sleep(time.Second)
+			processResourceChan <- true
+		}
+
+		for resourceID, deployState := range resourceToDeployStateMap {
+			if resourceToInDegreesMap[resourceID] == 0 && deployState == "CREATE_PENDING" {
+				go processResource(processResourceChan, resourceID)
+			}
+		}
+
+		resourceCount := 0
+		for range processResourceChan {
+			fmt.Println("Resource processed")
+			resourceCount++
+			if resourceCount == 2 {
+				break
+			}
+		}
 
 		/*
 			api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
@@ -206,27 +219,27 @@ func setDeployStateMap(upJson resources.ResourcesUpJson, currResourceMap resourc
 	return result
 }
 
-type ResourceIDToGraphLevelMap = map[string]int
+// type ResourceIDToGraphLevelMap = map[string]int
 
-func setResourceIDToGraphLevelMap(resourceGraph *resources.ResourceGraph) ResourceIDToGraphLevelMap {
-	result := make(ResourceIDToGraphLevelMap)
+// func setResourceIDToGraphLevelMap(resourceGraph *resources.ResourceGraph) ResourceIDToGraphLevelMap {
+// 	result := make(ResourceIDToGraphLevelMap)
 
-	for level := 0; level < len(resourceGraph.LevelsMap); level++ {
-		for _, resourceID := range resourceGraph.LevelsMap[level] {
-			result[resourceID] = level
-		}
-	}
+// 	for level := 0; level < len(resourceGraph.LevelsMap); level++ {
+// 		for _, resourceID := range resourceGraph.LevelsMap[level] {
+// 			result[resourceID] = level
+// 		}
+// 	}
 
-	return result
-}
+// 	return result
+// }
 
-func logResourcePreDeployStates(resourceGraph *resources.ResourceGraph, resourceToDeployStateMap ResourceToDeployStateMap) {
-	for level := 0; level < len(resourceGraph.LevelsMap); level++ {
-		for _, resource := range resourceGraph.LevelsMap[level] {
-			fmt.Printf("Level %d -> %s -> %s\n", level, resource, resourceToDeployStateMap[resource])
-		}
-	}
-}
+// func logResourcePreDeployStates(resourceGraph *resources.ResourceGraph, resourceToDeployStateMap ResourceToDeployStateMap) {
+// 	for level := 0; level < len(resourceGraph.LevelsMap); level++ {
+// 		for _, resource := range resourceGraph.LevelsMap[level] {
+// 			fmt.Printf("Level %d -> %s -> %s\n", level, resource, resourceToDeployStateMap[resource])
+// 		}
+// 	}
+// }
 
 func transitionResourceToDeployStateMapOnStart(resourceID string, resourceToDeployStateMap ResourceToDeployStateMap) {
 	switch state := resourceToDeployStateMap[resourceID]; state {
@@ -239,6 +252,6 @@ func transitionResourceToDeployStateMapOnStart(resourceID string, resourceToDepl
 	}
 }
 
-func logResourceDeployState(resourceID string, resourceToDeployStateMap ResourceToDeployStateMap, resourceIDToGraphLevelMap ResourceIDToGraphLevelMap) {
-	fmt.Printf("Level %d -> %s -> %s\n", resourceIDToGraphLevelMap[resourceID], resourceID, resourceToDeployStateMap[resourceID])
-}
+// func logResourceDeployState(resourceID string, resourceToDeployStateMap ResourceToDeployStateMap, resourceIDToGraphLevelMap ResourceIDToGraphLevelMap) {
+// 	fmt.Printf("Level %d -> %s -> %s\n", resourceIDToGraphLevelMap[resourceID], resourceID, resourceToDeployStateMap[resourceID])
+// }
