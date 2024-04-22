@@ -168,7 +168,7 @@ func GetPackageJsons(resourceContainerSubdirPaths ResourceContainerSubdirPaths) 
 	return result, nil
 }
 
-type ResourcesUpJson ResourceMap
+type ResourcesUpJson ResourceIDToData
 
 func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 	var result ResourcesUpJson
@@ -181,7 +181,7 @@ func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 
 type ResourceDependencyIDs [][]string
 
-func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIDMap PackageJsonNameToResourceIDMap, packageJsonsNameSet PackageJsonsNameSet) ResourceDependencyIDs {
+func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIDMap PackageJsonNameToResourceID, packageJsonsNameSet PackageJsonNameToBool) ResourceDependencyIDs {
 	var result ResourceDependencyIDs
 	for _, packageJson := range packageJsons {
 		var internalDependencies []string
@@ -196,10 +196,10 @@ func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResour
 	return result
 }
 
-type InDegreesMap map[string]int
+type ResourceIDToInDegrees map[string]int
 
-func SetInDegreesMap(resourceMap ResourceMap) InDegreesMap {
-	result := make(InDegreesMap)
+func SetIDToInDegrees(resourceMap ResourceIDToData) ResourceIDToInDegrees {
+	result := make(ResourceIDToInDegrees)
 	for _, resource := range resourceMap {
 		for _, dep := range resource.Dependencies {
 			result[dep]++
@@ -213,7 +213,7 @@ func SetInDegreesMap(resourceMap ResourceMap) InDegreesMap {
 	return result
 }
 
-type ResourceMap map[string]Resource
+type ResourceIDToData map[string]Resource
 
 type Resource struct {
 	Type         string
@@ -221,8 +221,8 @@ type Resource struct {
 	Dependencies []string
 }
 
-func SetMap(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependencyIDs ResourceDependencyIDs) ResourceMap {
-	result := make(ResourceMap)
+func SetIDToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependencyIDs ResourceDependencyIDs) ResourceIDToData {
+	result := make(ResourceIDToData)
 	for index, config := range indexBuildFileConfigs {
 		result[config.ID] = Resource{
 			Type:         strings.Split(config.ID, ":")[2],
@@ -233,20 +233,20 @@ func SetMap(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependencyIDs R
 	return result
 }
 
-type PackageJsonNameToResourceIDMap map[string]string
+type PackageJsonNameToResourceID map[string]string
 
-func SetPackageJsonNameToIDMap(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceIDMap {
-	result := make(PackageJsonNameToResourceIDMap)
+func SetPackageJsonNameToID(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceID {
+	result := make(PackageJsonNameToResourceID)
 	for index, packageJson := range packageJsons {
 		result[packageJson.Name] = indexBuildFileConfigs[index].ID
 	}
 	return result
 }
 
-type PackageJsonsNameSet map[string]bool
+type PackageJsonNameToBool map[string]bool
 
-func SetPackageJsonsNameSet(packageJsons ResourcePackageJsons) PackageJsonsNameSet {
-	result := make(PackageJsonsNameSet)
+func SetPackageJsonNameToBool(packageJsons ResourcePackageJsons) PackageJsonNameToBool {
+	result := make(PackageJsonNameToBool)
 	for _, packageJson := range packageJsons {
 		result[packageJson.Name] = true
 	}
@@ -261,10 +261,10 @@ const (
 	Updated State = "UPDATED"
 )
 
-type ResourcesStateMap map[string]State
+type ResourceIDToState map[string]State
 
-func SetStateMap(upJson ResourcesUpJson, currResourceMap ResourceMap) ResourcesStateMap {
-	result := make(ResourcesStateMap)
+func SetIDStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) ResourceIDToState {
+	result := make(ResourceIDToState)
 
 	for upJsonResourceID := range upJson {
 		if _, exists := currResourceMap[upJsonResourceID]; !exists {

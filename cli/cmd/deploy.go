@@ -53,18 +53,18 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		currResourcePackageJsonsNameSet := resources.SetPackageJsonsNameSet(currResourcePackageJsons)
+		currResourcePackageJsonNameToBool := resources.SetPackageJsonNameToBool(currResourcePackageJsons)
 
-		currResourcePackageJsonsNameToIDMap := resources.SetPackageJsonNameToIDMap(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
+		currResourcePackageJsonNameToID := resources.SetPackageJsonNameToID(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
 
-		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonsNameToIDMap, currResourcePackageJsonsNameSet)
+		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonNameToID, currResourcePackageJsonNameToBool)
 
-		currResourceMap := resources.SetMap(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
+		currResourceIDToData := resources.SetIDToData(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
 
-		helpers.PrettyPrint(currResourceMap)
+		helpers.PrettyPrint(currResourceIDToData)
 
-		resourceToInDegreesMap := resources.SetInDegreesMap(currResourceMap)
-		helpers.PrettyPrint(resourceToInDegreesMap)
+		resourceIDToInDegrees := resources.SetIDToInDegrees(currResourceIDToData)
+		helpers.PrettyPrint(resourceIDToInDegrees)
 
 		// TODO: json path can be configged?
 		// TODO: Or implement up -> driver -> local | gh in the config?
@@ -89,8 +89,8 @@ var deployCmd = &cobra.Command{
 		}
 		helpers.PrettyPrint(resourcesUpJson)
 
-		resourceToDeployStateMap := setDeployStateMap(resourcesUpJson, currResourceMap)
-		helpers.PrettyPrint(resourceToDeployStateMap)
+		resourceIDToDeployState := setResourceIDToDeployState(resourcesUpJson, currResourceIDToData)
+		helpers.PrettyPrint(resourceIDToDeployState)
 
 		type ProcessResourceChan chan any
 
@@ -102,8 +102,8 @@ var deployCmd = &cobra.Command{
 			processResourceChan <- true
 		}
 
-		for resourceID, deployState := range resourceToDeployStateMap {
-			if resourceToInDegreesMap[resourceID] == 0 && deployState == "CREATE_PENDING" {
+		for resourceID, deployState := range resourceIDToDeployState {
+			if resourceIDToInDegrees[resourceID] == 0 && deployState == "CREATE_PENDING" {
 				go processResource(processResourceChan, resourceID)
 			}
 		}
@@ -194,18 +194,18 @@ const (
 	UpdateSuccess    DeployState = "UPDATE_SUCCESS"
 )
 
-type ResourceToDeployStateMap = map[string]DeployState
+type ResourceIDToDeployState = map[string]DeployState
 
-func setDeployStateMap(upJson resources.ResourcesUpJson, currResourceMap resources.ResourceMap) ResourceToDeployStateMap {
-	result := make(ResourceToDeployStateMap)
+func setResourceIDToDeployState(upJson resources.ResourcesUpJson, resourceIDToData resources.ResourceIDToData) ResourceIDToDeployState {
+	result := make(ResourceIDToDeployState)
 
 	for upJsonResourceID := range upJson {
-		if _, exists := currResourceMap[upJsonResourceID]; !exists {
+		if _, exists := resourceIDToData[upJsonResourceID]; !exists {
 			result[upJsonResourceID] = DeletePending
 		}
 	}
 
-	for currResourceID, currResource := range currResourceMap {
+	for currResourceID, currResource := range resourceIDToData {
 		if _, exists := upJson[currResourceID]; !exists {
 			result[currResourceID] = CreatePending
 		} else {
@@ -241,7 +241,7 @@ func setDeployStateMap(upJson resources.ResourcesUpJson, currResourceMap resourc
 // 	}
 // }
 
-func transitionResourceToDeployStateMapOnStart(resourceID string, resourceToDeployStateMap ResourceToDeployStateMap) {
+func transitionResourceToDeployStateMapOnStart(resourceID string, resourceToDeployStateMap ResourceIDToDeployState) {
 	switch state := resourceToDeployStateMap[resourceID]; state {
 	case CreatePending:
 		resourceToDeployStateMap[resourceID] = CreateInProgress
