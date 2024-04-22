@@ -181,7 +181,7 @@ func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 
 type ResourceDependencyIDs [][]string
 
-func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIDMap PackageJsonNameToResourceID, packageJsonsNameSet PackageJsonNameToBool) ResourceDependencyIDs {
+func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIDMap PackageJsonNameToResourceID, packageJsonsNameSet PackageJsonNameToTrue) ResourceDependencyIDs {
 	var result ResourceDependencyIDs
 	for _, packageJson := range packageJsons {
 		var internalDependencies []string
@@ -243,13 +243,92 @@ func SetPackageJsonNameToID(packageJsons ResourcePackageJsons, indexBuildFileCon
 	return result
 }
 
-type PackageJsonNameToBool map[string]bool
+type PackageJsonNameToTrue map[string]bool
 
-func SetPackageJsonNameToBool(packageJsons ResourcePackageJsons) PackageJsonNameToBool {
-	result := make(PackageJsonNameToBool)
+/*
+SetPackageJsonNameToTrue returns a map of resource package.json
+names set to true.
+
+For example, given a resource of CORE_BASE_KV, the resource would
+have a package.json name of core-base-kv. Therefore, this map would
+have a key of core-base-kv with a value of true.
+
+This map can be used to tell if a dependency is an internal
+resource or not when looping over a resource's package.json
+dependencies.
+
+For example, given a relationship of CORE_BASE_API -> CORE_BASE_KV,
+when looping over CORE_BASE_API's package.json dependencies, each
+dependency can be checked against this map. If a check returns true,
+then the dependency is another resource.
+*/
+func SetPackageJsonNameToTrue(packageJsons ResourcePackageJsons) PackageJsonNameToTrue {
+	result := make(PackageJsonNameToTrue)
 	for _, packageJson := range packageJsons {
 		result[packageJson.Name] = true
 	}
+	return result
+}
+
+type ResourceIDs []string
+
+/*
+SetIDs returns a slice of resource IDs.
+*/
+func SetIDs(resourceIDToData ResourceIDToData) ResourceIDs {
+	var result ResourceIDs
+	for resourceID := range resourceIDToData {
+		result = append(result, resourceID)
+	}
+	return result
+}
+
+type ResourceIDToIntermediates map[string][]string
+
+/*
+SetIDToIntermediates returns a resource ID to intermediates
+map.
+
+Intermediates are resource IDs within the source resource's
+directed path when analyzing resource relationships as a graph.
+
+For example, given a graph of A->B, B->C, and X->C, B and C are
+intermediates of A, C is an intermediate of B, and C is an
+intermediate of X.
+
+Finding intermediates is necessary for grouping related resources.
+It wouldn't be possible to know A and X are relatives without them.
+*/
+func SetIDToIntermediates(resourceIDToData ResourceIDToData) ResourceIDToIntermediates {
+	result := make(ResourceIDToIntermediates)
+	memo := make(map[string][]string)
+	for resourceID := range resourceIDToData {
+		result[resourceID] = walkDependencies(resourceID, resourceIDToData, memo)
+	}
+	return result
+}
+
+func walkDependencies(resourceID string, resourceIDToData ResourceIDToData, memo map[string][]string) []string {
+	if result, found := memo[resourceID]; found {
+		return result
+	}
+
+	result := make([]string, 0)
+	if resourceData, exists := resourceIDToData[resourceID]; exists {
+		dependencies := resourceData.Dependencies
+		for _, dependency := range dependencies {
+			if !helpers.IsInSlice(result, dependency) {
+				result = append(result, dependency)
+				for _, transitiveDependency := range walkDependencies(dependency, resourceIDToData, memo) {
+					if !helpers.IsInSlice(result, transitiveDependency) {
+						result = append(result, transitiveDependency)
+					}
+				}
+			}
+		}
+	}
+	memo[resourceID] = result
+
 	return result
 }
 
@@ -263,7 +342,7 @@ const (
 
 type ResourceIDToState map[string]State
 
-func SetIDStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) ResourceIDToState {
+func SetIDToStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) ResourceIDToState {
 	result := make(ResourceIDToState)
 
 	for upJsonResourceID := range upJson {
@@ -297,6 +376,18 @@ func IsResourceEqual(resource1, resource2 Resource) bool {
 		return false
 	}
 	return true
+}
+
+type ResourceIDsWithInDegreesOf []string
+
+func SetIDsWithInDegreesOf(IDToInDegrees ResourceIDToInDegrees, degrees int) ResourceIDsWithInDegreesOf {
+	var result ResourceIDsWithInDegreesOf
+	for resourceID, inDegree := range IDToInDegrees {
+		if inDegree == degrees {
+			result = append(result, resourceID)
+		}
+	}
+	return result
 }
 
 /*

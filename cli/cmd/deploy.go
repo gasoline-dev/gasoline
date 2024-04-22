@@ -53,7 +53,7 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		currResourcePackageJsonNameToBool := resources.SetPackageJsonNameToBool(currResourcePackageJsons)
+		currResourcePackageJsonNameToBool := resources.SetPackageJsonNameToTrue(currResourcePackageJsons)
 
 		currResourcePackageJsonNameToID := resources.SetPackageJsonNameToID(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
 
@@ -65,6 +65,18 @@ var deployCmd = &cobra.Command{
 
 		resourceIDToInDegrees := resources.SetIDToInDegrees(currResourceIDToData)
 		helpers.PrettyPrint(resourceIDToInDegrees)
+
+		resourceIDsWithInDegreesOfZero := resources.SetIDsWithInDegreesOf(resourceIDToInDegrees, 0)
+
+		fmt.Println(resourceIDsWithInDegreesOfZero)
+
+		resourceIDs := resources.SetIDs(currResourceIDToData)
+
+		fmt.Println(resourceIDs)
+
+		resourceIDToIntermediates := resources.SetIDToIntermediates(currResourceIDToData)
+		fmt.Println("resource ID to intermediates")
+		helpers.PrettyPrint(resourceIDToIntermediates)
 
 		// TODO: json path can be configged?
 		// TODO: Or implement up -> driver -> local | gh in the config?
