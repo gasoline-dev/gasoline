@@ -283,24 +283,78 @@ func SetIDs(resourceIDToData ResourceIDToData) ResourceIDs {
 	return result
 }
 
-type ResourceIDToIntermediates map[string][]string
+type ResourceIDToGroup map[string]int
 
 /*
-SetIDToIntermediates returns a resource ID to intermediates
-map.
+SetIDToGroup returns a resource ID to group map.
 
-Intermediates are resource IDs within the source resource's
+A group is an int assigned to resource IDs that share
+at least one common relative.
+*/
+func SetIDToGroup(resourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf, resourceIDToIntermediateIDs ResourceIDToIntermediateIDs) ResourceIDToGroup {
+	result := make(ResourceIDToGroup)
+	group := 0
+	for _, sourceResourceID := range resourceIDsWithInDegreesOfZero {
+		if _, exists := result[sourceResourceID]; !exists {
+			// Initialize source resource's group.
+			result[sourceResourceID] = group
+
+			// Set group for source resource's intermediates.
+			for _, intermediateID := range resourceIDToIntermediateIDs[sourceResourceID] {
+				if _, exists := result[intermediateID]; !exists {
+					result[intermediateID] = group
+				}
+			}
+
+			// Set group for distant relatives of source resource.
+			// For example, given a graph of A->B, B->C, & X->C,
+			// A & X both have an in degrees of 0. When walking the graph
+			// downward from their positions, neither will gain knowledge of the
+			// other's existence because they don't have incoming edges. To account
+			// for that, all resources with an in degrees of 0 need to be checked
+			// with one another to see if they have a common relative (common
+			// intermediate resources in each's direct path). In this case, A & X
+			// share a common relative in "C". Therefore, A & X should be assigned
+			// to the same group.
+			for _, possibleDistantRelativeID := range resourceIDsWithInDegreesOfZero {
+				// Skip source resource from the main for loop.
+				if possibleDistantRelativeID != sourceResourceID {
+					// Loop over possible distant relative's intermediates.
+					for _, possibleDistantRelativeIntermediateID := range resourceIDToIntermediateIDs[possibleDistantRelativeID] {
+						// Check if possible distant relative's intermediate
+						// is also an intermediate of source resource.
+						if helpers.IncludesString(resourceIDToIntermediateIDs[sourceResourceID], possibleDistantRelativeIntermediateID) {
+							// If so, possibl distant relative and source resource
+							// are distant relatives and belong to the same group.
+							result[possibleDistantRelativeID] = group
+						}
+					}
+				}
+			}
+			group++
+		}
+	}
+	return result
+}
+
+type ResourceIDToIntermediateIDs map[string][]string
+
+/*
+SetIDToIntermediateIDs returns a resource ID to intermediate
+IDs map.
+
+Intermediate IDs are resource IDs within the source resource's
 directed path when analyzing resource relationships as a graph.
 
 For example, given a graph of A->B, B->C, and X->C, B and C are
 intermediates of A, C is an intermediate of B, and C is an
 intermediate of X.
 
-Finding intermediates is necessary for grouping related resources.
+Finding intermediate IDs is necessary for grouping related resources.
 It wouldn't be possible to know A and X are relatives without them.
 */
-func SetIDToIntermediates(resourceIDToData ResourceIDToData) ResourceIDToIntermediates {
-	result := make(ResourceIDToIntermediates)
+func SetIDToIntermediateIDs(resourceIDToData ResourceIDToData) ResourceIDToIntermediateIDs {
+	result := make(ResourceIDToIntermediateIDs)
 	memo := make(map[string][]string)
 	for resourceID := range resourceIDToData {
 		result[resourceID] = walkDependencies(resourceID, resourceIDToData, memo)

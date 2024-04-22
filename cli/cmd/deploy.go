@@ -74,9 +74,13 @@ var deployCmd = &cobra.Command{
 
 		fmt.Println(resourceIDs)
 
-		resourceIDToIntermediates := resources.SetIDToIntermediates(currResourceIDToData)
+		resourceIDToIntermediateIDs := resources.SetIDToIntermediateIDs(currResourceIDToData)
 		fmt.Println("resource ID to intermediates")
-		helpers.PrettyPrint(resourceIDToIntermediates)
+		helpers.PrettyPrint(resourceIDToIntermediateIDs)
+
+		resourceIDToGroup := resources.SetIDToGroup(resourceIDsWithInDegreesOfZero, resourceIDToIntermediateIDs)
+		fmt.Println("resource ID to group")
+		helpers.PrettyPrint(resourceIDToGroup)
 
 		// TODO: json path can be configged?
 		// TODO: Or implement up -> driver -> local | gh in the config?

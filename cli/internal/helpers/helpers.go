@@ -6,6 +6,16 @@ import (
 	"os"
 )
 
+// IncludesString checks if a string slice contains a given value.
+func IncludesString(slice []string, value string) bool {
+	for _, v := range slice {
+		if v == value {
+			return true
+		}
+	}
+	return false
+}
+
 func IsFilePresent(filePath string) bool {
 	_, err := os.Stat(filePath)
 	if err == nil {
