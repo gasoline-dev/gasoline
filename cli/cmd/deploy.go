@@ -17,21 +17,21 @@ var deployCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Deploying resources to the cloud")
 
-		currResourceContainerSubDirPaths, err := resources.GetContainerSubDirPaths(viper.GetString("resourceContainerDir"))
+		currResourceContainerSubdirPaths, err := resources.GetContainerSubdirPaths(viper.GetString("resourceContainerDir"))
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 			return
 		}
 
-		err = resources.ValidateContainerSubDirContents(currResourceContainerSubDirPaths)
+		err = resources.ValidateContainerSubdirContents(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 			return
 		}
 
-		currResourceIndexBuildFilePaths, err := resources.GetIndexBuildFilePaths(currResourceContainerSubDirPaths)
+		currResourceIndexBuildFilePaths, err := resources.GetIndexBuildFilePaths(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
@@ -46,7 +46,7 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		currResourcePackageJsons, err := resources.GetPackageJsons(currResourceContainerSubDirPaths)
+		currResourcePackageJsons, err := resources.GetPackageJsons(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)

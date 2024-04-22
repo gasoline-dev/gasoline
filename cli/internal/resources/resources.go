@@ -17,10 +17,10 @@ import (
 //go:embed embed/get-index-build-file-configs.js
 var getIndexBuildFileConfigsEmbed embed.FS
 
-type ResourceContainerSubDirPaths []string
+type ResourceContainerSubdirPaths []string
 
-func GetContainerSubDirPaths(resourceContainerDir string) (ResourceContainerSubDirPaths, error) {
-	var result ResourceContainerSubDirPaths
+func GetContainerSubdirPaths(resourceContainerDir string) (ResourceContainerSubdirPaths, error) {
+	var result ResourceContainerSubdirPaths
 
 	entries, err := os.ReadDir(resourceContainerDir)
 	if err != nil {
@@ -38,13 +38,13 @@ func GetContainerSubDirPaths(resourceContainerDir string) (ResourceContainerSubD
 
 type ResourceIndexFilePaths = []string
 
-func GetIndexFilePaths(resourceContainerSubDirPaths ResourceContainerSubDirPaths) (ResourceIndexFilePaths, error) {
+func GetIndexFilePaths(resourceContainerSubdirPaths ResourceContainerSubdirPaths) (ResourceIndexFilePaths, error) {
 	var result ResourceIndexFilePaths
 
 	pattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.ts$`)
 
-	for _, subDirPath := range resourceContainerSubDirPaths {
-		srcPath := filepath.Join(subDirPath, "src")
+	for _, subdirPath := range resourceContainerSubdirPaths {
+		srcPath := filepath.Join(subdirPath, "src")
 
 		files, err := os.ReadDir(srcPath)
 		if err != nil {
@@ -111,13 +111,13 @@ func GetIndexBuildFileConfigs(resourceIndexBuildFilePaths ResourceIndexBuildFile
 
 type ResourceIndexBuildFilePaths = []string
 
-func GetIndexBuildFilePaths(resourceContainerSubDirPaths ResourceContainerSubDirPaths) (ResourceIndexBuildFilePaths, error) {
+func GetIndexBuildFilePaths(resourceContainerSubdirPaths ResourceContainerSubdirPaths) (ResourceIndexBuildFilePaths, error) {
 	var result ResourceIndexBuildFilePaths
 
 	pattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.js$`)
 
-	for _, subDirPath := range resourceContainerSubDirPaths {
-		buildPath := filepath.Join(subDirPath, "build")
+	for _, subdirPath := range resourceContainerSubdirPaths {
+		buildPath := filepath.Join(subdirPath, "build")
 
 		files, err := os.ReadDir(buildPath)
 		if err != nil {
@@ -145,11 +145,11 @@ type PackageJson struct {
 	DevDependencies map[string]string `json:"devDependencies,omitempty"`
 }
 
-func GetPackageJsons(resourceContainerSubDirPaths ResourceContainerSubDirPaths) (ResourcePackageJsons, error) {
+func GetPackageJsons(resourceContainerSubdirPaths ResourceContainerSubdirPaths) (ResourcePackageJsons, error) {
 	var result ResourcePackageJsons
 
-	for _, subDirPath := range resourceContainerSubDirPaths {
-		packageJsonPath := filepath.Join(subDirPath, "package.json")
+	for _, subdirPath := range resourceContainerSubdirPaths {
+		packageJsonPath := filepath.Join(subdirPath, "package.json")
 
 		data, err := os.ReadFile(packageJsonPath)
 		if err != nil {
@@ -396,22 +396,22 @@ type ResourceGraph struct {
 // 	return nil
 // }
 
-func ValidateContainerSubDirContents(subDirPaths []string) error {
+func ValidateContainerSubdirContents(subdirPaths []string) error {
 	indexTsNamePattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.ts$`)
 	indexJsNamePattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.js$`)
 
-	for _, subDirPath := range subDirPaths {
-		if _, err := os.Stat(filepath.Join(subDirPath, "package.json")); os.IsNotExist(err) {
-			return fmt.Errorf("unable to find package.json in %s", subDirPath)
+	for _, subdirPath := range subdirPaths {
+		if _, err := os.Stat(filepath.Join(subdirPath, "package.json")); os.IsNotExist(err) {
+			return fmt.Errorf("unable to find package.json in %s", subdirPath)
 		}
 
-		var indexTsParentDirPath = filepath.Join(subDirPath, "src")
-		var indexJsParentDirPath = filepath.Join(subDirPath, "build")
+		var indexTsParentDirPath = filepath.Join(subdirPath, "src")
+		var indexJsParentDirPath = filepath.Join(subdirPath, "build")
 
 		foundIndexTs := false
 		foundIndexJs := false
 
-		err := filepath.Walk(subDirPath, func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(subdirPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -428,7 +428,7 @@ func ValidateContainerSubDirContents(subDirPaths []string) error {
 		})
 
 		if err != nil {
-			return fmt.Errorf("unable to walk path %q: %v", subDirPath, err)
+			return fmt.Errorf("unable to walk path %q: %v", subdirPath, err)
 		}
 
 		if !foundIndexTs {
