@@ -531,9 +531,10 @@ func walkDependencies(resourceID string, resourceIDToData ResourceIDToData, memo
 type State string
 
 const (
-	Created State = "CREATED"
-	Deleted State = "DELETED"
-	Updated State = "UPDATED"
+	Created   State = "CREATED"
+	Deleted   State = "DELETED"
+	Unchanged State = "UNCHANGED"
+	Updated   State = "UPDATED"
 )
 
 type ResourceIDToState map[string]State
@@ -546,17 +547,19 @@ func SetIDToStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) R
 
 	for upJsonResourceID := range upJson {
 		if _, exists := currResourceMap[upJsonResourceID]; !exists {
-			result[upJsonResourceID] = "DELETED"
+			result[upJsonResourceID] = Deleted
 		}
 	}
 
 	for currResourceID, currResource := range currResourceMap {
 		if _, exists := upJson[currResourceID]; !exists {
-			result[currResourceID] = "CREATED"
+			result[currResourceID] = Created
 		} else {
 			upResource := upJson[currResourceID]
-			if !IsResourceEqual(upResource, currResource) {
-				result[currResourceID] = "UPDATED"
+			if IsResourceEqual(upResource, currResource) {
+				result[currResourceID] = Unchanged
+			} else {
+				result[currResourceID] = Updated
 			}
 		}
 	}
