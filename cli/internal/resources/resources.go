@@ -323,6 +323,30 @@ func SetIDToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependency
 	return result
 }
 
+type GroupToDepthToResourceID map[int]map[int]string
+
+/*
+	{
+		0: {
+			0: "core:base:cloudflare-worker:12345",
+			1: "core:base:cloudflare-kv:12345"
+		},
+		1: {
+			0: "admin:base:cloudflare-worker:12345"
+		}
+	}
+*/
+func SetGroupToDepthToResourceID(resourceIDToGroup ResourceIDToGroup, resourceIDToDepth ResourceIDToDepth) GroupToDepthToResourceID {
+	result := make(GroupToDepthToResourceID)
+	for resourceID, group := range resourceIDToGroup {
+		if _, exists := result[group]; !exists {
+			result[group] = make(map[int]string)
+		}
+		result[group][resourceIDToDepth[resourceID]] = resourceID
+	}
+	return result
+}
+
 type PackageJsonNameToResourceID map[string]string
 
 /*
@@ -372,6 +396,24 @@ func SetIDs(resourceIDToData ResourceIDToData) ResourceIDs {
 	var result ResourceIDs
 	for resourceID := range resourceIDToData {
 		result = append(result, resourceID)
+	}
+	return result
+}
+
+type ResourceIDToDepth map[string]int
+
+/*
+	{
+		"core:base:cloudflare-kv:12345": 1,
+		"core:base:cloudflare-worker:12345": 0
+	}
+*/
+func SetIDToDepth(depthToResourceID DepthToResourceID) ResourceIDToDepth {
+	result := make(ResourceIDToDepth)
+	for depth, resourceIDs := range depthToResourceID {
+		for _, resourceID := range resourceIDs {
+			result[resourceID] = depth
+		}
 	}
 	return result
 }
