@@ -125,6 +125,10 @@ var deployCmd = &cobra.Command{
 		fmt.Println("resource to resource IDs")
 		helpers.PrettyPrint(stateToResourceIDs)
 
+		groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceIDToGroup, resourceIDToStateMap)
+		fmt.Println("groups with state changes")
+		helpers.PrettyPrint(groupsWithStateChanges)
+
 		resourceIDToDeployState := setResourceIDToDeployState(resourcesUpJson, currResourceIDToData)
 		helpers.PrettyPrint(resourceIDToDeployState)
 

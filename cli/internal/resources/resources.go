@@ -583,6 +583,34 @@ func IsResourceEqual(resource1, resource2 Resource) bool {
 	return true
 }
 
+type GroupsWithStateChanges = []int
+
+/*
+[0]
+
+Where a resource of core:base:cloudflare-worker:12345
+belonging to group 0 has been created.
+*/
+func SetGroupsWithStateChanges(resourceIDToGroup ResourceIDToGroup, resourceIDToState ResourceIDToState) GroupsWithStateChanges {
+	result := make(GroupsWithStateChanges, 0)
+
+	seenGroups := make(map[int]struct{})
+
+	for resourceID, state := range resourceIDToState {
+		if state != Unchanged {
+			group, exists := resourceIDToGroup[resourceID]
+			if exists {
+				if _, alreadyAdded := seenGroups[group]; !alreadyAdded {
+					result = append(result, group)
+					seenGroups[group] = struct{}{}
+				}
+			}
+		}
+	}
+
+	return result
+}
+
 type ResourceIDsWithInDegreesOf []string
 
 /*
