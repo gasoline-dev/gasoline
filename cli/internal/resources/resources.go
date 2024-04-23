@@ -347,6 +347,27 @@ func SetGroupToDepthToResourceID(resourceIDToGroup ResourceIDToGroup, resourceID
 	return result
 }
 
+type GroupToResourceIDs map[int][]string
+
+/*
+	{
+		0: [
+			"core:base:cloudflare-worker:12345", "core:base:cloudflare-kv:12345"
+		],
+		1: ["admin:base:cloudflare-worker:12345"]
+	}
+*/
+func SetGroupToResourceIDs(resourceIDToGroup ResourceIDToGroup) GroupToResourceIDs {
+	result := make(GroupToResourceIDs)
+	for resourceID, group := range resourceIDToGroup {
+		if _, exists := result[group]; !exists {
+			result[group] = make([]string, 0)
+		}
+		result[group] = append(result[group], resourceID)
+	}
+	return result
+}
+
 type PackageJsonNameToResourceID map[string]string
 
 /*
