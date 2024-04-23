@@ -19,6 +19,9 @@ var getIndexBuildFileConfigsEmbed embed.FS
 
 type ResourceContainerSubdirPaths []string
 
+/*
+["gas/core-base-api"]
+*/
 func GetContainerSubdirPaths(resourceContainerDir string) (ResourceContainerSubdirPaths, error) {
 	var result ResourceContainerSubdirPaths
 
@@ -38,6 +41,9 @@ func GetContainerSubdirPaths(resourceContainerDir string) (ResourceContainerSubd
 
 type ResourceIndexFilePaths = []string
 
+/*
+["gas/core-base-api/src/core-base-api._index.ts"]
+*/
 func GetIndexFilePaths(resourceContainerSubdirPaths ResourceContainerSubdirPaths) (ResourceIndexFilePaths, error) {
 	var result ResourceIndexFilePaths
 
@@ -72,6 +78,15 @@ type Config struct {
 	} `json:"kv,omitempty"`
 }
 
+/*
+	[{
+			ID: "core:base:cloudflare-worker:12345",
+			Name: "CORE_BASE_API",
+			KV: [{
+				binding: "CORE_BASE_KV"
+			}]
+		}]
+*/
 func GetIndexBuildFileConfigs(resourceIndexBuildFilePaths ResourceIndexBuildFilePaths) (ResourceIndexBuildFileConfigs, error) {
 	var result ResourceIndexBuildFileConfigs
 
@@ -111,6 +126,9 @@ func GetIndexBuildFileConfigs(resourceIndexBuildFilePaths ResourceIndexBuildFile
 
 type ResourceIndexBuildFilePaths = []string
 
+/*
+["gas/core-base-api/build/core-base-api._index.js"]
+*/
 func GetIndexBuildFilePaths(resourceContainerSubdirPaths ResourceContainerSubdirPaths) (ResourceIndexBuildFilePaths, error) {
 	var result ResourceIndexBuildFilePaths
 
@@ -145,6 +163,18 @@ type PackageJson struct {
 	DevDependencies map[string]string `json:"devDependencies,omitempty"`
 }
 
+/*
+TODO
+
+	[{
+		Name: "",
+		Main: "",
+		Types: "",
+		Scripts: "",
+		Dependencies: {},
+		DevDependencies: {}
+	}]
+*/
 func GetPackageJsons(resourceContainerSubdirPaths ResourceContainerSubdirPaths) (ResourcePackageJsons, error) {
 	var result ResourcePackageJsons
 
@@ -170,6 +200,9 @@ func GetPackageJsons(resourceContainerSubdirPaths ResourceContainerSubdirPaths) 
 
 type ResourcesUpJson ResourceIDToData
 
+/*
+TODO
+*/
 func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 	var result ResourcesUpJson
 	err := helpers.UnmarshallFile(resourcesUpJsonPath, &result)
@@ -181,6 +214,13 @@ func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 
 type ResourceDependencyIDs [][]string
 
+/*
+[["core:base:cloudflare-kv:12345"], []]
+
+Where index 0 is core:base:cloudflare-worker:12345's
+dependency IDs and index 1 is core:base:cloudflare-kv:12345's
+dependency IDs.
+*/
 func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIDMap PackageJsonNameToResourceID, packageJsonsNameSet PackageJsonNameToTrue) ResourceDependencyIDs {
 	var result ResourceDependencyIDs
 	for _, packageJson := range packageJsons {
@@ -198,6 +238,14 @@ func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResour
 
 type ResourceIDToInDegrees map[string]int
 
+/*
+	{
+		"core:base:cloudflare-worker:12345": 0,
+		"core:base:cloudflare-kv:12345" 1
+	}
+
+In degrees is how many incoming edges a target node has.
+*/
 func SetIDToInDegrees(resourceMap ResourceIDToData) ResourceIDToInDegrees {
 	result := make(ResourceIDToInDegrees)
 	for _, resource := range resourceMap {
@@ -221,6 +269,9 @@ type Resource struct {
 	Dependencies []string
 }
 
+/*
+TODO
+*/
 func SetIDToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependencyIDs ResourceDependencyIDs) ResourceIDToData {
 	result := make(ResourceIDToData)
 	for index, config := range indexBuildFileConfigs {
@@ -235,6 +286,11 @@ func SetIDToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependency
 
 type PackageJsonNameToResourceID map[string]string
 
+/*
+	{
+		"core-base-api": "core:base:cloudflare-worker:12345"
+	}
+*/
 func SetPackageJsonNameToID(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceID {
 	result := make(PackageJsonNameToResourceID)
 	for index, packageJson := range packageJsons {
@@ -246,12 +302,10 @@ func SetPackageJsonNameToID(packageJsons ResourcePackageJsons, indexBuildFileCon
 type PackageJsonNameToTrue map[string]bool
 
 /*
-SetPackageJsonNameToTrue returns a map of resource package.json
-names set to true.
-
-For example, given a resource of CORE_BASE_KV, the resource would
-have a package.json name of core-base-kv. Therefore, this map would
-have a key of core-base-kv with a value of true.
+	{
+		"core-base-api": true,
+		"core-base-kv": true
+	}
 
 This map can be used to tell if a dependency is an internal
 resource or not when looping over a resource's package.json
@@ -273,7 +327,7 @@ func SetPackageJsonNameToTrue(packageJsons ResourcePackageJsons) PackageJsonName
 type ResourceIDs []string
 
 /*
-SetIDs returns a slice of resource IDs.
+["core:base:cloudflare-worker:12345"]
 */
 func SetIDs(resourceIDToData ResourceIDToData) ResourceIDs {
 	var result ResourceIDs
@@ -286,7 +340,11 @@ func SetIDs(resourceIDToData ResourceIDToData) ResourceIDs {
 type ResourceIDToGroup map[string]int
 
 /*
-SetIDToGroup returns a resource ID to group map.
+	{
+		"admin:base:cloudflare-worker:12345": 0,
+		"core:base:cloudflare-worker:12345": 1,
+		"core:base:cloudflare-kv:12345": 2,
+	}
 
 A group is an int assigned to resource IDs that share
 at least one common relative.
@@ -340,8 +398,10 @@ func SetIDToGroup(resourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf, res
 type ResourceIDToIntermediateIDs map[string][]string
 
 /*
-SetIDToIntermediateIDs returns a resource ID to intermediate
-IDs map.
+	{
+		"core:base:cloudflare-worker:1235": ["core:base:cloudflare-kv:12345"],
+		"core:base:cloudflare-kv:12345": []
+	}
 
 Intermediate IDs are resource IDs within the source resource's
 directed path when analyzing resource relationships as a graph.
@@ -351,7 +411,8 @@ intermediates of A, C is an intermediate of B, and C is an
 intermediate of X.
 
 Finding intermediate IDs is necessary for grouping related resources.
-It wouldn't be possible to know A and X are relatives without them.
+It wouldn't be possible to know A and X are relatives in the above
+example without them.
 */
 func SetIDToIntermediateIDs(resourceIDToData ResourceIDToData) ResourceIDToIntermediateIDs {
 	result := make(ResourceIDToIntermediateIDs)
@@ -396,6 +457,9 @@ const (
 
 type ResourceIDToState map[string]State
 
+/*
+TODO
+*/
 func SetIDToStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) ResourceIDToState {
 	result := make(ResourceIDToState)
 
@@ -419,6 +483,9 @@ func SetIDToStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) R
 	return result
 }
 
+/*
+TODO
+*/
 func IsResourceEqual(resource1, resource2 Resource) bool {
 	if resource1.Type != resource2.Type {
 		return false
@@ -434,6 +501,9 @@ func IsResourceEqual(resource1, resource2 Resource) bool {
 
 type ResourceIDsWithInDegreesOf []string
 
+/*
+TODO
+*/
 func SetIDsWithInDegreesOf(IDToInDegrees ResourceIDToInDegrees, degrees int) ResourceIDsWithInDegreesOf {
 	var result ResourceIDsWithInDegreesOf
 	for resourceID, inDegree := range IDToInDegrees {
@@ -541,6 +611,9 @@ type ResourceGraph struct {
 // 	return nil
 // }
 
+/*
+TODO
+*/
 func ValidateContainerSubdirContents(subdirPaths []string) error {
 	indexTsNamePattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.ts$`)
 	indexJsNamePattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.js$`)
