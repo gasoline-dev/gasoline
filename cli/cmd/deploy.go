@@ -117,21 +117,30 @@ var deployCmd = &cobra.Command{
 		}
 		helpers.PrettyPrint(resourcesUpJson)
 
-		resourceIDToStateMap := resources.SetIDToStateMap(resourcesUpJson, currResourceIDToData)
-		fmt.Println("resource id to state map")
-		helpers.PrettyPrint(resourceIDToStateMap)
+		resourceIDToState := resources.SetIDToStateMap(resourcesUpJson, currResourceIDToData)
+		fmt.Println("resource id to state")
+		helpers.PrettyPrint(resourceIDToState)
 
-		stateToResourceIDs := resources.SetStateToResourceIDs(resourceIDToStateMap)
+		stateToResourceIDs := resources.SetStateToResourceIDs(resourceIDToState)
 		fmt.Println("resource to resource IDs")
 		helpers.PrettyPrint(stateToResourceIDs)
 
-		groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceIDToGroup, resourceIDToStateMap)
+		groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceIDToGroup, resourceIDToState)
 		fmt.Println("groups with state changes")
 		helpers.PrettyPrint(groupsWithStateChanges)
 
 		groupsToResourceIDs := resources.SetGroupToResourceIDs(resourceIDToGroup)
 		fmt.Println("groups to resource IDs")
 		helpers.PrettyPrint(groupsToResourceIDs)
+
+		groupToDeployDepth := resources.SetGroupToDeployDepth(
+			resourceIDToDepth,
+			resourceIDToState,
+			groupsWithStateChanges,
+			groupsToResourceIDs,
+		)
+		fmt.Println("group to deploy depth")
+		helpers.PrettyPrint(groupToDeployDepth)
 
 		resourceIDToDeployState := setResourceIDToDeployState(resourcesUpJson, currResourceIDToData)
 		helpers.PrettyPrint(resourceIDToDeployState)

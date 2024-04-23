@@ -323,6 +323,40 @@ func SetIDToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependency
 	return result
 }
 
+type GroupToDeployDepth map[int]int
+
+func SetGroupToDeployDepth(resourceIDToDepth ResourceIDToDepth, resourceIDToState ResourceIDToState, groupsWithStateChanges GroupsWithStateChanges, groupToResourceIDs GroupToResourceIDs) GroupToDeployDepth {
+	result := make(GroupToDeployDepth)
+	for _, group := range groupsWithStateChanges {
+		deployDepth := 0
+		isFirstResourceToProcess := true
+		for _, resourceID := range groupToResourceIDs[group] {
+			// Unchanged resources aren't deployed, so its depth
+			// can't be the deploy depth.
+			if resourceIDToState[resourceID] == "UNCHANGED" {
+				continue
+			}
+
+			// If resource is first to make it this far set deploy
+			// depth so it can be used for comparison in future loops.
+			if isFirstResourceToProcess {
+				result[group] = resourceIDToDepth[resourceID]
+				deployDepth = resourceIDToDepth[resourceID]
+				isFirstResourceToProcess = false
+				continue
+			}
+
+			// Update deploy depth if resource's depth is less than
+			// the comparative deploy depth.
+			if resourceIDToDepth[resourceID] < deployDepth {
+				result[group] = resourceIDToDepth[resourceID]
+				deployDepth = resourceIDToDepth[resourceID]
+			}
+		}
+	}
+	return result
+}
+
 type GroupToDepthToResourceID map[int]map[int]string
 
 /*
@@ -748,10 +782,10 @@ type StateToResourceIDs = map[State][]string
 
 /*
 	{
-		Created: ["core:base:cloudflare-worker:12345"],
-		Deleted: ["..."],
-		Unchanged: ["..."],
-		Updated: ["..."]
+		CREATED: ["core:base:cloudflare-worker:12345"],
+		DELETED: ["..."],
+		UNCHANGED: ["..."],
+		UPDATED: ["..."]
 	}
 */
 func SetStateToResourceIDs(resourceIDToState ResourceIDToState) StateToResourceIDs {
