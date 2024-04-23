@@ -343,7 +343,7 @@ type ResourceIDToGroup map[string]int
 	{
 		"admin:base:cloudflare-worker:12345": 0,
 		"core:base:cloudflare-worker:12345": 1,
-		"core:base:cloudflare-kv:12345": 2,
+		"core:base:cloudflare-kv:12345": 1,
 	}
 
 A group is an int assigned to resource IDs that share
