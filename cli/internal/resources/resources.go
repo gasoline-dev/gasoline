@@ -695,6 +695,27 @@ type ResourceGraph struct {
 // 	return nil
 // }
 
+type StateToResourceIDs = map[State][]string
+
+/*
+	{
+		Created: ["core:base:cloudflare-worker:12345"],
+		Deleted: ["..."],
+		Unchanged: ["..."],
+		Updated: ["..."]
+	}
+*/
+func SetStateToResourceIDs(resourceIDToState ResourceIDToState) StateToResourceIDs {
+	result := make(StateToResourceIDs)
+	for resourceID, state := range resourceIDToState {
+		if _, exists := result[state]; !exists {
+			result[state] = make([]string, 0)
+		}
+		result[state] = append(result[state], resourceID)
+	}
+	return result
+}
+
 /*
 TODO
 */
