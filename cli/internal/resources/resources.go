@@ -236,6 +236,45 @@ func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResour
 	return result
 }
 
+type DepthToResourceID map[int][]string
+
+/*
+	{
+		0: ["core:base:cloudflare-worker:12345"],
+		1: ["core:base:cloudflare-kv:12345"]
+	}
+
+Depth is an int that describes how far down the graph
+a resource is.
+
+For example, given a graph of A->B, B->C, A has a depth
+of 0, B has a depth of 1, and C has a depth of 2.
+*/
+func SetDepthToResourceID(resourceIDs ResourceIDs, resourceIDToData ResourceIDToData, resourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf) DepthToResourceID {
+	result := make(DepthToResourceID)
+
+	numOfResourceIDsToProcess := len(resourceIDs)
+
+	depth := 0
+
+	for _, resourceIDWithInDegreesOfZero := range resourceIDsWithInDegreesOfZero {
+		result[depth] = append(result[depth], resourceIDWithInDegreesOfZero)
+		numOfResourceIDsToProcess--
+	}
+
+	for numOfResourceIDsToProcess > 0 {
+		for _, resourceIDAtDepth := range result[depth] {
+			for _, dependencyID := range resourceIDToData[resourceIDAtDepth].Dependencies {
+				result[depth+1] = append(result[depth+1], dependencyID)
+				numOfResourceIDsToProcess--
+			}
+		}
+		depth++
+	}
+
+	return result
+}
+
 type ResourceIDToInDegrees map[string]int
 
 /*
