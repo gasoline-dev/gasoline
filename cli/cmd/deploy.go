@@ -94,8 +94,6 @@ var deployCmd = &cobra.Command{
 		fmt.Println("group to depth to resource IDs")
 		helpers.PrettyPrint(groupToDepthToResourceIDs)
 
-		return
-
 		// TODO: json path can be configged?
 		// TODO: Or implement up -> driver -> local | gh in the config?
 		resourcesUpJsonPath := "gas.up.json"
