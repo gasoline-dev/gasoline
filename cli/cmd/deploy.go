@@ -225,87 +225,10 @@ var deployCmd = &cobra.Command{
 	},
 }
 
+/*
 func processResource(resourceID string, doneChan chan bool) {
 	fmt.Printf("Processing resource ID %s\n", resourceID)
 	time.Sleep(time.Second)
 	doneChan <- true
 }
-
-type DeployState string
-
-const (
-	CreatePending    DeployState = "CREATE_PENDING"
-	DeletePending    DeployState = "DELETE_PENDING"
-	UpdatePending    DeployState = "UPDATE_PENDING"
-	CreateInProgress DeployState = "CREATE_IN_PROGRESS"
-	DeleteInProgress DeployState = "DELETE_IN_PROGRESS"
-	UpdateInProgress DeployState = "UPDATE_IN_PROGRESS"
-	CreateFailed     DeployState = "CREATE_FAILED"
-	DeleteFailed     DeployState = "DELETE_FAILED"
-	UpdateFailed     DeployState = "UPDATE_FAILED"
-	CreateSuccess    DeployState = "CREATE_SUCCESS"
-	DeleteSuccess    DeployState = "DELETE_SUCCESS"
-	UpdateSuccess    DeployState = "UPDATE_SUCCESS"
-)
-
-type ResourceIDToDeployState = map[string]DeployState
-
-func setResourceIDToDeployState(upJson resources.ResourcesUpJson, resourceIDToData resources.ResourceIDToData) ResourceIDToDeployState {
-	result := make(ResourceIDToDeployState)
-
-	for upJsonResourceID := range upJson {
-		if _, exists := resourceIDToData[upJsonResourceID]; !exists {
-			result[upJsonResourceID] = DeletePending
-		}
-	}
-
-	for currResourceID, currResource := range resourceIDToData {
-		if _, exists := upJson[currResourceID]; !exists {
-			result[currResourceID] = CreatePending
-		} else {
-			upResource := upJson[currResourceID]
-			if !resources.IsResourceEqual(upResource, currResource) {
-				result[currResourceID] = UpdatePending
-			}
-		}
-	}
-
-	return result
-}
-
-// type ResourceIDToGraphLevelMap = map[string]int
-
-// func setResourceIDToGraphLevelMap(resourceGraph *resources.ResourceGraph) ResourceIDToGraphLevelMap {
-// 	result := make(ResourceIDToGraphLevelMap)
-
-// 	for level := 0; level < len(resourceGraph.LevelsMap); level++ {
-// 		for _, resourceID := range resourceGraph.LevelsMap[level] {
-// 			result[resourceID] = level
-// 		}
-// 	}
-
-// 	return result
-// }
-
-// func logResourcePreDeployStates(resourceGraph *resources.ResourceGraph, resourceToDeployStateMap ResourceToDeployStateMap) {
-// 	for level := 0; level < len(resourceGraph.LevelsMap); level++ {
-// 		for _, resource := range resourceGraph.LevelsMap[level] {
-// 			fmt.Printf("Level %d -> %s -> %s\n", level, resource, resourceToDeployStateMap[resource])
-// 		}
-// 	}
-// }
-
-func transitionResourceToDeployStateMapOnStart(resourceID string, resourceToDeployStateMap ResourceIDToDeployState) {
-	switch state := resourceToDeployStateMap[resourceID]; state {
-	case CreatePending:
-		resourceToDeployStateMap[resourceID] = CreateInProgress
-	case DeletePending:
-		resourceToDeployStateMap[resourceID] = DeleteInProgress
-	case UpdatePending:
-		resourceToDeployStateMap[resourceID] = UpdateInProgress
-	}
-}
-
-// func logResourceDeployState(resourceID string, resourceToDeployStateMap ResourceToDeployStateMap, resourceIDToGraphLevelMap ResourceIDToGraphLevelMap) {
-// 	fmt.Printf("Level %d -> %s -> %s\n", resourceIDToGraphLevelMap[resourceID], resourceID, resourceToDeployStateMap[resourceID])
-// }
+*/
