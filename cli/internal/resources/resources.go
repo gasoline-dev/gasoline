@@ -331,7 +331,7 @@ func SetGroupToDeployDepth(resourceIDToDepth ResourceIDToDepth, resourceIDToStat
 		deployDepth := 0
 		isFirstResourceToProcess := true
 		for _, resourceID := range groupToResourceIDs[group] {
-			// Unchanged resources aren't deployed, so its depth
+			// UNCHANGED resources aren't deployed, so its depth
 			// can't be the deploy depth.
 			if resourceIDToState[resourceID] == "UNCHANGED" {
 				continue
@@ -619,10 +619,10 @@ func walkDependencies(resourceID string, resourceIDToData ResourceIDToData, memo
 type State string
 
 const (
-	Created   State = "CREATED"
-	Deleted   State = "DELETED"
-	Unchanged State = "UNCHANGED"
-	Updated   State = "UPDATED"
+	CREATED   State = "CREATED"
+	DELETED   State = "DELETED"
+	UNCHANGED State = "UNCHANGED"
+	UPDATED   State = "UPDATED"
 )
 
 type ResourceIDToState map[string]State
@@ -635,19 +635,19 @@ func SetIDToStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) R
 
 	for upJsonResourceID := range upJson {
 		if _, exists := currResourceMap[upJsonResourceID]; !exists {
-			result[upJsonResourceID] = Deleted
+			result[upJsonResourceID] = DELETED
 		}
 	}
 
 	for currResourceID, currResource := range currResourceMap {
 		if _, exists := upJson[currResourceID]; !exists {
-			result[currResourceID] = Created
+			result[currResourceID] = CREATED
 		} else {
 			upResource := upJson[currResourceID]
 			if IsResourceEqual(upResource, currResource) {
-				result[currResourceID] = Unchanged
+				result[currResourceID] = UNCHANGED
 			} else {
-				result[currResourceID] = Updated
+				result[currResourceID] = UPDATED
 			}
 		}
 	}
@@ -685,7 +685,7 @@ func SetGroupsWithStateChanges(resourceIDToGroup ResourceIDToGroup, resourceIDTo
 	seenGroups := make(map[int]struct{})
 
 	for resourceID, state := range resourceIDToState {
-		if state != Unchanged {
+		if state != UNCHANGED {
 			group, exists := resourceIDToGroup[resourceID]
 			if exists {
 				if _, alreadyAdded := seenGroups[group]; !alreadyAdded {
