@@ -212,6 +212,30 @@ func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 	return result, nil
 }
 
+type HasResourceIDsToDeploy bool
+
+func HasIDsToDeploy(stateToResourceIDs StateToResourceIDs) HasResourceIDsToDeploy {
+	statesToDeploy := []State{"CREATED", "DELETED", "UPDATED"}
+	for _, state := range statesToDeploy {
+		if _, exists := stateToResourceIDs[state]; exists {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+Group 0 -> Depth 0 -> core:base:cloudflare-worker:12345
+*/
+func LogIDPreDeploymentStates(groupToDepthToResourceID GroupToDepthToResourceID, resourceIDToState ResourceIDToState) {
+	fmt.Println("# Pre-Deployment States:")
+	for group, depthToResourceID := range groupToDepthToResourceID {
+		for depth, resourceID := range depthToResourceID {
+			fmt.Printf("Group %d -> Depth %d -> %s -> %s\n", group, depth, resourceID, resourceIDToState[resourceID])
+		}
+	}
+}
+
 type ResourceDependencyIDs [][]string
 
 /*

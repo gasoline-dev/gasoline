@@ -125,6 +125,12 @@ var deployCmd = &cobra.Command{
 		fmt.Println("resource to resource IDs")
 		helpers.PrettyPrint(stateToResourceIDs)
 
+		hasResourceIDsToDeploy := resources.HasIDsToDeploy(stateToResourceIDs)
+		if !hasResourceIDsToDeploy {
+			fmt.Println("No resource changes to deploy")
+			return
+		}
+
 		groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceIDToGroup, resourceIDToState)
 		fmt.Println("groups with state changes")
 		helpers.PrettyPrint(groupsWithStateChanges)
@@ -146,27 +152,32 @@ var deployCmd = &cobra.Command{
 		fmt.Println("initial deploy state")
 		helpers.PrettyPrint(resourceIDToDeployState)
 
-		type ProcessResourceChan chan any
+		resources.LogIDPreDeploymentStates(groupToDepthToResourceID, resourceIDToState)
 
-		processResourceChan := make(ProcessResourceChan)
+		numOfGroupsToDeploy := len(groupsWithStateChanges)
 
-		processResource := func(processResourceChan ProcessResourceChan, resourceID string) {
-			fmt.Printf("processing resource: %s\n", resourceID)
+		numOfGroupsFinishedDeploying := 0
+		//numOfGroupsFinishedDeployingWithError := 0
+
+		type ProcessGroupChan chan any
+
+		processGroupChan := make(ProcessGroupChan)
+
+		processGroup := func(processGroupChan ProcessGroupChan, group int) {
+			fmt.Printf("processing group: %v\n", group)
 			time.Sleep(time.Second)
-			processResourceChan <- true
+			processGroupChan <- "hello"
 		}
 
-		for resourceID, deployState := range resourceIDToDeployState {
-			if resourceIDToInDegrees[resourceID] == 0 && deployState == "CREATE_PENDING" {
-				go processResource(processResourceChan, resourceID)
-			}
+		for _, group := range groupsWithStateChanges {
+			go processGroup(processGroupChan, group)
 		}
 
-		resourceCount := 0
-		for range processResourceChan {
-			fmt.Println("Resource processed")
-			resourceCount++
-			if resourceCount == 2 {
+		for msg := range processGroupChan {
+			numOfGroupsFinishedDeploying++
+			fmt.Println(msg)
+			if numOfGroupsToDeploy == numOfGroupsFinishedDeploying {
+				fmt.Println("FINISHED DEPLOYING")
 				break
 			}
 		}
