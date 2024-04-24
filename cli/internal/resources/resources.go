@@ -227,11 +227,13 @@ func HasIDsToDeploy(stateToResourceIDs StateToResourceIDs) HasResourceIDsToDeplo
 /*
 Group 0 -> Depth 0 -> core:base:cloudflare-worker:12345
 */
-func LogIDPreDeploymentStates(groupToDepthToResourceID GroupToDepthToResourceID, resourceIDToState ResourceIDToState) {
+func LogIDPreDeploymentStates(groupToDepthToResourceID GroupToDepthToResourceIDs, resourceIDToState ResourceIDToState) {
 	fmt.Println("# Pre-Deployment States:")
 	for group, depthToResourceID := range groupToDepthToResourceID {
-		for depth, resourceID := range depthToResourceID {
-			fmt.Printf("Group %d -> Depth %d -> %s -> %s\n", group, depth, resourceID, resourceIDToState[resourceID])
+		for depth, resourceIDs := range depthToResourceID {
+			for _, resourceID := range resourceIDs {
+				fmt.Printf("Group %d -> Depth %d -> %s -> %s\n", group, depth, resourceID, resourceIDToState[resourceID])
+			}
 		}
 	}
 }
@@ -381,26 +383,30 @@ func SetGroupToDeployDepth(resourceIDToDepth ResourceIDToDepth, resourceIDToStat
 	return result
 }
 
-type GroupToDepthToResourceID map[int]map[int]string
+type GroupToDepthToResourceIDs map[int]map[int][]string
 
 /*
 	{
 		0: {
-			0: "core:base:cloudflare-worker:12345",
-			1: "core:base:cloudflare-kv:12345"
+			0: ["core:base:cloudflare-worker:12345"],
+			1: ["core:base:cloudflare-kv:12345"]
 		},
 		1: {
-			0: "admin:base:cloudflare-worker:12345"
+			0: ["admin:base:cloudflare-worker:12345"]
 		}
 	}
 */
-func SetGroupToDepthToResourceID(resourceIDToGroup ResourceIDToGroup, resourceIDToDepth ResourceIDToDepth) GroupToDepthToResourceID {
-	result := make(GroupToDepthToResourceID)
+func SetGroupToDepthToResourceIDs(resourceIDToGroup ResourceIDToGroup, resourceIDToDepth ResourceIDToDepth) GroupToDepthToResourceIDs {
+	result := make(GroupToDepthToResourceIDs)
 	for resourceID, group := range resourceIDToGroup {
 		if _, exists := result[group]; !exists {
-			result[group] = make(map[int]string)
+			result[group] = make(map[int][]string)
 		}
-		result[group][resourceIDToDepth[resourceID]] = resourceID
+		depth := resourceIDToDepth[resourceID]
+		if _, exists := result[group][depth]; !exists {
+			result[group][depth] = make([]string, 0)
+		}
+		result[group][depth] = append(result[group][depth], resourceID)
 	}
 	return result
 }

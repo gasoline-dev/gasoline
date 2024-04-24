@@ -90,9 +90,11 @@ var deployCmd = &cobra.Command{
 		fmt.Println("resource ID to depth")
 		helpers.PrettyPrint(resourceIDToDepth)
 
-		groupToDepthToResourceID := resources.SetGroupToDepthToResourceID(resourceIDToGroup, resourceIDToDepth)
-		fmt.Println("group to depth to resource ID")
-		helpers.PrettyPrint(groupToDepthToResourceID)
+		groupToDepthToResourceIDs := resources.SetGroupToDepthToResourceIDs(resourceIDToGroup, resourceIDToDepth)
+		fmt.Println("group to depth to resource IDs")
+		helpers.PrettyPrint(groupToDepthToResourceIDs)
+
+		return
 
 		// TODO: json path can be configged?
 		// TODO: Or implement up -> driver -> local | gh in the config?
@@ -152,21 +154,50 @@ var deployCmd = &cobra.Command{
 		fmt.Println("initial deploy state")
 		helpers.PrettyPrint(resourceIDToDeployState)
 
-		resources.LogIDPreDeploymentStates(groupToDepthToResourceID, resourceIDToState)
+		resources.LogIDPreDeploymentStates(groupToDepthToResourceIDs, resourceIDToState)
 
 		numOfGroupsToDeploy := len(groupsWithStateChanges)
 
 		numOfGroupsFinishedDeploying := 0
 		//numOfGroupsFinishedDeployingWithError := 0
 
+		type ProcessResourceChan chan bool
+
+		processResourceChan := make(ProcessResourceChan)
+
+		processResource := func(processResourceChan ProcessResourceChan, resourceID string) {
+			fmt.Printf("Processing resource ID %s\n", resourceID)
+			time.Sleep(time.Second)
+			processResourceChan <- true
+		}
+
 		type ProcessGroupChan chan any
 
 		processGroupChan := make(ProcessGroupChan)
 
 		processGroup := func(processGroupChan ProcessGroupChan, group int) {
-			fmt.Printf("processing group: %v\n", group)
-			time.Sleep(time.Second)
-			processGroupChan <- "hello"
+			initialGroupDeployDepth := groupToDeployDepth[group]
+
+			initialGroupResourceIDsToDeploy := groupToDepthToResourceIDs[group][initialGroupDeployDepth]
+
+			for _, resourceID := range initialGroupResourceIDsToDeploy {
+				go processResource(processResourceChan, resourceID)
+			}
+
+			for msg := range processResourceChan {
+				//processGroupChan <- "hello"
+				if msg {
+					fmt.Println("Deployed resource")
+					processGroupChan <- "hello"
+					break
+				}
+			}
+
+			/*
+				fmt.Printf("processing group: %v\n", group)
+					time.Sleep(time.Second)
+					processGroupChan <- "hello"
+			*/
 		}
 
 		for _, group := range groupsWithStateChanges {
@@ -235,11 +266,3 @@ var deployCmd = &cobra.Command{
 		*/
 	},
 }
-
-/*
-func processResource(resourceID string, doneChan chan bool) {
-	fmt.Printf("Processing resource ID %s\n", resourceID)
-	time.Sleep(time.Second)
-	doneChan <- true
-}
-*/
