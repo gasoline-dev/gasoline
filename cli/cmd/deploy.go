@@ -142,7 +142,8 @@ var deployCmd = &cobra.Command{
 		fmt.Println("group to deploy depth")
 		helpers.PrettyPrint(groupToDeployDepth)
 
-		resourceIDToDeployState := setResourceIDToDeployState(resourcesUpJson, currResourceIDToData)
+		resourceIDToDeployState := resources.SetResourceIDToDeployStateOfPending(resourceIDToState)
+		fmt.Println("initial deploy state")
 		helpers.PrettyPrint(resourceIDToDeployState)
 
 		type ProcessResourceChan chan any

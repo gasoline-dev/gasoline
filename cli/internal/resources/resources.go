@@ -455,6 +455,39 @@ func SetIDs(resourceIDToData ResourceIDToData) ResourceIDs {
 	return result
 }
 
+type ResourceIDToDeployState map[string]DeployState
+
+type DeployState string
+
+const (
+	CANCELED           DeployState = "CANCELED"
+	CREATE_COMPLETE    DeployState = "CREATE_COMPLETE"
+	CREATE_FAILED      DeployState = "CREATE_FAILED"
+	CREATE_IN_PROGRESS DeployState = "CREATE_IN_PROGRESS"
+	DELETE_COMPLETE    DeployState = "DELETE_COMPLETE"
+	DELETE_FAILED      DeployState = "DEPLOY_FAILED"
+	DELETE_IN_PROGRESS DeployState = "DELETE_IN_PROGRESS"
+	PENDING            DeployState = "PENDING"
+	UPDATE_COMPLETE    DeployState = "UPDATE_COMPLETE"
+	UPDATE_FAILED      DeployState = "UPDATE_FAILED"
+	UPDATE_IN_PROGRESS DeployState = "UPDATE_IN_PROGRESS"
+)
+
+/*
+	{
+		"core:base:cloudflare-worker:12345": "PENDING",
+	}
+*/
+func SetResourceIDToDeployStateOfPending(resourceIDToState ResourceIDToState) ResourceIDToDeployState {
+	result := make(ResourceIDToDeployState)
+	for resourceID, deployState := range resourceIDToState {
+		if deployState != "UNCHANGED" {
+			result[resourceID] = "PENDING"
+		}
+	}
+	return result
+}
+
 type ResourceIDToDepth map[string]int
 
 /*
