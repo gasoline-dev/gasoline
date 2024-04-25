@@ -747,6 +747,18 @@ func SetIDsWithInDegreesOf(IDToInDegrees ResourceIDToInDegrees, degrees int) Res
 	return result
 }
 
+type NumInGroupToDeploy int
+
+func SetNumInGroupToDeploy(groupToResourceIDs GroupToResourceIDs, resourceIDToState ResourceIDToState, group int) NumInGroupToDeploy {
+	result := NumInGroupToDeploy(0)
+	for _, resourceID := range groupToResourceIDs[group] {
+		if resourceIDToState[resourceID] != UNCHANGED {
+			result++
+		}
+	}
+	return result
+}
+
 type StateToResourceIDs = map[State][]string
 
 /*

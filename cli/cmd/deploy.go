@@ -159,17 +159,27 @@ var deployCmd = &cobra.Command{
 		numOfGroupsFinishedDeploying := 0
 		//numOfGroupsFinishedDeployingWithError := 0
 
-		type ProcessResourceChan chan bool
+		type ProcessResourceChanMsg bool
+
+		/*
+			const (
+				PROCESS_RESOURCE_MSG_OK  ProcessResourceChanMsg = "OK"
+				PROCESS_RESOURCE_MSG_ERR ProcessResourceChanMsg = "ERR"
+			)
+		*/
+
+		type ProcessResourceChan chan ProcessResourceChanMsg
 
 		processResourceChan := make(ProcessResourceChan)
 
 		processResource := func(processResourceChan ProcessResourceChan, resourceID string) {
 			fmt.Printf("Processing resource ID %s\n", resourceID)
 			time.Sleep(time.Second)
+			fmt.Printf("Processed resource ID %s\n", resourceID)
 			processResourceChan <- true
 		}
 
-		type ProcessGroupChan chan any
+		type ProcessGroupChan chan bool
 
 		processGroupChan := make(ProcessGroupChan)
 
@@ -182,13 +192,44 @@ var deployCmd = &cobra.Command{
 				go processResource(processResourceChan, resourceID)
 			}
 
-			for msg := range processResourceChan {
-				//processGroupChan <- "hello"
-				if msg {
-					fmt.Println("Deployed resource")
-					processGroupChan <- "hello"
-					break
+			numOfResourcesInGroupToDeploy := resources.SetNumInGroupToDeploy(
+				groupsToResourceIDs,
+				resourceIDToState,
+				group,
+			)
+
+			numOfResourcesDeployedOk := 0
+			numOfResourcesDeployedErr := 0
+			numOfResourcesDeployedCanceled := 0
+
+			for resourceDeployedOk := range processResourceChan {
+				if resourceDeployedOk {
+					numOfResourcesDeployedOk++
+					// loop over other resources if no r with deploy err
+				} else {
+					numOfResourcesDeployedErr++
+					// if canceled num == 0 then cancel pending r's.
+					// pendingResourceIDsCanceled := cancel()
+					numOfResourcesDeployedCanceled++
 				}
+
+				if numOfResourcesDeployedOk+numOfResourcesDeployedErr+numOfResourcesDeployedCanceled == int(numOfResourcesInGroupToDeploy) {
+					if numOfResourcesDeployedErr > 0 {
+						processGroupChan <- false
+					} else {
+						processGroupChan <- true
+					}
+					return
+				}
+
+				// processGroupChan <- "hello"
+				/*
+					if msg {
+						fmt.Println("Deployed resource")
+						processGroupChan <- "hello"
+						break
+					}
+				*/
 			}
 
 			/*
