@@ -227,7 +227,16 @@ var deployCmd = &cobra.Command{
 			go deployGroup(deployGroupOkChan, group)
 		}
 
+		// numOfGroupsDeployedOk := 0
+		// numOfGroupsDeployedErr := 0
+
 		for groupDeployedOk := range deployGroupOkChan {
+			// if numOfGroupsDeployedOk++
+			// else numOfGroupsDeployedErr++
+			// numOfGroupsFinishedDeploying := ...
+			// if num finished == to deploy
+			// if err > 0, os exit 1 return else
+			// os exit 0.
 			numOfGroupsFinishedDeploying++
 			fmt.Println(groupDeployedOk)
 			if numOfGroupsToDeploy == numOfGroupsFinishedDeploying {
