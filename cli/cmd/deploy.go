@@ -53,11 +53,11 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		currResourcePackageJsonNameToBool := resources.SetPackageJsonNameToTrue(currResourcePackageJsons)
+		currResourcePackageJsonNameToTrue := resources.SetPackageJsonNameToTrue(currResourcePackageJsons)
 
 		currResourcePackageJsonNameToID := resources.SetPackageJsonNameToID(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
 
-		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonNameToID, currResourcePackageJsonNameToBool)
+		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonNameToID, currResourcePackageJsonNameToTrue)
 
 		currResourceIDToData := resources.SetIDToData(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
 
@@ -157,14 +157,6 @@ var deployCmd = &cobra.Command{
 		numOfGroupsToDeploy := len(groupsWithStateChanges)
 
 		numOfGroupsFinishedDeploying := 0
-		//numOfGroupsFinishedDeployingWithError := 0
-
-		/*
-			const (
-				PROCESS_RESOURCE_MSG_OK  ProcessResourceChanMsg = "OK"
-				PROCESS_RESOURCE_MSG_ERR ProcessResourceChanMsg = "ERR"
-			)
-		*/
 
 		type DeployResourceOkChan chan bool
 
@@ -227,34 +219,6 @@ var deployCmd = &cobra.Command{
 					// on a currently deploy resource
 					// if not, then deploy it
 				}
-
-				/*
-					if resourceDeployedOk {
-						numOfResourcesDeployedOk++
-						// loop over other resources if no r with deploy err
-						if numOfResourcesDeployedErr == 0 {
-							// loop over group resources
-							// if a resource has a state of PENDING
-							// then check if that resource is dependent
-							// on a currently deploy resource
-							// if not, then deploy it
-						}
-					} else {
-						numOfResourcesDeployedErr++
-						// if canceled num == 0 then cancel pending r's.
-						// pendingResourceIDsCanceled := cancel()
-						numOfResourcesDeployedCanceled++
-					}
-
-					if numOfResourcesDeployedOk+numOfResourcesDeployedErr+numOfResourcesDeployedCanceled == int(numOfResourcesInGroupToDeploy) {
-						if numOfResourcesDeployedErr > 0 {
-							processGroupChan <- false
-						} else {
-							processGroupChan <- true
-						}
-						return
-					}
-				*/
 			}
 		}
 
@@ -262,9 +226,9 @@ var deployCmd = &cobra.Command{
 			go deployGroup(deployGroupOkChan, group)
 		}
 
-		for msg := range deployGroupOkChan {
+		for groupDeployedOk := range deployGroupOkChan {
 			numOfGroupsFinishedDeploying++
-			fmt.Println(msg)
+			fmt.Println(groupDeployedOk)
 			if numOfGroupsToDeploy == numOfGroupsFinishedDeploying {
 				fmt.Println("FINISHED DEPLOYING")
 				break
@@ -287,40 +251,6 @@ var deployCmd = &cobra.Command{
 			}
 			// Print user details
 			fmt.Println(u)
-		*/
-		/*
-			resourceToDeployStateMap := setDeployStateMap(resourcesUpJson, currResourceMap)
-
-			resourceIDToGraphLevelMap := setResourceIDToGraphLevelMap(resourceGraph)
-
-			logResourcePreDeployStates(resourceGraph, resourceToDeployStateMap)
-
-			resourceToDoneChannelMap := make(map[string]chan bool)
-			for _, resources := range resourceGraph.LevelsMap {
-				for _, resource := range resources {
-					resourceToDoneChannelMap[resource] = make(chan bool)
-				}
-			}
-
-			for _, resourceID := range resourceGraph.LevelsMap[0] {
-				transitionResourceToDeployStateMapOnStart(resourceID, resourceToDeployStateMap)
-				logResourceDeployState(resourceID, resourceToDeployStateMap, resourceIDToGraphLevelMap)
-				go processResource(resourceID, resourceToDoneChannelMap[resourceID])
-			}
-
-			for level := 0; level < len(resourceGraph.LevelsMap); level++ {
-				for _, resource := range resourceGraph.LevelsMap[level] {
-					<-resourceToDoneChannelMap[resource]
-					fmt.Printf("Resource %s completed\n", resource)
-					if level+1 < len(resourceGraph.LevelsMap) {
-						for _, nextResourceID := range resourceGraph.LevelsMap[level+1] {
-							transitionResourceToDeployStateMapOnStart(nextResourceID, resourceToDeployStateMap)
-							logResourceDeployState(nextResourceID, resourceToDeployStateMap, resourceIDToGraphLevelMap)
-							go processResource(nextResourceID, resourceToDoneChannelMap[nextResourceID])
-						}
-					}
-				}
-			}
 		*/
 	},
 }
