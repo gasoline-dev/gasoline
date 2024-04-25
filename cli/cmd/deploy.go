@@ -163,6 +163,23 @@ var deployCmd = &cobra.Command{
 		deployResourceOkChan := make(DeployResourceOkChan)
 
 		deployResource := func(deployResourceOkChan DeployResourceOkChan, resourceID string) {
+			// transitionNodeDeployStateOnStart(node)
+			/*
+function transitionNodeDeployStateOnStart(node: string) {
+		switch (nodeToStateMap[node]) {
+			case 'CREATED':
+			case 'REPLACEMENT':
+				nodeToDeployStateMap[node] = 'CREATE_IN_PROGRESS';
+				break;
+			case 'DELETED':
+				nodeToDeployStateMap[node] = 'DELETE_IN_PROGRESS';
+				break;
+			case 'UPDATED':
+				nodeToDeployStateMap[node] = 'UPDATE_IN_PROGRESS';
+				break;
+		}
+	}
+	    */
 			fmt.Printf("Processing resource ID %s\n", resourceID)
 			time.Sleep(time.Second)
 			fmt.Printf("Processed resource ID %s\n", resourceID)
