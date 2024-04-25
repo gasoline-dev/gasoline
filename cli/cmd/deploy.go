@@ -159,8 +159,6 @@ var deployCmd = &cobra.Command{
 		numOfGroupsFinishedDeploying := 0
 		//numOfGroupsFinishedDeployingWithError := 0
 
-		type ProcessResourceChanMsg bool
-
 		/*
 			const (
 				PROCESS_RESOURCE_MSG_OK  ProcessResourceChanMsg = "OK"
@@ -168,28 +166,28 @@ var deployCmd = &cobra.Command{
 			)
 		*/
 
-		type ProcessResourceChan chan ProcessResourceChanMsg
+		type DeployResourceOkChan chan bool
 
-		processResourceChan := make(ProcessResourceChan)
+		deployResourceOkChan := make(DeployResourceOkChan)
 
-		processResource := func(processResourceChan ProcessResourceChan, resourceID string) {
+		deployResource := func(deployResourceOkChan DeployResourceOkChan, resourceID string) {
 			fmt.Printf("Processing resource ID %s\n", resourceID)
 			time.Sleep(time.Second)
 			fmt.Printf("Processed resource ID %s\n", resourceID)
-			processResourceChan <- true
+			deployResourceOkChan <- true
 		}
 
-		type ProcessGroupChan chan bool
+		type DeployGroupOkChan chan bool
 
-		processGroupChan := make(ProcessGroupChan)
+		deployGroupOkChan := make(DeployGroupOkChan)
 
-		processGroup := func(processGroupChan ProcessGroupChan, group int) {
+		deployGroup := func(deployGroupOkChan DeployGroupOkChan, group int) {
 			highestGroupDeployDepth := groupToHighestDeployDepth[group]
 
 			initialGroupResourceIDsToDeploy := groupToDepthToResourceIDs[group][highestGroupDeployDepth]
 
 			for _, resourceID := range initialGroupResourceIDsToDeploy {
-				go processResource(processResourceChan, resourceID)
+				go deployResource(deployResourceOkChan, resourceID)
 			}
 
 			numOfResourcesInGroupToDeploy := resources.SetNumInGroupToDeploy(
@@ -202,10 +200,9 @@ var deployCmd = &cobra.Command{
 			numOfResourcesDeployedErr := 0
 			numOfResourcesDeployedCanceled := 0
 
-			for resourceDeployedOk := range processResourceChan {
+			for resourceDeployedOk := range deployResourceOkChan {
 				if resourceDeployedOk {
 					numOfResourcesDeployedOk++
-					// loop over other resources if no r with deploy err
 				} else {
 					numOfResourcesDeployedErr++
 					// if canceled num == 0 then cancel pending r's.
@@ -213,37 +210,59 @@ var deployCmd = &cobra.Command{
 					numOfResourcesDeployedCanceled++
 				}
 
-				if numOfResourcesDeployedOk+numOfResourcesDeployedErr+numOfResourcesDeployedCanceled == int(numOfResourcesInGroupToDeploy) {
-					if numOfResourcesDeployedErr > 0 {
-						processGroupChan <- false
+				numOfResourcesInFinalDeployState := numOfResourcesDeployedOk + numOfResourcesDeployedErr + numOfResourcesDeployedCanceled
+
+				if numOfResourcesInFinalDeployState == int(numOfResourcesInGroupToDeploy) {
+					if numOfResourcesDeployedErr == 0 {
+						deployGroupOkChan <- true
 					} else {
-						processGroupChan <- true
+						deployGroupOkChan <- false
 					}
 					return
+				} else {
+					// keep deploying
+					// loop over group resources
+					// if a resource has a state of PENDING
+					// then check if that resource is dependent
+					// on a currently deploy resource
+					// if not, then deploy it
 				}
 
-				// processGroupChan <- "hello"
 				/*
-					if msg {
-						fmt.Println("Deployed resource")
-						processGroupChan <- "hello"
-						break
+					if resourceDeployedOk {
+						numOfResourcesDeployedOk++
+						// loop over other resources if no r with deploy err
+						if numOfResourcesDeployedErr == 0 {
+							// loop over group resources
+							// if a resource has a state of PENDING
+							// then check if that resource is dependent
+							// on a currently deploy resource
+							// if not, then deploy it
+						}
+					} else {
+						numOfResourcesDeployedErr++
+						// if canceled num == 0 then cancel pending r's.
+						// pendingResourceIDsCanceled := cancel()
+						numOfResourcesDeployedCanceled++
+					}
+
+					if numOfResourcesDeployedOk+numOfResourcesDeployedErr+numOfResourcesDeployedCanceled == int(numOfResourcesInGroupToDeploy) {
+						if numOfResourcesDeployedErr > 0 {
+							processGroupChan <- false
+						} else {
+							processGroupChan <- true
+						}
+						return
 					}
 				*/
 			}
-
-			/*
-				fmt.Printf("processing group: %v\n", group)
-					time.Sleep(time.Second)
-					processGroupChan <- "hello"
-			*/
 		}
 
 		for _, group := range groupsWithStateChanges {
-			go processGroup(processGroupChan, group)
+			go deployGroup(deployGroupOkChan, group)
 		}
 
-		for msg := range processGroupChan {
+		for msg := range deployGroupOkChan {
 			numOfGroupsFinishedDeploying++
 			fmt.Println(msg)
 			if numOfGroupsToDeploy == numOfGroupsFinishedDeploying {
