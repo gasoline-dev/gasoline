@@ -216,7 +216,8 @@ var deployCmd = &cobra.Command{
 					// loop over group resources
 					// if a resource has a state of PENDING
 					// then check if that resource is dependent
-					// on a currently deploy resource
+					// on a currently deploying resource
+					// or one that is pending or one that failed.
 					// if not, then deploy it
 				}
 			}
