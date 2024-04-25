@@ -349,10 +349,13 @@ func SetIDToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependency
 	return result
 }
 
-type GroupToDeployDepth map[int]int
+type GroupToHighestDeployDepth map[int]int
 
-func SetGroupToDeployDepth(resourceIDToDepth ResourceIDToDepth, resourceIDToState ResourceIDToState, groupsWithStateChanges GroupsWithStateChanges, groupToResourceIDs GroupToResourceIDs) GroupToDeployDepth {
-	result := make(GroupToDeployDepth)
+/*
+TODO
+*/
+func SetGroupToHighestDeployDepth(resourceIDToDepth ResourceIDToDepth, resourceIDToState ResourceIDToState, groupsWithStateChanges GroupsWithStateChanges, groupToResourceIDs GroupToResourceIDs) GroupToHighestDeployDepth {
+	result := make(GroupToHighestDeployDepth)
 	for _, group := range groupsWithStateChanges {
 		deployDepth := 0
 		isFirstResourceToProcess := true

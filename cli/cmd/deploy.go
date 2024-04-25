@@ -139,14 +139,14 @@ var deployCmd = &cobra.Command{
 		fmt.Println("groups to resource IDs")
 		helpers.PrettyPrint(groupsToResourceIDs)
 
-		groupToDeployDepth := resources.SetGroupToDeployDepth(
+		groupToHighestDeployDepth := resources.SetGroupToHighestDeployDepth(
 			resourceIDToDepth,
 			resourceIDToState,
 			groupsWithStateChanges,
 			groupsToResourceIDs,
 		)
 		fmt.Println("group to deploy depth")
-		helpers.PrettyPrint(groupToDeployDepth)
+		helpers.PrettyPrint(groupToHighestDeployDepth)
 
 		resourceIDToDeployState := resources.SetResourceIDToDeployStateOfPending(resourceIDToState)
 		fmt.Println("initial deploy state")
@@ -174,9 +174,9 @@ var deployCmd = &cobra.Command{
 		processGroupChan := make(ProcessGroupChan)
 
 		processGroup := func(processGroupChan ProcessGroupChan, group int) {
-			initialGroupDeployDepth := groupToDeployDepth[group]
+			highestGroupDeployDepth := groupToHighestDeployDepth[group]
 
-			initialGroupResourceIDsToDeploy := groupToDepthToResourceIDs[group][initialGroupDeployDepth]
+			initialGroupResourceIDsToDeploy := groupToDepthToResourceIDs[group][highestGroupDeployDepth]
 
 			for _, resourceID := range initialGroupResourceIDsToDeploy {
 				go processResource(processResourceChan, resourceID)
