@@ -179,6 +179,56 @@ function transitionNodeDeployStateOnStart(node: string) {
 				break;
 		}
 	}
+
+ nodeToTimeStartedAtMap[node] = Date.now();
+
+								logNodeDeployState({
+									depth,
+									group,
+									node,
+									timestamp: nodeToTimeStartedAtMap[node],
+								});
+
+		function logNodeDeployState({
+		depth,
+		group,
+		node,
+		timestamp,
+	}: {
+		depth: string;
+		group: string;
+		node: string;
+		timestamp: number;
+	}) {
+		const date: Date = new Date(timestamp);
+		const hours: string = date.getHours().toString().padStart(2, '0');
+		const minutes: string = date.getMinutes().toString().padStart(2, '0');
+		const seconds: string = date.getSeconds().toString().padStart(2, '0');
+		const formattedTime = `${hours}:${minutes}:${seconds}`;
+
+		console.log(
+			'[' +
+				formattedTime +
+				']' +
+				' ' +
+				'Group' +
+				' ' +
+				group +
+				' ' +
+				'->' +
+				' ' +
+				'Depth' +
+				' ' +
+				depth +
+				' ' +
+				'->' +
+				' ' +
+				node +
+				' ' +
+				nodeToDeployStateMap[node]
+		);
+	}
+
 	    */
 			fmt.Printf("Processing resource ID %s\n", resourceID)
 			time.Sleep(time.Second)
@@ -238,10 +288,51 @@ SetInitialIDsToDeploy
 			for resourceDeployedOk := range deployResourceOkChan {
 				if resourceDeployedOk {
 					numOfResourcesDeployedOk++
+
+					/*
+		 transitionNodeDeployStateOnOk(node);
+
+										nodeToTimeEndedAtMap[node] = Date.now();
+
+										logNodeDeployState({
+											depth,
+											group,
+											node,
+											timestamp: nodeToTimeEndedAtMap[node],
+										});
+	        */
 				} else {
 					numOfResourcesDeployedErr++
 					// if canceled num == 0 then cancel pending r's.
 					// pendingResourceIDsCanceled := cancel()
+					/*
+transitionNodeDeployStateOnErr(node);
+
+										logNodeDeployState({
+											depth: nodeToDepthMap[node] as string,
+											group,
+											node,
+											timestamp: Date.now(),
+										});
+
+										cancelPendingNodes(
+											group,
+											groupToNodesMap,
+											nodeToDeployStateMap
+										);
+
+		 function cancelPendingNodes(
+		group: string,
+		groupToNodesMap: GroupToNodesMap,
+		nodeToDeployStateMap: NodeToDeployStateMap
+	): void {
+		for (const node of groupToNodesMap[group]) {
+			if (nodeToDeployStateMap[node] === 'PENDING') {
+				nodeToDeployStateMap[node] = 'CANCELED';
+			}
+		}
+	}
+	        */
 					numOfResourcesDeployedCanceled++
 				}
 
@@ -262,6 +353,28 @@ SetInitialIDsToDeploy
 					// on a currently deploying resource
 					// or one that is pending or one that failed.
 					// if not, then deploy it
+					/*
+function isNodeDirectlyDependentOnActivelyDeployingNode(
+		node: string,
+		nodeToDirectDependenciesMap: NodeToDirectDependenciesMap,
+		nodeToDeployStateMap: NodeToDeployStateMap
+	): boolean {
+		let result = false;
+		for (const nodeToCheck of nodeToDirectDependenciesMap[node]) {
+			const activeStates = [
+				'CREATE_IN_PROGRESS',
+				'DELETE_IN_PROGRESS',
+				'PENDING',
+				'UPDATE_IN_PROGRESS',
+			];
+			if (activeStates.includes(nodeToDeployStateMap[nodeToCheck])) {
+				result = true;
+				break;
+			}
+		}
+		return result;
+	}
+	        */
 				}
 			}
 		}
