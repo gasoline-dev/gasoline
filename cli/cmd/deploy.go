@@ -172,7 +172,7 @@ var deployCmd = &cobra.Command{
 			time.Sleep(time.Second)
 
 			// TODO: Everything below is for state OK -> Add if-else
-			// to handle on err.
+			// to handle on err -> UpdateResourceIDToDeployStateOnErr
 
 			resources.UpdateResourceIDToDeployStateOnOk(
 				resourceIDToDeployState,

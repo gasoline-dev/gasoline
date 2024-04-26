@@ -854,19 +854,14 @@ func UpdateIDToDeployStateOfPending(resourceIDToState ResourceIDToState) Resourc
 	return result
 }
 
-/*
-	{
-		"core:base:cloudflare-worker:12345": "CREATE_IN_PROGRESS"
-	}
-*/
-func UpdateIDToDeployStateOnStart(resourceIDToDeployState ResourceIDToDeployState, resourceIDToState ResourceIDToState, resourceID string) {
-	switch resourceIDToState[resourceID] {
-	case State(CREATED):
-		resourceIDToDeployState[resourceID] = DeployState(CREATE_IN_PROGRESS)
-	case State(DELETED):
-		resourceIDToDeployState[resourceID] = DeployState(DELETE_IN_PROGRESS)
-	case State(UPDATED):
-		resourceIDToDeployState[resourceID] = DeployState(UPDATE_IN_PROGRESS)
+func UpdateResourceIDToDeployStateOnErr(resourceIDToDeployState ResourceIDToDeployState, resourceID string) {
+	switch resourceIDToDeployState[resourceID] {
+	case DeployState(CREATE_IN_PROGRESS):
+		resourceIDToDeployState[resourceID] = DeployState(CREATE_FAILED)
+	case DeployState(DELETE_IN_PROGRESS):
+		resourceIDToDeployState[resourceID] = DeployState(DELETE_FAILED)
+	case DeployState(UPDATE_IN_PROGRESS):
+		resourceIDToDeployState[resourceID] = DeployState(UPDATE_FAILED)
 	}
 }
 
@@ -883,6 +878,22 @@ func UpdateResourceIDToDeployStateOnOk(resourceIDToDeployState ResourceIDToDeplo
 		resourceIDToDeployState[resourceID] = DeployState(DELETE_COMPLETE)
 	case DeployState(UPDATE_IN_PROGRESS):
 		resourceIDToDeployState[resourceID] = DeployState(UPDATE_COMPLETE)
+	}
+}
+
+/*
+	{
+		"core:base:cloudflare-worker:12345": "CREATE_IN_PROGRESS"
+	}
+*/
+func UpdateIDToDeployStateOnStart(resourceIDToDeployState ResourceIDToDeployState, resourceIDToState ResourceIDToState, resourceID string) {
+	switch resourceIDToState[resourceID] {
+	case State(CREATED):
+		resourceIDToDeployState[resourceID] = DeployState(CREATE_IN_PROGRESS)
+	case State(DELETED):
+		resourceIDToDeployState[resourceID] = DeployState(DELETE_IN_PROGRESS)
+	case State(UPDATED):
+		resourceIDToDeployState[resourceID] = DeployState(UPDATE_IN_PROGRESS)
 	}
 }
 
