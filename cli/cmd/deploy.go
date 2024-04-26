@@ -148,7 +148,7 @@ var deployCmd = &cobra.Command{
 		fmt.Println("group to deploy depth")
 		helpers.PrettyPrint(groupToHighestDeployDepth)
 
-		resourceIDToDeployState := resources.SetResourceIDToDeployStateOfPending(resourceIDToState)
+		resourceIDToDeployState := resources.SetIDToDeployStateOfPending(resourceIDToState)
 		fmt.Println("initial deploy state")
 		helpers.PrettyPrint(resourceIDToDeployState)
 
@@ -165,71 +165,71 @@ var deployCmd = &cobra.Command{
 		deployResource := func(deployResourceOkChan DeployResourceOkChan, resourceID string) {
 			// transitionNodeDeployStateOnStart(node)
 			/*
-function transitionNodeDeployStateOnStart(node: string) {
-		switch (nodeToStateMap[node]) {
-			case 'CREATED':
-			case 'REPLACEMENT':
-				nodeToDeployStateMap[node] = 'CREATE_IN_PROGRESS';
-				break;
-			case 'DELETED':
-				nodeToDeployStateMap[node] = 'DELETE_IN_PROGRESS';
-				break;
-			case 'UPDATED':
-				nodeToDeployStateMap[node] = 'UPDATE_IN_PROGRESS';
-				break;
-		}
-	}
+				function transitionNodeDeployStateOnStart(node: string) {
+						switch (nodeToStateMap[node]) {
+							case 'CREATED':
+							case 'REPLACEMENT':
+								nodeToDeployStateMap[node] = 'CREATE_IN_PROGRESS';
+								break;
+							case 'DELETED':
+								nodeToDeployStateMap[node] = 'DELETE_IN_PROGRESS';
+								break;
+							case 'UPDATED':
+								nodeToDeployStateMap[node] = 'UPDATE_IN_PROGRESS';
+								break;
+						}
+					}
 
- nodeToTimeStartedAtMap[node] = Date.now();
+				 nodeToTimeStartedAtMap[node] = Date.now();
 
-								logNodeDeployState({
-									depth,
-									group,
-									node,
-									timestamp: nodeToTimeStartedAtMap[node],
-								});
+												logNodeDeployState({
+													depth,
+													group,
+													node,
+													timestamp: nodeToTimeStartedAtMap[node],
+												});
 
-		function logNodeDeployState({
-		depth,
-		group,
-		node,
-		timestamp,
-	}: {
-		depth: string;
-		group: string;
-		node: string;
-		timestamp: number;
-	}) {
-		const date: Date = new Date(timestamp);
-		const hours: string = date.getHours().toString().padStart(2, '0');
-		const minutes: string = date.getMinutes().toString().padStart(2, '0');
-		const seconds: string = date.getSeconds().toString().padStart(2, '0');
-		const formattedTime = `${hours}:${minutes}:${seconds}`;
+						function logNodeDeployState({
+						depth,
+						group,
+						node,
+						timestamp,
+					}: {
+						depth: string;
+						group: string;
+						node: string;
+						timestamp: number;
+					}) {
+						const date: Date = new Date(timestamp);
+						const hours: string = date.getHours().toString().padStart(2, '0');
+						const minutes: string = date.getMinutes().toString().padStart(2, '0');
+						const seconds: string = date.getSeconds().toString().padStart(2, '0');
+						const formattedTime = `${hours}:${minutes}:${seconds}`;
 
-		console.log(
-			'[' +
-				formattedTime +
-				']' +
-				' ' +
-				'Group' +
-				' ' +
-				group +
-				' ' +
-				'->' +
-				' ' +
-				'Depth' +
-				' ' +
-				depth +
-				' ' +
-				'->' +
-				' ' +
-				node +
-				' ' +
-				nodeToDeployStateMap[node]
-		);
-	}
+						console.log(
+							'[' +
+								formattedTime +
+								']' +
+								' ' +
+								'Group' +
+								' ' +
+								group +
+								' ' +
+								'->' +
+								' ' +
+								'Depth' +
+								' ' +
+								depth +
+								' ' +
+								'->' +
+								' ' +
+								node +
+								' ' +
+								nodeToDeployStateMap[node]
+						);
+					}
 
-	    */
+			*/
 			fmt.Printf("Processing resource ID %s\n", resourceID)
 			time.Sleep(time.Second)
 			fmt.Printf("Processed resource ID %s\n", resourceID)
@@ -246,31 +246,31 @@ function transitionNodeDeployStateOnStart(node: string) {
 			initialGroupResourceIDsToDeploy := groupToDepthToResourceIDs[group][highestGroupDeployDepth]
 
 			/*
-         a - b - c - d
-a - c - e - f - g
+				         a - b - c - d
+				a - c - e - f - g
 
-d and g deploy
+				d and g deploy
 
-g would block d because g has higher depth.
+				g would block d because g has higher depth.
 
-so on initial deploy that needs to be accounted for. it cant just start at the initial depth. it needs to start there, but also loop down.
+				so on initial deploy that needs to be accounted for. it cant just start at the initial depth. it needs to start there, but also loop down.
 
-* change init deploy depth to highest
+				* change init deploy depth to highest
 
-start with highest deploy depth -> 6.
+				start with highest deploy depth -> 6.
 
-groupToDepthToResourceIDs
-- add every resource at highest depth to res
-- depth to check = init depth --
-- for d t c > 0
-- for _, rid:= r at d t c
-- if rid at dtc is not dep on any rid in res and state needs to be deployed, resourceIDToState, append to res
-- end r at dtc loop
-- depth--
+				groupToDepthToResourceIDs
+				- add every resource at highest depth to res
+				- depth to check = init depth --
+				- for d t c > 0
+				- for _, rid:= r at d t c
+				- if rid at dtc is not dep on any rid in res and state needs to be deployed, resourceIDToState, append to res
+				- end r at dtc loop
+				- depth--
 
-SetInitialIDsToDeploy
-	    */
-			
+				SetInitialIDsToDeploy
+			*/
+
 			for _, resourceID := range initialGroupResourceIDsToDeploy {
 				go deployResource(deployResourceOkChan, resourceID)
 			}
@@ -290,49 +290,49 @@ SetInitialIDsToDeploy
 					numOfResourcesDeployedOk++
 
 					/*
-		 transitionNodeDeployStateOnOk(node);
+						 transitionNodeDeployStateOnOk(node);
 
-										nodeToTimeEndedAtMap[node] = Date.now();
+														nodeToTimeEndedAtMap[node] = Date.now();
 
-										logNodeDeployState({
-											depth,
-											group,
-											node,
-											timestamp: nodeToTimeEndedAtMap[node],
-										});
-	        */
+														logNodeDeployState({
+															depth,
+															group,
+															node,
+															timestamp: nodeToTimeEndedAtMap[node],
+														});
+					*/
 				} else {
 					numOfResourcesDeployedErr++
 					// if canceled num == 0 then cancel pending r's.
 					// pendingResourceIDsCanceled := cancel()
 					/*
-transitionNodeDeployStateOnErr(node);
+						transitionNodeDeployStateOnErr(node);
 
-										logNodeDeployState({
-											depth: nodeToDepthMap[node] as string,
-											group,
-											node,
-											timestamp: Date.now(),
-										});
+																logNodeDeployState({
+																	depth: nodeToDepthMap[node] as string,
+																	group,
+																	node,
+																	timestamp: Date.now(),
+																});
 
-										cancelPendingNodes(
-											group,
-											groupToNodesMap,
-											nodeToDeployStateMap
-										);
+																cancelPendingNodes(
+																	group,
+																	groupToNodesMap,
+																	nodeToDeployStateMap
+																);
 
-		 function cancelPendingNodes(
-		group: string,
-		groupToNodesMap: GroupToNodesMap,
-		nodeToDeployStateMap: NodeToDeployStateMap
-	): void {
-		for (const node of groupToNodesMap[group]) {
-			if (nodeToDeployStateMap[node] === 'PENDING') {
-				nodeToDeployStateMap[node] = 'CANCELED';
-			}
-		}
-	}
-	        */
+								 function cancelPendingNodes(
+								group: string,
+								groupToNodesMap: GroupToNodesMap,
+								nodeToDeployStateMap: NodeToDeployStateMap
+							): void {
+								for (const node of groupToNodesMap[group]) {
+									if (nodeToDeployStateMap[node] === 'PENDING') {
+										nodeToDeployStateMap[node] = 'CANCELED';
+									}
+								}
+							}
+					*/
 					numOfResourcesDeployedCanceled++
 				}
 
@@ -354,27 +354,27 @@ transitionNodeDeployStateOnErr(node);
 					// or one that is pending or one that failed.
 					// if not, then deploy it
 					/*
-function isNodeDirectlyDependentOnActivelyDeployingNode(
-		node: string,
-		nodeToDirectDependenciesMap: NodeToDirectDependenciesMap,
-		nodeToDeployStateMap: NodeToDeployStateMap
-	): boolean {
-		let result = false;
-		for (const nodeToCheck of nodeToDirectDependenciesMap[node]) {
-			const activeStates = [
-				'CREATE_IN_PROGRESS',
-				'DELETE_IN_PROGRESS',
-				'PENDING',
-				'UPDATE_IN_PROGRESS',
-			];
-			if (activeStates.includes(nodeToDeployStateMap[nodeToCheck])) {
-				result = true;
-				break;
-			}
-		}
-		return result;
-	}
-	        */
+						function isNodeDirectlyDependentOnActivelyDeployingNode(
+								node: string,
+								nodeToDirectDependenciesMap: NodeToDirectDependenciesMap,
+								nodeToDeployStateMap: NodeToDeployStateMap
+							): boolean {
+								let result = false;
+								for (const nodeToCheck of nodeToDirectDependenciesMap[node]) {
+									const activeStates = [
+										'CREATE_IN_PROGRESS',
+										'DELETE_IN_PROGRESS',
+										'PENDING',
+										'UPDATE_IN_PROGRESS',
+									];
+									if (activeStates.includes(nodeToDeployStateMap[nodeToCheck])) {
+										result = true;
+										break;
+									}
+								}
+								return result;
+							}
+					*/
 				}
 			}
 		}

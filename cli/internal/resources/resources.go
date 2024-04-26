@@ -511,7 +511,7 @@ const (
 		"core:base:cloudflare-worker:12345": "PENDING",
 	}
 */
-func SetResourceIDToDeployStateOfPending(resourceIDToState ResourceIDToState) ResourceIDToDeployState {
+func SetIDToDeployStateOfPending(resourceIDToState ResourceIDToState) ResourceIDToDeployState {
 	result := make(ResourceIDToDeployState)
 	for resourceID, deployState := range resourceIDToState {
 		if deployState != "UNCHANGED" {
