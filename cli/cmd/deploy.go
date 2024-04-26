@@ -183,33 +183,7 @@ var deployCmd = &cobra.Command{
 		deployGroup := func(deployGroupOkChan DeployGroupOkChan, group int) {
 			highestGroupDeployDepth := groupToHighestDeployDepth[group]
 
-			initialGroupResourceIDsToDeploy := groupToDepthToResourceIDs[group][highestGroupDeployDepth]
-
-			/*
-				         a - b - c - d
-				a - c - e - f - g
-
-				d and g deploy
-
-				g would block d because g has higher depth.
-
-				so on initial deploy that needs to be accounted for. it cant just start at the initial depth. it needs to start there, but also loop down.
-
-				* change init deploy depth to highest
-
-				start with highest deploy depth -> 6.
-
-				groupToDepthToResourceIDs
-				- add every resource at highest depth to res
-				- depth to check = init depth --
-				- for d t c > 0
-				- for _, rid:= r at d t c
-				- if rid at dtc is not dep on any rid in res and state needs to be deployed, resourceIDToState, append to res
-				- end r at dtc loop
-				- depth--
-
-				SetInitialIDsToDeploy
-			*/
+			initialGroupResourceIDsToDeploy := resources.SetInitialGroupIDsToDeploy(highestGroupDeployDepth, group, groupToDepthToResourceIDs, currResourceIDToData, resourceIDToDeployState)
 
 			for _, resourceID := range initialGroupResourceIDsToDeploy {
 				depth := resourceIDToDepth[resourceID]

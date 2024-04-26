@@ -783,8 +783,62 @@ func SetIDsWithInDegreesOf(IDToInDegrees ResourceIDToInDegrees, degrees int) Res
 	return result
 }
 
+type InitialResourceIDsToDeploy []string
+
+/*
+["core:base:cloudflare-worker:12345"]
+
+Deployments can't only start at the highest depth
+containing a resource to deploy (i.e. a resource
+with a deploy state of PENDING).
+
+For example, given a graph of:
+a -> b
+b -> c
+c -> d
+a -> e
+
+d has a depth of 3 and e has a depth of 1.
+
+If just d and e need to be deployed, the deployment can't start
+at depth 3 only. e would be blocked until d finished because
+d has a higher depth than e. That's not optimal. They should
+be started at the same time and deployed concurrently.
+*/
+func SetInitialGroupIDsToDeploy(highestDepthContainingAResourceToDeploy int, group int, groupToDepthToResourceIDs GroupToDepthToResourceIDs, resourceIDToData ResourceIDToData, resourceIDToDeployState ResourceIDToDeployState) InitialResourceIDsToDeploy {
+	var result InitialResourceIDsToDeploy
+
+	// Add every resource at highest deploy depth containing
+	// a resource to deploy.
+	result = append(result, groupToDepthToResourceIDs[group][highestDepthContainingAResourceToDeploy]...)
+
+	// Check all other depths, except 0, for resources that can
+	// start deploying on deployment initiation (0 is skipped
+	// because a resource at that depth can only be deployed
+	// first if it's being deployed in isolation).
+	depthToCheck := highestDepthContainingAResourceToDeploy - 1
+	for depthToCheck > 0 {
+		for _, resourceIDAtDepthToCheck := range groupToDepthToResourceIDs[group][depthToCheck] {
+			for _, dependencyID := range resourceIDToData[resourceIDAtDepthToCheck].Dependencies {
+				// If resource at depth to check is PENDING and is not
+				// dependent on any resource in the ongoing result, then
+				// append it to the result.
+				if resourceIDToDeployState[resourceIDAtDepthToCheck] == DeployState("PENDING") && !helpers.IsInSlice(result, dependencyID) {
+					result = append(result, resourceIDAtDepthToCheck)
+				}
+			}
+		}
+		depthToCheck--
+	}
+
+	return result
+}
+
 type NumInGroupToDeploy int
 
+/*
+TODO
+*/
 func SetNumInGroupToDeploy(groupToResourceIDs GroupToResourceIDs, resourceIDToState ResourceIDToState, group int) NumInGroupToDeploy {
 	result := NumInGroupToDeploy(0)
 	for _, resourceID := range groupToResourceIDs[group] {
