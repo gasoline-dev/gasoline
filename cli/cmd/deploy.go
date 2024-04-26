@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 	"gas/internal/helpers"
-	resources "gas/internal/resources"
+	"gas/internal/resources"
 	"os"
 	"time"
 
@@ -239,6 +239,33 @@ var deployCmd = &cobra.Command{
 					}
 					return
 				} else {
+					for _, resourceID := range groupsToResourceIDs[group] {
+						if resourceIDToDeployState[resourceID] == resources.DeployState("PENDING") {
+							shouldDeployResource := true
+
+							// Is resource dependent on onther deploying resource?
+							for _, dependencyID := range currResourceIDToData[resourceID].Dependencies {
+								activeStates := map[resources.DeployState]bool{
+									resources.DeployState(resources.CREATE_IN_PROGRESS): true,
+									resources.DeployState(resources.DELETE_IN_PROGRESS): true,
+									resources.DeployState(resources.PENDING):            true,
+									resources.DeployState(resources.UPDATE_IN_PROGRESS): true,
+								}
+
+								dependencyIDDeployState := resourceIDToDeployState[dependencyID]
+
+								if activeStates[dependencyIDDeployState] {
+									shouldDeployResource = false
+									break
+								}
+							}
+
+							if shouldDeployResource {
+								depth := resourceIDToDepth[resourceID]
+								go deployResource(deployResourceOkChan, group, depth, resourceID)
+							}
+						}
+					}
 					// keep deploying
 					// loop over group resources
 					// if a resource has a state of PENDING
@@ -279,7 +306,7 @@ var deployCmd = &cobra.Command{
 		// numOfGroupsDeployedOk := 0
 		// numOfGroupsDeployedErr := 0
 
-		for groupDeployedOk := range deployGroupOkChan {
+		for range deployGroupOkChan {
 			// if numOfGroupsDeployedOk++
 			// else numOfGroupsDeployedErr++
 			// numOfGroupsFinishedDeploying := ...
@@ -287,7 +314,6 @@ var deployCmd = &cobra.Command{
 			// if err > 0, os exit 1 return else
 			// os exit 0.
 			numOfGroupsFinishedDeploying++
-			fmt.Println(groupDeployedOk)
 			if numOfGroupsToDeploy == numOfGroupsFinishedDeploying {
 				fmt.Println("FINISHED DEPLOYING")
 				break
