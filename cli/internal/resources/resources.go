@@ -508,71 +508,6 @@ func SetIDs(resourceIDToData ResourceIDToData) ResourceIDs {
 	return result
 }
 
-type ResourceIDToDeployState map[string]DeployState
-
-type DeployState string
-
-const (
-	CANCELED           DeployState = "CANCELED"
-	CREATE_COMPLETE    DeployState = "CREATE_COMPLETE"
-	CREATE_FAILED      DeployState = "CREATE_FAILED"
-	CREATE_IN_PROGRESS DeployState = "CREATE_IN_PROGRESS"
-	DELETE_COMPLETE    DeployState = "DELETE_COMPLETE"
-	DELETE_FAILED      DeployState = "DEPLOY_FAILED"
-	DELETE_IN_PROGRESS DeployState = "DELETE_IN_PROGRESS"
-	PENDING            DeployState = "PENDING"
-	UPDATE_COMPLETE    DeployState = "UPDATE_COMPLETE"
-	UPDATE_FAILED      DeployState = "UPDATE_FAILED"
-	UPDATE_IN_PROGRESS DeployState = "UPDATE_IN_PROGRESS"
-)
-
-/*
-	{
-		"core:base:cloudflare-worker:12345": "PENDING",
-	}
-*/
-func SetIDToDeployStateOfPending(resourceIDToState ResourceIDToState) ResourceIDToDeployState {
-	result := make(ResourceIDToDeployState)
-	for resourceID, deployState := range resourceIDToState {
-		if deployState != "UNCHANGED" {
-			result[resourceID] = "PENDING"
-		}
-	}
-	return result
-}
-
-/*
-	{
-		"core:base:cloudflare-worker:12345": "CREATE_IN_PROGRESS"
-	}
-*/
-func SetIDToDeployStateOnStart(resourceIDToDeployState ResourceIDToDeployState, resourceIDToState ResourceIDToState, resourceID string) {
-	switch resourceIDToState[resourceID] {
-	case State(CREATED):
-		resourceIDToDeployState[resourceID] = DeployState(CREATE_IN_PROGRESS)
-	case State(DELETED):
-		resourceIDToDeployState[resourceID] = DeployState(DELETE_IN_PROGRESS)
-	case State(UPDATED):
-		resourceIDToDeployState[resourceID] = DeployState(UPDATE_IN_PROGRESS)
-	}
-}
-
-/*
-	{
-		"core:base:cloudflare-worker:12345": "CREATE_COMPLETE"
-	}
-*/
-func SetResourceIDToDeployStateOnOk(resourceIDToDeployState ResourceIDToDeployState, resourceID string) {
-	switch resourceIDToDeployState[resourceID] {
-	case DeployState(CREATE_IN_PROGRESS):
-		resourceIDToDeployState[resourceID] = DeployState(CREATE_COMPLETE)
-	case DeployState(DELETE_IN_PROGRESS):
-		resourceIDToDeployState[resourceID] = DeployState(DELETE_COMPLETE)
-	case DeployState(UPDATE_IN_PROGRESS):
-		resourceIDToDeployState[resourceID] = DeployState(UPDATE_COMPLETE)
-	}
-}
-
 type ResourceIDToDepth map[string]int
 
 /*
@@ -884,6 +819,71 @@ func SetStateToResourceIDs(resourceIDToState ResourceIDToState) StateToResourceI
 		result[state] = append(result[state], resourceID)
 	}
 	return result
+}
+
+type ResourceIDToDeployState map[string]DeployState
+
+type DeployState string
+
+const (
+	CANCELED           DeployState = "CANCELED"
+	CREATE_COMPLETE    DeployState = "CREATE_COMPLETE"
+	CREATE_FAILED      DeployState = "CREATE_FAILED"
+	CREATE_IN_PROGRESS DeployState = "CREATE_IN_PROGRESS"
+	DELETE_COMPLETE    DeployState = "DELETE_COMPLETE"
+	DELETE_FAILED      DeployState = "DEPLOY_FAILED"
+	DELETE_IN_PROGRESS DeployState = "DELETE_IN_PROGRESS"
+	PENDING            DeployState = "PENDING"
+	UPDATE_COMPLETE    DeployState = "UPDATE_COMPLETE"
+	UPDATE_FAILED      DeployState = "UPDATE_FAILED"
+	UPDATE_IN_PROGRESS DeployState = "UPDATE_IN_PROGRESS"
+)
+
+/*
+	{
+		"core:base:cloudflare-worker:12345": "PENDING",
+	}
+*/
+func UpdateIDToDeployStateOfPending(resourceIDToState ResourceIDToState) ResourceIDToDeployState {
+	result := make(ResourceIDToDeployState)
+	for resourceID, deployState := range resourceIDToState {
+		if deployState != "UNCHANGED" {
+			result[resourceID] = "PENDING"
+		}
+	}
+	return result
+}
+
+/*
+	{
+		"core:base:cloudflare-worker:12345": "CREATE_IN_PROGRESS"
+	}
+*/
+func UpdateIDToDeployStateOnStart(resourceIDToDeployState ResourceIDToDeployState, resourceIDToState ResourceIDToState, resourceID string) {
+	switch resourceIDToState[resourceID] {
+	case State(CREATED):
+		resourceIDToDeployState[resourceID] = DeployState(CREATE_IN_PROGRESS)
+	case State(DELETED):
+		resourceIDToDeployState[resourceID] = DeployState(DELETE_IN_PROGRESS)
+	case State(UPDATED):
+		resourceIDToDeployState[resourceID] = DeployState(UPDATE_IN_PROGRESS)
+	}
+}
+
+/*
+	{
+		"core:base:cloudflare-worker:12345": "CREATE_COMPLETE"
+	}
+*/
+func UpdateResourceIDToDeployStateOnOk(resourceIDToDeployState ResourceIDToDeployState, resourceID string) {
+	switch resourceIDToDeployState[resourceID] {
+	case DeployState(CREATE_IN_PROGRESS):
+		resourceIDToDeployState[resourceID] = DeployState(CREATE_COMPLETE)
+	case DeployState(DELETE_IN_PROGRESS):
+		resourceIDToDeployState[resourceID] = DeployState(DELETE_COMPLETE)
+	case DeployState(UPDATE_IN_PROGRESS):
+		resourceIDToDeployState[resourceID] = DeployState(UPDATE_COMPLETE)
+	}
 }
 
 /*

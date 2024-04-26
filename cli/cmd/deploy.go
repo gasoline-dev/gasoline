@@ -150,7 +150,7 @@ var deployCmd = &cobra.Command{
 
 		resources.LogIDPreDeploymentStates(groupToDepthToResourceIDs, resourceIDToState)
 
-		resourceIDToDeployState := resources.SetIDToDeployStateOfPending(resourceIDToState)
+		resourceIDToDeployState := resources.UpdateIDToDeployStateOfPending(resourceIDToState)
 		fmt.Println("initial deploy state")
 		helpers.PrettyPrint(resourceIDToDeployState)
 
@@ -163,7 +163,7 @@ var deployCmd = &cobra.Command{
 		deployResourceOkChan := make(DeployResourceOkChan)
 
 		deployResource := func(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceID string) {
-			resources.SetIDToDeployStateOnStart(resourceIDToDeployState, resourceIDToState, resourceID)
+			resources.UpdateIDToDeployStateOnStart(resourceIDToDeployState, resourceIDToState, resourceID)
 
 			timestamp := time.Now().UnixMilli()
 
@@ -174,7 +174,7 @@ var deployCmd = &cobra.Command{
 			// TODO: Everything below is for state OK -> Add if-else
 			// to handle on err.
 
-			resources.SetResourceIDToDeployStateOnOk(
+			resources.UpdateResourceIDToDeployStateOnOk(
 				resourceIDToDeployState,
 				resourceID,
 			)
