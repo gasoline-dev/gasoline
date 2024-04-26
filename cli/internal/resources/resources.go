@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 )
 
 //go:embed embed/get-index-build-file-configs.js
@@ -222,6 +223,25 @@ func HasIDsToDeploy(stateToResourceIDs StateToResourceIDs) HasResourceIDsToDeplo
 		}
 	}
 	return false
+}
+
+/*
+[07:54:56] Group 0 -> Depth 0 -> core:base:cloudflare-worker:12345 -> CREATE_IN_PROGRESS
+*/
+func LogIDDeployState(group int, depth int, resourceID string, timestamp int64, resourceIDToDeployState ResourceIDToDeployState) {
+	date := time.Unix(0, timestamp*int64(time.Millisecond))
+	hours := fmt.Sprintf("%02d", date.Hour())
+	minutes := fmt.Sprintf("%02d", date.Minute())
+	seconds := fmt.Sprintf("%02d", date.Second())
+	formattedTime := fmt.Sprintf("%s:%s:%s", hours, minutes, seconds)
+
+	fmt.Printf("[%s] Group %d -> Depth %d -> %s -> %s\n",
+		formattedTime,
+		group,
+		depth,
+		resourceID,
+		resourceIDToDeployState[resourceID],
+	)
 }
 
 /*
@@ -519,6 +539,22 @@ func SetIDToDeployStateOfPending(resourceIDToState ResourceIDToState) ResourceID
 		}
 	}
 	return result
+}
+
+/*
+	{
+		"core:base:cloudflare-worker:12345": "CREATE_IN_PROGRESS"
+	}
+*/
+func SetIDToDeployStateOnStart(resourceIDToDeployState ResourceIDToDeployState, resourceIDToState ResourceIDToState, resourceID string) {
+	switch resourceIDToState[resourceID] {
+	case State(CREATED):
+		resourceIDToDeployState[resourceID] = DeployState(CREATE_IN_PROGRESS)
+	case State(DELETED):
+		resourceIDToDeployState[resourceID] = DeployState(DELETE_IN_PROGRESS)
+	case State(UPDATED):
+		resourceIDToDeployState[resourceID] = DeployState(UPDATE_IN_PROGRESS)
+	}
 }
 
 type ResourceIDToDepth map[string]int

@@ -148,11 +148,11 @@ var deployCmd = &cobra.Command{
 		fmt.Println("group to deploy depth")
 		helpers.PrettyPrint(groupToHighestDeployDepth)
 
+		resources.LogIDPreDeploymentStates(groupToDepthToResourceIDs, resourceIDToState)
+
 		resourceIDToDeployState := resources.SetIDToDeployStateOfPending(resourceIDToState)
 		fmt.Println("initial deploy state")
 		helpers.PrettyPrint(resourceIDToDeployState)
-
-		resources.LogIDPreDeploymentStates(groupToDepthToResourceIDs, resourceIDToState)
 
 		numOfGroupsToDeploy := len(groupsWithStateChanges)
 
@@ -162,77 +162,17 @@ var deployCmd = &cobra.Command{
 
 		deployResourceOkChan := make(DeployResourceOkChan)
 
-		deployResource := func(deployResourceOkChan DeployResourceOkChan, resourceID string) {
-			// transitionNodeDeployStateOnStart(node)
-			/*
-				function transitionNodeDeployStateOnStart(node: string) {
-						switch (nodeToStateMap[node]) {
-							case 'CREATED':
-							case 'REPLACEMENT':
-								nodeToDeployStateMap[node] = 'CREATE_IN_PROGRESS';
-								break;
-							case 'DELETED':
-								nodeToDeployStateMap[node] = 'DELETE_IN_PROGRESS';
-								break;
-							case 'UPDATED':
-								nodeToDeployStateMap[node] = 'UPDATE_IN_PROGRESS';
-								break;
-						}
-					}
+		deployResource := func(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceID string) {
+			resources.SetIDToDeployStateOnStart(resourceIDToDeployState, resourceIDToState, resourceID)
 
-				 nodeToTimeStartedAtMap[node] = Date.now();
+			timestamp := time.Now().UnixMilli()
 
-												logNodeDeployState({
-													depth,
-													group,
-													node,
-													timestamp: nodeToTimeStartedAtMap[node],
-												});
+			resources.LogIDDeployState(group, depth, resourceID, timestamp, resourceIDToDeployState)
 
-						function logNodeDeployState({
-						depth,
-						group,
-						node,
-						timestamp,
-					}: {
-						depth: string;
-						group: string;
-						node: string;
-						timestamp: number;
-					}) {
-						const date: Date = new Date(timestamp);
-						const hours: string = date.getHours().toString().padStart(2, '0');
-						const minutes: string = date.getMinutes().toString().padStart(2, '0');
-						const seconds: string = date.getSeconds().toString().padStart(2, '0');
-						const formattedTime = `${hours}:${minutes}:${seconds}`;
-
-						console.log(
-							'[' +
-								formattedTime +
-								']' +
-								' ' +
-								'Group' +
-								' ' +
-								group +
-								' ' +
-								'->' +
-								' ' +
-								'Depth' +
-								' ' +
-								depth +
-								' ' +
-								'->' +
-								' ' +
-								node +
-								' ' +
-								nodeToDeployStateMap[node]
-						);
-					}
-
-			*/
-			fmt.Printf("Processing resource ID %s\n", resourceID)
 			time.Sleep(time.Second)
+
 			fmt.Printf("Processed resource ID %s\n", resourceID)
+
 			deployResourceOkChan <- true
 		}
 
@@ -272,7 +212,8 @@ var deployCmd = &cobra.Command{
 			*/
 
 			for _, resourceID := range initialGroupResourceIDsToDeploy {
-				go deployResource(deployResourceOkChan, resourceID)
+				depth := resourceIDToDepth[resourceID]
+				go deployResource(deployResourceOkChan, group, depth, resourceID)
 			}
 
 			numOfResourcesInGroupToDeploy := resources.SetNumInGroupToDeploy(
