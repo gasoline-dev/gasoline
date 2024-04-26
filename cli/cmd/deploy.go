@@ -171,7 +171,23 @@ var deployCmd = &cobra.Command{
 
 			time.Sleep(time.Second)
 
-			fmt.Printf("Processed resource ID %s\n", resourceID)
+			// TODO: Everything below is for state OK -> Add if-else
+			// to handle on err.
+
+			resources.SetResourceIDToDeployStateOnOk(
+				resourceIDToDeployState,
+				resourceID,
+			)
+
+			timestamp = time.Now().UnixMilli()
+
+			resources.LogIDDeployState(
+				group,
+				depth,
+				resourceID,
+				timestamp,
+				resourceIDToDeployState,
+			)
 
 			deployResourceOkChan <- true
 		}
@@ -203,19 +219,6 @@ var deployCmd = &cobra.Command{
 			for resourceDeployedOk := range deployResourceOkChan {
 				if resourceDeployedOk {
 					numOfResourcesDeployedOk++
-
-					/*
-						 transitionNodeDeployStateOnOk(node);
-
-														nodeToTimeEndedAtMap[node] = Date.now();
-
-														logNodeDeployState({
-															depth,
-															group,
-															node,
-															timestamp: nodeToTimeEndedAtMap[node],
-														});
-					*/
 				} else {
 					numOfResourcesDeployedErr++
 					// if canceled num == 0 then cancel pending r's.

@@ -557,6 +557,22 @@ func SetIDToDeployStateOnStart(resourceIDToDeployState ResourceIDToDeployState, 
 	}
 }
 
+/*
+	{
+		"core:base:cloudflare-worker:12345": "CREATE_COMPLETE"
+	}
+*/
+func SetResourceIDToDeployStateOnOk(resourceIDToDeployState ResourceIDToDeployState, resourceID string) {
+	switch resourceIDToDeployState[resourceID] {
+	case DeployState(CREATE_IN_PROGRESS):
+		resourceIDToDeployState[resourceID] = DeployState(CREATE_COMPLETE)
+	case DeployState(DELETE_IN_PROGRESS):
+		resourceIDToDeployState[resourceID] = DeployState(DELETE_COMPLETE)
+	case DeployState(UPDATE_IN_PROGRESS):
+		resourceIDToDeployState[resourceID] = DeployState(UPDATE_COMPLETE)
+	}
+}
+
 type ResourceIDToDepth map[string]int
 
 /*
