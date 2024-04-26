@@ -854,6 +854,11 @@ func UpdateIDToDeployStateOfPending(resourceIDToState ResourceIDToState) Resourc
 	return result
 }
 
+/*
+	{
+		"core:base:cloudflare-worker:12345": "CREATE_FAILED"
+	}
+*/
 func UpdateResourceIDToDeployStateOnErr(resourceIDToDeployState ResourceIDToDeployState, resourceID string) {
 	switch resourceIDToDeployState[resourceID] {
 	case DeployState(CREATE_IN_PROGRESS):
