@@ -221,37 +221,12 @@ var deployCmd = &cobra.Command{
 					numOfResourcesDeployedOk++
 				} else {
 					numOfResourcesDeployedErr++
-					// if canceled num == 0 then cancel pending r's.
-					// pendingResourceIDsCanceled := cancel()
-					/*
-						transitionNodeDeployStateOnErr(node);
-
-																logNodeDeployState({
-																	depth: nodeToDepthMap[node] as string,
-																	group,
-																	node,
-																	timestamp: Date.now(),
-																});
-
-																cancelPendingNodes(
-																	group,
-																	groupToNodesMap,
-																	nodeToDeployStateMap
-																);
-
-								 function cancelPendingNodes(
-								group: string,
-								groupToNodesMap: GroupToNodesMap,
-								nodeToDeployStateMap: NodeToDeployStateMap
-							): void {
-								for (const node of groupToNodesMap[group]) {
-									if (nodeToDeployStateMap[node] === 'PENDING') {
-										nodeToDeployStateMap[node] = 'CANCELED';
-									}
-								}
-							}
-					*/
-					numOfResourcesDeployedCanceled++
+					// Cancel PENDING resources.
+					// Check for 0 because resources should only
+					// be canceled one time.
+					if numOfResourcesDeployedCanceled == 0 {
+						numOfResourcesDeployedCanceled = resources.UpdateIDToDeployStateOfCanceled(resourceIDToDeployState)
+					}
 				}
 
 				numOfResourcesInFinalDeployState := numOfResourcesDeployedOk + numOfResourcesDeployedErr + numOfResourcesDeployedCanceled

@@ -856,6 +856,24 @@ func UpdateIDToDeployStateOfPending(resourceIDToState ResourceIDToState) Resourc
 
 /*
 	{
+		"core:base:cloudflare-worker:12345": "CANCELED"
+	}
+
+Also returns the number of resources canceled.
+*/
+func UpdateIDToDeployStateOfCanceled(resourceIDToDeployState ResourceIDToDeployState) int {
+	result := 0
+	for resourceID, deployState := range resourceIDToDeployState {
+		if deployState == "PENDING" {
+			resourceIDToDeployState[resourceID] = "CANCELED"
+			result++
+		}
+	}
+	return result
+}
+
+/*
+	{
 		"core:base:cloudflare-worker:12345": "CREATE_FAILED"
 	}
 */
