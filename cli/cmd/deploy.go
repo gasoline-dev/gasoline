@@ -174,8 +174,6 @@ func deploy(resourceIDToState resources.ResourceIDToState, resourceIDToGroup res
 	return nil
 }
 
-type DeployGroupOkChan chan bool
-
 func deployGroups(resourceIDToDeployState resources.ResourceIDToDeployState, resourceIDToState resources.ResourceIDToState, groupToDepthToResourceIDs resources.GroupToDepthToResourceIDs, currResourceIDToData resources.ResourceIDToData, resourceIDToDepth resources.ResourceIDToDepth, resourceIDToGroup resources.ResourceIDToGroup) error {
 	groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceIDToGroup, resourceIDToState)
 
@@ -219,60 +217,11 @@ func deployGroups(resourceIDToDeployState resources.ResourceIDToDeployState, res
 	return nil
 }
 
+type DeployGroupOkChan chan bool
+
 func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceIDToDeployState resources.ResourceIDToDeployState, resourceIDToState resources.ResourceIDToState, groupToHighestDeployDepth resources.GroupToHighestDeployDepth, groupToDepthToResourceIDs resources.GroupToDepthToResourceIDs, currResourceIDToData resources.ResourceIDToData, resourceIDToDepth resources.ResourceIDToDepth, groupsToResourceIDs resources.GroupToResourceIDs) {
-	type DeployResourceOkChan chan bool
 
 	deployResourceOkChan := make(DeployResourceOkChan)
-
-	deployResource := func(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceID string) {
-		resources.UpdateIDToDeployStateOnStart(resourceIDToDeployState, resourceIDToState, resourceID)
-
-		timestamp := time.Now().UnixMilli()
-
-		resources.LogIDDeployState(group, depth, resourceID, timestamp, resourceIDToDeployState)
-
-		resourceProcessorOkChan := make(ResourceProcessorOkChan)
-
-		go resourceProcessors["cloudflare-kv:create"]("test", resourceProcessorOkChan)
-
-		if <-resourceProcessorOkChan {
-			resources.UpdateResourceIDToDeployStateOnOk(
-				resourceIDToDeployState,
-				resourceID,
-			)
-
-			timestamp = time.Now().UnixMilli()
-
-			resources.LogIDDeployState(
-				group,
-				depth,
-				resourceID,
-				timestamp,
-				resourceIDToDeployState,
-			)
-
-			deployResourceOkChan <- true
-
-			return
-		}
-
-		resources.UpdateResourceIDToDeployStateOnErr(
-			resourceIDToDeployState,
-			resourceID,
-		)
-
-		timestamp = time.Now().UnixMilli()
-
-		resources.LogIDDeployState(
-			group,
-			depth,
-			resourceID,
-			timestamp,
-			resourceIDToDeployState,
-		)
-
-		deployResourceOkChan <- false
-	}
 
 	highestGroupDeployDepth := groupToHighestDeployDepth[group]
 
@@ -280,7 +229,7 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceIDToDep
 
 	for _, resourceID := range initialGroupResourceIDsToDeploy {
 		depth := resourceIDToDepth[resourceID]
-		go deployResource(deployResourceOkChan, group, depth, resourceID)
+		go deployResource(deployResourceOkChan, group, depth, resourceID, resourceIDToDeployState, resourceIDToState)
 	}
 
 	numOfResourcesInGroupToDeploy := resources.SetNumInGroupToDeploy(
@@ -320,7 +269,7 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceIDToDep
 				if resourceIDToDeployState[resourceID] == resources.DeployState("PENDING") {
 					shouldDeployResource := true
 
-					// Is resource dependent on onther deploying resource?
+					// Is resource dependent on another deploying resource?
 					for _, dependencyID := range currResourceIDToData[resourceID].Dependencies {
 						activeStates := map[resources.DeployState]bool{
 							resources.DeployState(resources.CREATE_IN_PROGRESS): true,
@@ -339,10 +288,62 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceIDToDep
 
 					if shouldDeployResource {
 						depth := resourceIDToDepth[resourceID]
-						go deployResource(deployResourceOkChan, group, depth, resourceID)
+						go deployResource(deployResourceOkChan, group, depth, resourceID, resourceIDToDeployState, resourceIDToState)
 					}
 				}
 			}
 		}
 	}
+}
+
+type DeployResourceOkChan chan bool
+
+func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceID string, resourceIDToDeployState resources.ResourceIDToDeployState, resourceIDToState resources.ResourceIDToState) {
+	resources.UpdateIDToDeployStateOnStart(resourceIDToDeployState, resourceIDToState, resourceID)
+
+	timestamp := time.Now().UnixMilli()
+
+	resources.LogIDDeployState(group, depth, resourceID, timestamp, resourceIDToDeployState)
+
+	resourceProcessorOkChan := make(ResourceProcessorOkChan)
+
+	go resourceProcessors["cloudflare-kv:create"]("test", resourceProcessorOkChan)
+
+	if <-resourceProcessorOkChan {
+		resources.UpdateResourceIDToDeployStateOnOk(
+			resourceIDToDeployState,
+			resourceID,
+		)
+
+		timestamp = time.Now().UnixMilli()
+
+		resources.LogIDDeployState(
+			group,
+			depth,
+			resourceID,
+			timestamp,
+			resourceIDToDeployState,
+		)
+
+		deployResourceOkChan <- true
+
+		return
+	}
+
+	resources.UpdateResourceIDToDeployStateOnErr(
+		resourceIDToDeployState,
+		resourceID,
+	)
+
+	timestamp = time.Now().UnixMilli()
+
+	resources.LogIDDeployState(
+		group,
+		depth,
+		resourceID,
+		timestamp,
+		resourceIDToDeployState,
+	)
+
+	deployResourceOkChan <- false
 }
