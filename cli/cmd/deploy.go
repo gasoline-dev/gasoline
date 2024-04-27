@@ -266,35 +266,6 @@ var deployCmd = &cobra.Command{
 							}
 						}
 					}
-					// keep deploying
-					// loop over group resources
-					// if a resource has a state of PENDING
-					// then check if that resource is dependent
-					// on a currently deploying resource
-					// or one that is pending or one that failed.
-					// if not, then deploy it
-					/*
-						function isNodeDirectlyDependentOnActivelyDeployingNode(
-								node: string,
-								nodeToDirectDependenciesMap: NodeToDirectDependenciesMap,
-								nodeToDeployStateMap: NodeToDeployStateMap
-							): boolean {
-								let result = false;
-								for (const nodeToCheck of nodeToDirectDependenciesMap[node]) {
-									const activeStates = [
-										'CREATE_IN_PROGRESS',
-										'DELETE_IN_PROGRESS',
-										'PENDING',
-										'UPDATE_IN_PROGRESS',
-									];
-									if (activeStates.includes(nodeToDeployStateMap[nodeToCheck])) {
-										result = true;
-										break;
-									}
-								}
-								return result;
-							}
-					*/
 				}
 			}
 		}
