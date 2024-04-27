@@ -67,7 +67,6 @@ var deployCmd = &cobra.Command{
 			os.Exit(1)
 			return
 		}
-		fmt.Println(currResourceIndexBuildFilePaths)
 
 		currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(currResourceIndexBuildFilePaths)
 		if err != nil {
@@ -91,18 +90,12 @@ var deployCmd = &cobra.Command{
 
 		currResourceIDToData := resources.SetIDToData(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
 
-		helpers.PrettyPrint(currResourceIDToData)
-
 		resourceIDToInDegrees := resources.SetIDToInDegrees(currResourceIDToData)
-		helpers.PrettyPrint(resourceIDToInDegrees)
 
 		resourceIDsWithInDegreesOfZero := resources.SetIDsWithInDegreesOf(resourceIDToInDegrees, 0)
 
-		fmt.Println(resourceIDsWithInDegreesOfZero)
-
 		// TODO: Might not need this
 		resourceIDs := resources.SetIDs(currResourceIDToData)
-		fmt.Println(resourceIDs)
 
 		resourceIDToIntermediateIDs := resources.SetIDToIntermediateIDs(currResourceIDToData)
 
@@ -135,7 +128,6 @@ var deployCmd = &cobra.Command{
 			os.Exit(1)
 			return
 		}
-		helpers.PrettyPrint(resourcesUpJson)
 
 		resourceIDToState := resources.SetIDToStateMap(resourcesUpJson, currResourceIDToData)
 
