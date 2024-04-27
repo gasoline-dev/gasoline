@@ -216,7 +216,7 @@ func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 type HasResourceIDsToDeploy bool
 
 func HasIDsToDeploy(stateToResourceIDs StateToResourceIDs) HasResourceIDsToDeploy {
-	statesToDeploy := []State{"CREATED", "DELETED", "UPDATED"}
+	statesToDeploy := []State{State(CREATED), State(DELETED), State(UPDATED)}
 	for _, state := range statesToDeploy {
 		if _, exists := stateToResourceIDs[state]; exists {
 			return true
@@ -382,7 +382,7 @@ func SetGroupToHighestDeployDepth(resourceIDToDepth ResourceIDToDepth, resourceI
 		for _, resourceID := range groupToResourceIDs[group] {
 			// UNCHANGED resources aren't deployed, so its depth
 			// can't be the deploy depth.
-			if resourceIDToState[resourceID] == "UNCHANGED" {
+			if resourceIDToState[resourceID] == State("UNCHANGED") {
 				continue
 			}
 
@@ -655,19 +655,19 @@ func SetIDToStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) R
 
 	for upJsonResourceID := range upJson {
 		if _, exists := currResourceMap[upJsonResourceID]; !exists {
-			result[upJsonResourceID] = DELETED
+			result[upJsonResourceID] = State(DELETED)
 		}
 	}
 
 	for currResourceID, currResource := range currResourceMap {
 		if _, exists := upJson[currResourceID]; !exists {
-			result[currResourceID] = CREATED
+			result[currResourceID] = State(CREATED)
 		} else {
 			upResource := upJson[currResourceID]
 			if IsResourceEqual(upResource, currResource) {
-				result[currResourceID] = UNCHANGED
+				result[currResourceID] = State(UNCHANGED)
 			} else {
-				result[currResourceID] = UPDATED
+				result[currResourceID] = State(UPDATED)
 			}
 		}
 	}
@@ -793,7 +793,7 @@ TODO
 func SetNumInGroupToDeploy(groupToResourceIDs GroupToResourceIDs, resourceIDToState ResourceIDToState, group int) NumInGroupToDeploy {
 	result := NumInGroupToDeploy(0)
 	for _, resourceID := range groupToResourceIDs[group] {
-		if resourceIDToState[resourceID] != UNCHANGED {
+		if resourceIDToState[resourceID] != State(UNCHANGED) {
 			result++
 		}
 	}
@@ -846,9 +846,9 @@ const (
 */
 func UpdateIDToDeployStateOfPending(resourceIDToState ResourceIDToState) ResourceIDToDeployState {
 	result := make(ResourceIDToDeployState)
-	for resourceID, deployState := range resourceIDToState {
-		if deployState != "UNCHANGED" {
-			result[resourceID] = "PENDING"
+	for resourceID, state := range resourceIDToState {
+		if state != State(UNCHANGED) {
+			result[resourceID] = DeployState(PENDING)
 		}
 	}
 	return result
@@ -864,8 +864,8 @@ Also returns the number of resources canceled.
 func UpdateIDToDeployStateOfCanceled(resourceIDToDeployState ResourceIDToDeployState) int {
 	result := 0
 	for resourceID, deployState := range resourceIDToDeployState {
-		if deployState == "PENDING" {
-			resourceIDToDeployState[resourceID] = "CANCELED"
+		if deployState == DeployState(PENDING) {
+			resourceIDToDeployState[resourceID] = DeployState(CANCELED)
 			result++
 		}
 	}
