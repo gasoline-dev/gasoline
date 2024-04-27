@@ -105,24 +105,14 @@ var deployCmd = &cobra.Command{
 		fmt.Println(resourceIDs)
 
 		resourceIDToIntermediateIDs := resources.SetIDToIntermediateIDs(currResourceIDToData)
-		fmt.Println("resource ID to intermediates")
-		helpers.PrettyPrint(resourceIDToIntermediateIDs)
 
 		resourceIDToGroup := resources.SetIDToGroup(resourceIDsWithInDegreesOfZero, resourceIDToIntermediateIDs)
-		fmt.Println("resource ID to group")
-		helpers.PrettyPrint(resourceIDToGroup)
 
 		depthToResourceID := resources.SetDepthToResourceID(resourceIDs, currResourceIDToData, resourceIDsWithInDegreesOfZero)
-		fmt.Println("depth to resource ID")
-		helpers.PrettyPrint(depthToResourceID)
 
 		resourceIDToDepth := resources.SetIDToDepth(depthToResourceID)
-		fmt.Println("resource ID to depth")
-		helpers.PrettyPrint(resourceIDToDepth)
 
 		groupToDepthToResourceIDs := resources.SetGroupToDepthToResourceIDs(resourceIDToGroup, resourceIDToDepth)
-		fmt.Println("group to depth to resource IDs")
-		helpers.PrettyPrint(groupToDepthToResourceIDs)
 
 		// TODO: json path can be configged?
 		// TODO: Or implement up -> driver -> local | gh in the config?
@@ -148,12 +138,8 @@ var deployCmd = &cobra.Command{
 		helpers.PrettyPrint(resourcesUpJson)
 
 		resourceIDToState := resources.SetIDToStateMap(resourcesUpJson, currResourceIDToData)
-		fmt.Println("resource id to state")
-		helpers.PrettyPrint(resourceIDToState)
 
 		stateToResourceIDs := resources.SetStateToResourceIDs(resourceIDToState)
-		fmt.Println("resource to resource IDs")
-		helpers.PrettyPrint(stateToResourceIDs)
 
 		hasResourceIDsToDeploy := resources.HasIDsToDeploy(stateToResourceIDs)
 
@@ -175,30 +161,11 @@ var deployCmd = &cobra.Command{
 }
 
 func deploy(resourceIDToState resources.ResourceIDToState, resourceIDToGroup resources.ResourceIDToGroup, resourceIDToDepth resources.ResourceIDToDepth, groupToDepthToResourceIDs resources.GroupToDepthToResourceIDs, currResourceIDToData resources.ResourceIDToData) error {
-	groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceIDToGroup, resourceIDToState)
-	fmt.Println("groups with state changes")
-	helpers.PrettyPrint(groupsWithStateChanges)
-
-	groupsToResourceIDs := resources.SetGroupToResourceIDs(resourceIDToGroup)
-	fmt.Println("groups to resource IDs")
-	helpers.PrettyPrint(groupsToResourceIDs)
-
-	groupToHighestDeployDepth := resources.SetGroupToHighestDeployDepth(
-		resourceIDToDepth,
-		resourceIDToState,
-		groupsWithStateChanges,
-		groupsToResourceIDs,
-	)
-	fmt.Println("group to deploy depth")
-	helpers.PrettyPrint(groupToHighestDeployDepth)
-
 	resources.LogIDPreDeploymentStates(groupToDepthToResourceIDs, resourceIDToState)
 
 	resourceIDToDeployState := resources.UpdateIDToDeployStateOfPending(resourceIDToState)
-	fmt.Println("initial deploy state")
-	helpers.PrettyPrint(resourceIDToDeployState)
 
-	err := deployGroups(groupsWithStateChanges, resourceIDToDeployState, resourceIDToState, groupToHighestDeployDepth, groupToDepthToResourceIDs, currResourceIDToData, resourceIDToDepth, groupsToResourceIDs)
+	err := deployGroups(resourceIDToDeployState, resourceIDToState, groupToDepthToResourceIDs, currResourceIDToData, resourceIDToDepth, resourceIDToGroup)
 
 	if err != nil {
 		return err
@@ -209,7 +176,18 @@ func deploy(resourceIDToState resources.ResourceIDToState, resourceIDToGroup res
 
 type DeployGroupOkChan chan bool
 
-func deployGroups(groupsWithStateChanges resources.GroupsWithStateChanges, resourceIDToDeployState resources.ResourceIDToDeployState, resourceIDToState resources.ResourceIDToState, groupToHighestDeployDepth resources.GroupToHighestDeployDepth, groupToDepthToResourceIDs resources.GroupToDepthToResourceIDs, currResourceIDToData resources.ResourceIDToData, resourceIDToDepth resources.ResourceIDToDepth, groupsToResourceIDs resources.GroupToResourceIDs) error {
+func deployGroups(resourceIDToDeployState resources.ResourceIDToDeployState, resourceIDToState resources.ResourceIDToState, groupToDepthToResourceIDs resources.GroupToDepthToResourceIDs, currResourceIDToData resources.ResourceIDToData, resourceIDToDepth resources.ResourceIDToDepth, resourceIDToGroup resources.ResourceIDToGroup) error {
+	groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceIDToGroup, resourceIDToState)
+
+	groupsToResourceIDs := resources.SetGroupToResourceIDs(resourceIDToGroup)
+
+	groupToHighestDeployDepth := resources.SetGroupToHighestDeployDepth(
+		resourceIDToDepth,
+		resourceIDToState,
+		groupsWithStateChanges,
+		groupsToResourceIDs,
+	)
+
 	numOfGroupsToDeploy := len(groupsWithStateChanges)
 
 	deployGroupOkChan := make(DeployGroupOkChan)
