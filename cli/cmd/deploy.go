@@ -156,8 +156,6 @@ var deployCmd = &cobra.Command{
 
 		numOfGroupsToDeploy := len(groupsWithStateChanges)
 
-		numOfGroupsFinishedDeploying := 0
-
 		type DeployResourceOkChan chan bool
 
 		deployResourceOkChan := make(DeployResourceOkChan)
@@ -274,20 +272,28 @@ var deployCmd = &cobra.Command{
 			go deployGroup(deployGroupOkChan, group)
 		}
 
-		// numOfGroupsDeployedOk := 0
-		// numOfGroupsDeployedErr := 0
+		numOfGroupsDeployedOk := 0
+		numOfGroupsDeployedErr := 0
 
-		for range deployGroupOkChan {
-			// if numOfGroupsDeployedOk++
-			// else numOfGroupsDeployedErr++
-			// numOfGroupsFinishedDeploying := ...
-			// if num finished == to deploy
-			// if err > 0, os exit 1 return else
-			// os exit 0.
-			numOfGroupsFinishedDeploying++
-			if numOfGroupsToDeploy == numOfGroupsFinishedDeploying {
-				fmt.Println("FINISHED DEPLOYING")
-				break
+		for groupDeployedOk := range deployGroupOkChan {
+			if groupDeployedOk {
+				numOfGroupsDeployedOk++
+			} else {
+				numOfGroupsDeployedErr++
+			}
+
+			numOfGroupsFinishedDeploying := numOfGroupsDeployedOk + numOfGroupsDeployedErr
+
+			if numOfGroupsFinishedDeploying == numOfGroupsToDeploy {
+				if numOfGroupsDeployedErr > 0 {
+					fmt.Println("Deployment failed")
+					os.Exit(1)
+					return
+
+				}
+				fmt.Println("Deployment succeeded")
+				os.Exit(0)
+				return
 			}
 		}
 
