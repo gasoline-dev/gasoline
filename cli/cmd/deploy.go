@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"gas/internal/helpers"
 	"gas/internal/resources"
+	"log"
 	"os"
 	"time"
 
+	"github.com/cloudflare/cloudflare-go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -167,7 +170,8 @@ var deployCmd = &cobra.Command{
 
 			resources.LogIDDeployState(group, depth, resourceID, timestamp, resourceIDToDeployState)
 
-			time.Sleep(time.Second)
+			resourceProcessors["cloudflare-kv:create"]("test")
+			time.Sleep(time.Second * 5)
 
 			// TODO: Everything below is for state OK -> Add if-else
 			// to handle on err -> UpdateResourceIDToDeployStateOnErr
@@ -292,29 +296,10 @@ var deployCmd = &cobra.Command{
 
 				}
 				fmt.Println("Deployment succeeded")
-				resourceProcessors["test"]("test")
 				os.Exit(0)
 				return
 			}
 		}
-
-		/*
-			api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			// Most API calls require a Context
-			ctx := context.Background()
-
-			// Fetch user details on the account
-			u, err := api.UserDetails(ctx)
-			if err != nil {
-				log.Fatal(err)
-			}
-			// Print user details
-			fmt.Println(u)
-		*/
 	},
 }
 
@@ -323,15 +308,18 @@ type ResourceProcessors map[string]func(arg interface{})
 var resourceProcessors ResourceProcessors = make(ResourceProcessors)
 
 func init() {
-	resourceProcessors["print"] = func(arg interface{}) {
-		fmt.Println(arg)
-	}
-
-	resourceProcessors["double"] = func(arg interface{}) {
-		if v, ok := arg.(int); ok {
-			fmt.Println(v * 2)
-		} else {
-			fmt.Println("Expected an integer")
+	resourceProcessors["cloudflare-kv:create"] = func(arg interface{}) {
+		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
+		if err != nil {
+			log.Fatal(err)
 		}
+
+		req := cloudflare.CreateWorkersKVNamespaceParams{Title: "test_namespace2"}
+		response, err := api.CreateWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), req)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		fmt.Println(response)
 	}
 }
