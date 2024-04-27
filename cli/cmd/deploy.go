@@ -128,196 +128,21 @@ var deployCmd = &cobra.Command{
 		helpers.PrettyPrint(stateToResourceIDs)
 
 		hasResourceIDsToDeploy := resources.HasIDsToDeploy(stateToResourceIDs)
+
 		if !hasResourceIDsToDeploy {
 			fmt.Println("No resource changes to deploy")
 			return
 		}
 
-		groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceIDToGroup, resourceIDToState)
-		fmt.Println("groups with state changes")
-		helpers.PrettyPrint(groupsWithStateChanges)
+		err = deploy(resourceIDToState, resourceIDToGroup, resourceIDToDepth, groupToDepthToResourceIDs, currResourceIDToData)
 
-		groupsToResourceIDs := resources.SetGroupToResourceIDs(resourceIDToGroup)
-		fmt.Println("groups to resource IDs")
-		helpers.PrettyPrint(groupsToResourceIDs)
-
-		groupToHighestDeployDepth := resources.SetGroupToHighestDeployDepth(
-			resourceIDToDepth,
-			resourceIDToState,
-			groupsWithStateChanges,
-			groupsToResourceIDs,
-		)
-		fmt.Println("group to deploy depth")
-		helpers.PrettyPrint(groupToHighestDeployDepth)
-
-		resources.LogIDPreDeploymentStates(groupToDepthToResourceIDs, resourceIDToState)
-
-		resourceIDToDeployState := resources.UpdateIDToDeployStateOfPending(resourceIDToState)
-		fmt.Println("initial deploy state")
-		helpers.PrettyPrint(resourceIDToDeployState)
-
-		numOfGroupsToDeploy := len(groupsWithStateChanges)
-
-		type DeployResourceOkChan chan bool
-
-		deployResourceOkChan := make(DeployResourceOkChan)
-
-		deployResource := func(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceID string) {
-			resources.UpdateIDToDeployStateOnStart(resourceIDToDeployState, resourceIDToState, resourceID)
-
-			timestamp := time.Now().UnixMilli()
-
-			resources.LogIDDeployState(group, depth, resourceID, timestamp, resourceIDToDeployState)
-
-			resourceProcessorOkChan := make(ResourceProcessorOkChan)
-
-			go resourceProcessors["cloudflare-kv:create"]("test", resourceProcessorOkChan)
-
-			if <-resourceProcessorOkChan {
-				resources.UpdateResourceIDToDeployStateOnOk(
-					resourceIDToDeployState,
-					resourceID,
-				)
-
-				timestamp = time.Now().UnixMilli()
-
-				resources.LogIDDeployState(
-					group,
-					depth,
-					resourceID,
-					timestamp,
-					resourceIDToDeployState,
-				)
-
-				deployResourceOkChan <- true
-
-				return
-			}
-
-			resources.UpdateResourceIDToDeployStateOnErr(
-				resourceIDToDeployState,
-				resourceID,
-			)
-
-			timestamp = time.Now().UnixMilli()
-
-			resources.LogIDDeployState(
-				group,
-				depth,
-				resourceID,
-				timestamp,
-				resourceIDToDeployState,
-			)
-
-			deployResourceOkChan <- false
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+			return
 		}
 
-		type DeployGroupOkChan chan bool
-
-		deployGroupOkChan := make(DeployGroupOkChan)
-
-		deployGroup := func(deployGroupOkChan DeployGroupOkChan, group int) {
-			highestGroupDeployDepth := groupToHighestDeployDepth[group]
-
-			initialGroupResourceIDsToDeploy := resources.SetInitialGroupIDsToDeploy(highestGroupDeployDepth, group, groupToDepthToResourceIDs, currResourceIDToData, resourceIDToDeployState)
-
-			for _, resourceID := range initialGroupResourceIDsToDeploy {
-				depth := resourceIDToDepth[resourceID]
-				go deployResource(deployResourceOkChan, group, depth, resourceID)
-			}
-
-			numOfResourcesInGroupToDeploy := resources.SetNumInGroupToDeploy(
-				groupsToResourceIDs,
-				resourceIDToState,
-				group,
-			)
-
-			numOfResourcesDeployedOk := 0
-			numOfResourcesDeployedErr := 0
-			numOfResourcesDeployedCanceled := 0
-
-			for resourceDeployedOk := range deployResourceOkChan {
-				if resourceDeployedOk {
-					numOfResourcesDeployedOk++
-				} else {
-					numOfResourcesDeployedErr++
-					// Cancel PENDING resources.
-					// Check for 0 because resources should only
-					// be canceled one time.
-					if numOfResourcesDeployedCanceled == 0 {
-						numOfResourcesDeployedCanceled = resources.UpdateIDToDeployStateOfCanceled(resourceIDToDeployState)
-					}
-				}
-
-				numOfResourcesInFinalDeployState := numOfResourcesDeployedOk + numOfResourcesDeployedErr + numOfResourcesDeployedCanceled
-
-				if numOfResourcesInFinalDeployState == int(numOfResourcesInGroupToDeploy) {
-					if numOfResourcesDeployedErr == 0 {
-						deployGroupOkChan <- true
-					} else {
-						deployGroupOkChan <- false
-					}
-					return
-				} else {
-					for _, resourceID := range groupsToResourceIDs[group] {
-						if resourceIDToDeployState[resourceID] == resources.DeployState("PENDING") {
-							shouldDeployResource := true
-
-							// Is resource dependent on onther deploying resource?
-							for _, dependencyID := range currResourceIDToData[resourceID].Dependencies {
-								activeStates := map[resources.DeployState]bool{
-									resources.DeployState(resources.CREATE_IN_PROGRESS): true,
-									resources.DeployState(resources.DELETE_IN_PROGRESS): true,
-									resources.DeployState(resources.PENDING):            true,
-									resources.DeployState(resources.UPDATE_IN_PROGRESS): true,
-								}
-
-								dependencyIDDeployState := resourceIDToDeployState[dependencyID]
-
-								if activeStates[dependencyIDDeployState] {
-									shouldDeployResource = false
-									break
-								}
-							}
-
-							if shouldDeployResource {
-								depth := resourceIDToDepth[resourceID]
-								go deployResource(deployResourceOkChan, group, depth, resourceID)
-							}
-						}
-					}
-				}
-			}
-		}
-
-		for _, group := range groupsWithStateChanges {
-			go deployGroup(deployGroupOkChan, group)
-		}
-
-		numOfGroupsDeployedOk := 0
-		numOfGroupsDeployedErr := 0
-
-		for groupDeployedOk := range deployGroupOkChan {
-			if groupDeployedOk {
-				numOfGroupsDeployedOk++
-			} else {
-				numOfGroupsDeployedErr++
-			}
-
-			numOfGroupsFinishedDeploying := numOfGroupsDeployedOk + numOfGroupsDeployedErr
-
-			if numOfGroupsFinishedDeploying == numOfGroupsToDeploy {
-				if numOfGroupsDeployedErr > 0 {
-					fmt.Println("Deployment failed")
-					os.Exit(1)
-					return
-
-				}
-				fmt.Println("Deployment succeeded")
-				os.Exit(0)
-				return
-			}
-		}
+		fmt.Println("Deployment successful")
 	},
 }
 
@@ -347,4 +172,189 @@ func init() {
 		fmt.Println(response)
 		resourceProcessorOkChan <- true
 	}
+}
+
+func deploy(resourceIDToState resources.ResourceIDToState, resourceIDToGroup resources.ResourceIDToGroup, resourceIDToDepth resources.ResourceIDToDepth, groupToDepthToResourceIDs resources.GroupToDepthToResourceIDs, currResourceIDToData resources.ResourceIDToData) error {
+	groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceIDToGroup, resourceIDToState)
+	fmt.Println("groups with state changes")
+	helpers.PrettyPrint(groupsWithStateChanges)
+
+	groupsToResourceIDs := resources.SetGroupToResourceIDs(resourceIDToGroup)
+	fmt.Println("groups to resource IDs")
+	helpers.PrettyPrint(groupsToResourceIDs)
+
+	groupToHighestDeployDepth := resources.SetGroupToHighestDeployDepth(
+		resourceIDToDepth,
+		resourceIDToState,
+		groupsWithStateChanges,
+		groupsToResourceIDs,
+	)
+	fmt.Println("group to deploy depth")
+	helpers.PrettyPrint(groupToHighestDeployDepth)
+
+	resources.LogIDPreDeploymentStates(groupToDepthToResourceIDs, resourceIDToState)
+
+	resourceIDToDeployState := resources.UpdateIDToDeployStateOfPending(resourceIDToState)
+	fmt.Println("initial deploy state")
+	helpers.PrettyPrint(resourceIDToDeployState)
+
+	numOfGroupsToDeploy := len(groupsWithStateChanges)
+
+	type DeployResourceOkChan chan bool
+
+	deployResourceOkChan := make(DeployResourceOkChan)
+
+	deployResource := func(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceID string) {
+		resources.UpdateIDToDeployStateOnStart(resourceIDToDeployState, resourceIDToState, resourceID)
+
+		timestamp := time.Now().UnixMilli()
+
+		resources.LogIDDeployState(group, depth, resourceID, timestamp, resourceIDToDeployState)
+
+		resourceProcessorOkChan := make(ResourceProcessorOkChan)
+
+		go resourceProcessors["cloudflare-kv:create"]("test", resourceProcessorOkChan)
+
+		if <-resourceProcessorOkChan {
+			resources.UpdateResourceIDToDeployStateOnOk(
+				resourceIDToDeployState,
+				resourceID,
+			)
+
+			timestamp = time.Now().UnixMilli()
+
+			resources.LogIDDeployState(
+				group,
+				depth,
+				resourceID,
+				timestamp,
+				resourceIDToDeployState,
+			)
+
+			deployResourceOkChan <- true
+
+			return
+		}
+
+		resources.UpdateResourceIDToDeployStateOnErr(
+			resourceIDToDeployState,
+			resourceID,
+		)
+
+		timestamp = time.Now().UnixMilli()
+
+		resources.LogIDDeployState(
+			group,
+			depth,
+			resourceID,
+			timestamp,
+			resourceIDToDeployState,
+		)
+
+		deployResourceOkChan <- false
+	}
+
+	type DeployGroupOkChan chan bool
+
+	deployGroupOkChan := make(DeployGroupOkChan)
+
+	deployGroup := func(deployGroupOkChan DeployGroupOkChan, group int) {
+		highestGroupDeployDepth := groupToHighestDeployDepth[group]
+
+		initialGroupResourceIDsToDeploy := resources.SetInitialGroupIDsToDeploy(highestGroupDeployDepth, group, groupToDepthToResourceIDs, currResourceIDToData, resourceIDToDeployState)
+
+		for _, resourceID := range initialGroupResourceIDsToDeploy {
+			depth := resourceIDToDepth[resourceID]
+			go deployResource(deployResourceOkChan, group, depth, resourceID)
+		}
+
+		numOfResourcesInGroupToDeploy := resources.SetNumInGroupToDeploy(
+			groupsToResourceIDs,
+			resourceIDToState,
+			group,
+		)
+
+		numOfResourcesDeployedOk := 0
+		numOfResourcesDeployedErr := 0
+		numOfResourcesDeployedCanceled := 0
+
+		for resourceDeployedOk := range deployResourceOkChan {
+			if resourceDeployedOk {
+				numOfResourcesDeployedOk++
+			} else {
+				numOfResourcesDeployedErr++
+				// Cancel PENDING resources.
+				// Check for 0 because resources should only
+				// be canceled one time.
+				if numOfResourcesDeployedCanceled == 0 {
+					numOfResourcesDeployedCanceled = resources.UpdateIDToDeployStateOfCanceled(resourceIDToDeployState)
+				}
+			}
+
+			numOfResourcesInFinalDeployState := numOfResourcesDeployedOk + numOfResourcesDeployedErr + numOfResourcesDeployedCanceled
+
+			if numOfResourcesInFinalDeployState == int(numOfResourcesInGroupToDeploy) {
+				if numOfResourcesDeployedErr == 0 {
+					deployGroupOkChan <- true
+				} else {
+					deployGroupOkChan <- false
+				}
+				return
+			} else {
+				for _, resourceID := range groupsToResourceIDs[group] {
+					if resourceIDToDeployState[resourceID] == resources.DeployState("PENDING") {
+						shouldDeployResource := true
+
+						// Is resource dependent on onther deploying resource?
+						for _, dependencyID := range currResourceIDToData[resourceID].Dependencies {
+							activeStates := map[resources.DeployState]bool{
+								resources.DeployState(resources.CREATE_IN_PROGRESS): true,
+								resources.DeployState(resources.DELETE_IN_PROGRESS): true,
+								resources.DeployState(resources.PENDING):            true,
+								resources.DeployState(resources.UPDATE_IN_PROGRESS): true,
+							}
+
+							dependencyIDDeployState := resourceIDToDeployState[dependencyID]
+
+							if activeStates[dependencyIDDeployState] {
+								shouldDeployResource = false
+								break
+							}
+						}
+
+						if shouldDeployResource {
+							depth := resourceIDToDepth[resourceID]
+							go deployResource(deployResourceOkChan, group, depth, resourceID)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for _, group := range groupsWithStateChanges {
+		go deployGroup(deployGroupOkChan, group)
+	}
+
+	numOfGroupsDeployedOk := 0
+	numOfGroupsDeployedErr := 0
+
+	for groupDeployedOk := range deployGroupOkChan {
+		if groupDeployedOk {
+			numOfGroupsDeployedOk++
+		} else {
+			numOfGroupsDeployedErr++
+		}
+
+		numOfGroupsFinishedDeploying := numOfGroupsDeployedOk + numOfGroupsDeployedErr
+
+		if numOfGroupsFinishedDeploying == numOfGroupsToDeploy {
+			if numOfGroupsDeployedErr > 0 {
+				return fmt.Errorf("deployment failed")
+			}
+			break
+		}
+	}
+
+	return nil
 }
