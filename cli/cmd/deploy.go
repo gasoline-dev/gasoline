@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"gas/internal/helpers"
 	"gas/internal/resources"
-	"log"
 	"os"
 	"time"
 
@@ -170,13 +169,32 @@ var deployCmd = &cobra.Command{
 
 			resources.LogIDDeployState(group, depth, resourceID, timestamp, resourceIDToDeployState)
 
-			resourceProcessors["cloudflare-kv:create"]("test")
-			time.Sleep(time.Second * 5)
+			resourceProcessorOkChan := make(ResourceProcessorOkChan)
 
-			// TODO: Everything below is for state OK -> Add if-else
-			// to handle on err -> UpdateResourceIDToDeployStateOnErr
+			go resourceProcessors["cloudflare-kv:create"]("test", resourceProcessorOkChan)
 
-			resources.UpdateResourceIDToDeployStateOnOk(
+			if <-resourceProcessorOkChan {
+				resources.UpdateResourceIDToDeployStateOnOk(
+					resourceIDToDeployState,
+					resourceID,
+				)
+
+				timestamp = time.Now().UnixMilli()
+
+				resources.LogIDDeployState(
+					group,
+					depth,
+					resourceID,
+					timestamp,
+					resourceIDToDeployState,
+				)
+
+				deployResourceOkChan <- true
+
+				return
+			}
+
+			resources.UpdateResourceIDToDeployStateOnErr(
 				resourceIDToDeployState,
 				resourceID,
 			)
@@ -191,7 +209,7 @@ var deployCmd = &cobra.Command{
 				resourceIDToDeployState,
 			)
 
-			deployResourceOkChan <- true
+			deployResourceOkChan <- false
 		}
 
 		type DeployGroupOkChan chan bool
@@ -303,23 +321,30 @@ var deployCmd = &cobra.Command{
 	},
 }
 
-type ResourceProcessors map[string]func(arg interface{})
+type ResourceProcessorOkChan = chan bool
+
+type ResourceProcessors map[string]func(arg interface{}, resourceProcessOkChan ResourceProcessorOkChan)
 
 var resourceProcessors ResourceProcessors = make(ResourceProcessors)
 
 func init() {
-	resourceProcessors["cloudflare-kv:create"] = func(arg interface{}) {
+	resourceProcessors["cloudflare-kv:create"] = func(arg interface{}, resourceProcessorOkChan ResourceProcessorOkChan) {
 		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println("Error:", err)
+			resourceProcessorOkChan <- false
+			return
 		}
 
 		req := cloudflare.CreateWorkersKVNamespaceParams{Title: "test_namespace2"}
 		response, err := api.CreateWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), req)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println("Error:", err)
+			resourceProcessorOkChan <- false
+			return
 		}
 
 		fmt.Println(response)
+		resourceProcessorOkChan <- true
 	}
 }
