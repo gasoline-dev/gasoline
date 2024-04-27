@@ -12,7 +12,6 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-	"time"
 )
 
 //go:embed embed/get-index-build-file-configs.js
@@ -211,51 +210,6 @@ func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 		return nil, err
 	}
 	return result, nil
-}
-
-type HasResourceIDsToDeploy bool
-
-func HasIDsToDeploy(stateToResourceIDs StateToResourceIDs) HasResourceIDsToDeploy {
-	statesToDeploy := []State{State(CREATED), State(DELETED), State(UPDATED)}
-	for _, state := range statesToDeploy {
-		if _, exists := stateToResourceIDs[state]; exists {
-			return true
-		}
-	}
-	return false
-}
-
-/*
-[07:54:56] Group 0 -> Depth 0 -> core:base:cloudflare-worker:12345 -> CREATE_IN_PROGRESS
-*/
-func LogIDDeployState(group int, depth int, resourceID string, timestamp int64, resourceIDToDeployState ResourceIDToDeployState) {
-	date := time.Unix(0, timestamp*int64(time.Millisecond))
-	hours := fmt.Sprintf("%02d", date.Hour())
-	minutes := fmt.Sprintf("%02d", date.Minute())
-	seconds := fmt.Sprintf("%02d", date.Second())
-	formattedTime := fmt.Sprintf("%s:%s:%s", hours, minutes, seconds)
-
-	fmt.Printf("[%s] Group %d -> Depth %d -> %s -> %s\n",
-		formattedTime,
-		group,
-		depth,
-		resourceID,
-		resourceIDToDeployState[resourceID],
-	)
-}
-
-/*
-Group 0 -> Depth 0 -> core:base:cloudflare-worker:12345
-*/
-func LogIDPreDeploymentStates(groupToDepthToResourceID GroupToDepthToResourceIDs, resourceIDToState ResourceIDToState) {
-	fmt.Println("# Pre-Deployment States:")
-	for group, depthToResourceID := range groupToDepthToResourceID {
-		for depth, resourceIDs := range depthToResourceID {
-			for _, resourceID := range resourceIDs {
-				fmt.Printf("Group %d -> Depth %d -> %s -> %s\n", group, depth, resourceID, resourceIDToState[resourceID])
-			}
-		}
-	}
 }
 
 type ResourceDependencyIDs [][]string
@@ -734,72 +688,6 @@ func SetIDsWithInDegreesOf(IDToInDegrees ResourceIDToInDegrees, degrees int) Res
 	return result
 }
 
-type InitialResourceIDsToDeploy []string
-
-/*
-["core:base:cloudflare-worker:12345"]
-
-Deployments can't only start at the highest depth
-containing a resource to deploy (i.e. a resource
-with a deploy state of PENDING).
-
-For example, given a graph of:
-a -> b
-b -> c
-c -> d
-a -> e
-
-d has a depth of 3 and e has a depth of 1.
-
-If just d and e need to be deployed, the deployment can't start
-at depth 3 only. e would be blocked until d finished because
-d has a higher depth than e. That's not optimal. They should
-be started at the same time and deployed concurrently.
-*/
-func SetInitialGroupIDsToDeploy(highestDepthContainingAResourceToDeploy int, group int, groupToDepthToResourceIDs GroupToDepthToResourceIDs, resourceIDToData ResourceIDToData, resourceIDToDeployState ResourceIDToDeployState) InitialResourceIDsToDeploy {
-	var result InitialResourceIDsToDeploy
-
-	// Add every resource at highest deploy depth containing
-	// a resource to deploy.
-	result = append(result, groupToDepthToResourceIDs[group][highestDepthContainingAResourceToDeploy]...)
-
-	// Check all other depths, except 0, for resources that can
-	// start deploying on deployment initiation (0 is skipped
-	// because a resource at that depth can only be deployed
-	// first if it's being deployed in isolation).
-	depthToCheck := highestDepthContainingAResourceToDeploy - 1
-	for depthToCheck > 0 {
-		for _, resourceIDAtDepthToCheck := range groupToDepthToResourceIDs[group][depthToCheck] {
-			for _, dependencyID := range resourceIDToData[resourceIDAtDepthToCheck].Dependencies {
-				// If resource at depth to check is PENDING and is not
-				// dependent on any resource in the ongoing result, then
-				// append it to the result.
-				if resourceIDToDeployState[resourceIDAtDepthToCheck] == DeployState("PENDING") && !helpers.IsInSlice(result, dependencyID) {
-					result = append(result, resourceIDAtDepthToCheck)
-				}
-			}
-		}
-		depthToCheck--
-	}
-
-	return result
-}
-
-type NumInGroupToDeploy int
-
-/*
-TODO
-*/
-func SetNumInGroupToDeploy(groupToResourceIDs GroupToResourceIDs, resourceIDToState ResourceIDToState, group int) NumInGroupToDeploy {
-	result := NumInGroupToDeploy(0)
-	for _, resourceID := range groupToResourceIDs[group] {
-		if resourceIDToState[resourceID] != State(UNCHANGED) {
-			result++
-		}
-	}
-	return result
-}
-
 type StateToResourceIDs = map[State][]string
 
 /*
@@ -819,105 +707,6 @@ func SetStateToResourceIDs(resourceIDToState ResourceIDToState) StateToResourceI
 		result[state] = append(result[state], resourceID)
 	}
 	return result
-}
-
-type ResourceIDToDeployState map[string]DeployState
-
-type DeployState string
-
-const (
-	CANCELED           DeployState = "CANCELED"
-	CREATE_COMPLETE    DeployState = "CREATE_COMPLETE"
-	CREATE_FAILED      DeployState = "CREATE_FAILED"
-	CREATE_IN_PROGRESS DeployState = "CREATE_IN_PROGRESS"
-	DELETE_COMPLETE    DeployState = "DELETE_COMPLETE"
-	DELETE_FAILED      DeployState = "DEPLOY_FAILED"
-	DELETE_IN_PROGRESS DeployState = "DELETE_IN_PROGRESS"
-	PENDING            DeployState = "PENDING"
-	UPDATE_COMPLETE    DeployState = "UPDATE_COMPLETE"
-	UPDATE_FAILED      DeployState = "UPDATE_FAILED"
-	UPDATE_IN_PROGRESS DeployState = "UPDATE_IN_PROGRESS"
-)
-
-/*
-	{
-		"core:base:cloudflare-worker:12345": "PENDING",
-	}
-*/
-func UpdateIDToDeployStateOfPending(resourceIDToState ResourceIDToState) ResourceIDToDeployState {
-	result := make(ResourceIDToDeployState)
-	for resourceID, state := range resourceIDToState {
-		if state != State(UNCHANGED) {
-			result[resourceID] = DeployState(PENDING)
-		}
-	}
-	return result
-}
-
-/*
-	{
-		"core:base:cloudflare-worker:12345": "CANCELED"
-	}
-
-Also returns the number of resources canceled.
-*/
-func UpdateIDToDeployStateOfCanceled(resourceIDToDeployState ResourceIDToDeployState) int {
-	result := 0
-	for resourceID, deployState := range resourceIDToDeployState {
-		if deployState == DeployState(PENDING) {
-			resourceIDToDeployState[resourceID] = DeployState(CANCELED)
-			result++
-		}
-	}
-	return result
-}
-
-/*
-	{
-		"core:base:cloudflare-worker:12345": "CREATE_FAILED"
-	}
-*/
-func UpdateResourceIDToDeployStateOnErr(resourceIDToDeployState ResourceIDToDeployState, resourceID string) {
-	switch resourceIDToDeployState[resourceID] {
-	case DeployState(CREATE_IN_PROGRESS):
-		resourceIDToDeployState[resourceID] = DeployState(CREATE_FAILED)
-	case DeployState(DELETE_IN_PROGRESS):
-		resourceIDToDeployState[resourceID] = DeployState(DELETE_FAILED)
-	case DeployState(UPDATE_IN_PROGRESS):
-		resourceIDToDeployState[resourceID] = DeployState(UPDATE_FAILED)
-	}
-}
-
-/*
-	{
-		"core:base:cloudflare-worker:12345": "CREATE_COMPLETE"
-	}
-*/
-func UpdateResourceIDToDeployStateOnOk(resourceIDToDeployState ResourceIDToDeployState, resourceID string) {
-	switch resourceIDToDeployState[resourceID] {
-	case DeployState(CREATE_IN_PROGRESS):
-		resourceIDToDeployState[resourceID] = DeployState(CREATE_COMPLETE)
-	case DeployState(DELETE_IN_PROGRESS):
-		resourceIDToDeployState[resourceID] = DeployState(DELETE_COMPLETE)
-	case DeployState(UPDATE_IN_PROGRESS):
-		resourceIDToDeployState[resourceID] = DeployState(UPDATE_COMPLETE)
-	}
-}
-
-/*
-	{
-		"core:base:cloudflare-worker:12345": "CREATE_IN_PROGRESS"
-	}
-*/
-func UpdateIDToDeployStateOnStart(resourceIDToDeployState ResourceIDToDeployState, resourceIDToState ResourceIDToState, resourceID string) {
-	switch resourceIDToState[resourceID] {
-	case State(CREATED):
-		resourceIDToDeployState[resourceID] = DeployState(CREATE_IN_PROGRESS)
-	case State(DELETED):
-		resourceIDToDeployState[resourceID] = DeployState(DELETE_IN_PROGRESS)
-	case State(UPDATED):
-		resourceIDToDeployState[resourceID] = DeployState(UPDATE_IN_PROGRESS)
-	}
 }
 
 /*
