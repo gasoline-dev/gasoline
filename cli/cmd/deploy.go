@@ -13,6 +13,34 @@ import (
 	"github.com/spf13/viper"
 )
 
+type ResourceProcessorOkChan = chan bool
+
+type ResourceProcessors map[string]func(arg interface{}, resourceProcessOkChan ResourceProcessorOkChan)
+
+var resourceProcessors ResourceProcessors = make(ResourceProcessors)
+
+func init() {
+	resourceProcessors["cloudflare-kv:create"] = func(arg interface{}, resourceProcessorOkChan ResourceProcessorOkChan) {
+		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
+		if err != nil {
+			fmt.Println("Error:", err)
+			resourceProcessorOkChan <- false
+			return
+		}
+
+		req := cloudflare.CreateWorkersKVNamespaceParams{Title: "test_namespace2"}
+		response, err := api.CreateWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), req)
+		if err != nil {
+			fmt.Println("Error:", err)
+			resourceProcessorOkChan <- false
+			return
+		}
+
+		fmt.Println(response)
+		resourceProcessorOkChan <- true
+	}
+}
+
 var deployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Deploy resources to the cloud",
@@ -144,34 +172,6 @@ var deployCmd = &cobra.Command{
 
 		fmt.Println("Deployment successful")
 	},
-}
-
-type ResourceProcessorOkChan = chan bool
-
-type ResourceProcessors map[string]func(arg interface{}, resourceProcessOkChan ResourceProcessorOkChan)
-
-var resourceProcessors ResourceProcessors = make(ResourceProcessors)
-
-func init() {
-	resourceProcessors["cloudflare-kv:create"] = func(arg interface{}, resourceProcessorOkChan ResourceProcessorOkChan) {
-		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
-		if err != nil {
-			fmt.Println("Error:", err)
-			resourceProcessorOkChan <- false
-			return
-		}
-
-		req := cloudflare.CreateWorkersKVNamespaceParams{Title: "test_namespace2"}
-		response, err := api.CreateWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), req)
-		if err != nil {
-			fmt.Println("Error:", err)
-			resourceProcessorOkChan <- false
-			return
-		}
-
-		fmt.Println(response)
-		resourceProcessorOkChan <- true
-	}
 }
 
 func deploy(resourceIDToState resources.ResourceIDToState, resourceIDToGroup resources.ResourceIDToGroup, resourceIDToDepth resources.ResourceIDToDepth, groupToDepthToResourceIDs resources.GroupToDepthToResourceIDs, currResourceIDToData resources.ResourceIDToData) error {
