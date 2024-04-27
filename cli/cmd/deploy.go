@@ -292,6 +292,7 @@ var deployCmd = &cobra.Command{
 
 				}
 				fmt.Println("Deployment succeeded")
+				resourceProcessors["test"]("test")
 				os.Exit(0)
 				return
 			}
@@ -315,4 +316,22 @@ var deployCmd = &cobra.Command{
 			fmt.Println(u)
 		*/
 	},
+}
+
+type ResourceProcessors map[string]func(arg interface{})
+
+var resourceProcessors ResourceProcessors = make(ResourceProcessors)
+
+func init() {
+	resourceProcessors["print"] = func(arg interface{}) {
+		fmt.Println(arg)
+	}
+
+	resourceProcessors["double"] = func(arg interface{}) {
+		if v, ok := arg.(int); ok {
+			fmt.Println(v * 2)
+		} else {
+			fmt.Println("Expected an integer")
+		}
+	}
 }
