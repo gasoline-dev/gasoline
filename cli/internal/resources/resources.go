@@ -395,9 +395,9 @@ func SetGroupToHighestDeployDepth(resourceIDToDepth ResourceIDToDepth, resourceI
 				continue
 			}
 
-			// Update deploy depth if resource's depth is less than
+			// Update deploy depth if resource's depth is greater than
 			// the comparative deploy depth.
-			if resourceIDToDepth[resourceID] < deployDepth {
+			if resourceIDToDepth[resourceID] > deployDepth {
 				result[group] = resourceIDToDepth[resourceID]
 				deployDepth = resourceIDToDepth[resourceID]
 			}
