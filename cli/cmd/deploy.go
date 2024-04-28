@@ -133,7 +133,7 @@ var deployCmd = &cobra.Command{
 
 		stateToResourceIDs := resources.SetStateToResourceIDs(resourceIDToState)
 
-		hasResourceIDsToDeploy := hasIDsToDeploy(stateToResourceIDs)
+		hasResourceIDsToDeploy := hasResourceIDsToDeploy(stateToResourceIDs)
 
 		if !hasResourceIDsToDeploy {
 			fmt.Println("No resource changes to deploy")
@@ -152,18 +152,6 @@ var deployCmd = &cobra.Command{
 	},
 }
 
-type hasResourceIDsToDeploy bool
-
-func hasIDsToDeploy(stateToResourceIDs resources.StateToResourceIDs) hasResourceIDsToDeploy {
-	statesToDeploy := []resources.State{resources.State(resources.CREATED), resources.State(resources.DELETED), resources.State(resources.UPDATED)}
-	for _, state := range statesToDeploy {
-		if _, exists := stateToResourceIDs[state]; exists {
-			return true
-		}
-	}
-	return false
-}
-
 func deploy(resourceIDToState resources.ResourceIDToState, resourceIDToGroup resources.ResourceIDToGroup, resourceIDToDepth resources.ResourceIDToDepth, groupToDepthToResourceIDs resources.GroupToDepthToResourceIDs, currResourceIDToData resources.ResourceIDToData) error {
 	logResourceIDPreDeployStates(groupToDepthToResourceIDs, resourceIDToState)
 
@@ -176,27 +164,6 @@ func deploy(resourceIDToState resources.ResourceIDToState, resourceIDToGroup res
 	}
 
 	return nil
-}
-
-func logResourceIDPreDeployStates(groupToDepthToResourceID resources.GroupToDepthToResourceIDs, resourceIDToState resources.ResourceIDToState) {
-	fmt.Println("# Pre-Deploy States:")
-	for group, depthToResourceID := range groupToDepthToResourceID {
-		for depth, resourceIDs := range depthToResourceID {
-			for _, resourceID := range resourceIDs {
-				fmt.Printf("Group %d -> Depth %d -> %s -> %s\n", group, depth, resourceID, resourceIDToState[resourceID])
-			}
-		}
-	}
-}
-
-func updateResourceIDToDeployStateOfPending(resourceIDToState resources.ResourceIDToState) resourceIDToDeployState {
-	result := make(resourceIDToDeployState)
-	for resourceID, state := range resourceIDToState {
-		if state != resources.State(resources.UNCHANGED) {
-			result[resourceID] = deployState(PENDING)
-		}
-	}
-	return result
 }
 
 func deployGroups(resourceIDToDeployState resourceIDToDeployState, resourceIDToState resources.ResourceIDToState, groupToDepthToResourceIDs resources.GroupToDepthToResourceIDs, currResourceIDToData resources.ResourceIDToData, resourceIDToDepth resources.ResourceIDToDepth, resourceIDToGroup resources.ResourceIDToGroup) error {
@@ -328,7 +295,7 @@ func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth 
 
 	timestamp := time.Now().UnixMilli()
 
-	logIDDeployState(group, depth, resourceID, timestamp, resourceIDToDeployState)
+	logResourceIDDeployState(group, depth, resourceID, timestamp, resourceIDToDeployState)
 
 	resourceProcessorOkChan := make(ResourceProcessorOkChan)
 
@@ -342,7 +309,7 @@ func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth 
 
 		timestamp = time.Now().UnixMilli()
 
-		logIDDeployState(
+		logResourceIDDeployState(
 			group,
 			depth,
 			resourceID,
@@ -362,7 +329,7 @@ func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth 
 
 	timestamp = time.Now().UnixMilli()
 
-	logIDDeployState(
+	logResourceIDDeployState(
 		group,
 		depth,
 		resourceID,
@@ -391,7 +358,17 @@ const (
 	UPDATE_IN_PROGRESS deployState = "UPDATE_IN_PROGRESS"
 )
 
-func logIDDeployState(group int, depth int, resourceID string, timestamp int64, resourceIDToDeployState resourceIDToDeployState) {
+func hasResourceIDsToDeploy(stateToResourceIDs resources.StateToResourceIDs) bool {
+	statesToDeploy := []resources.State{resources.State(resources.CREATED), resources.State(resources.DELETED), resources.State(resources.UPDATED)}
+	for _, state := range statesToDeploy {
+		if _, exists := stateToResourceIDs[state]; exists {
+			return true
+		}
+	}
+	return false
+}
+
+func logResourceIDDeployState(group int, depth int, resourceID string, timestamp int64, resourceIDToDeployState resourceIDToDeployState) {
 	date := time.Unix(0, timestamp*int64(time.Millisecond))
 	hours := fmt.Sprintf("%02d", date.Hour())
 	minutes := fmt.Sprintf("%02d", date.Minute())
@@ -405,6 +382,17 @@ func logIDDeployState(group int, depth int, resourceID string, timestamp int64, 
 		resourceID,
 		resourceIDToDeployState[resourceID],
 	)
+}
+
+func logResourceIDPreDeployStates(groupToDepthToResourceID resources.GroupToDepthToResourceIDs, resourceIDToState resources.ResourceIDToState) {
+	fmt.Println("# Pre-Deploy States:")
+	for group, depthToResourceID := range groupToDepthToResourceID {
+		for depth, resourceIDs := range depthToResourceID {
+			for _, resourceID := range resourceIDs {
+				fmt.Printf("Group %d -> Depth %d -> %s -> %s\n", group, depth, resourceID, resourceIDToState[resourceID])
+			}
+		}
+	}
 }
 
 type initialResourceIDsToDeploy []string
@@ -490,6 +478,16 @@ func updateResourceIDToDeployStateOnErr(resourceIDToDeployState resourceIDToDepl
 	case deployState(UPDATE_IN_PROGRESS):
 		resourceIDToDeployState[resourceID] = deployState(UPDATE_FAILED)
 	}
+}
+
+func updateResourceIDToDeployStateOfPending(resourceIDToState resources.ResourceIDToState) resourceIDToDeployState {
+	result := make(resourceIDToDeployState)
+	for resourceID, state := range resourceIDToState {
+		if state != resources.State(resources.UNCHANGED) {
+			result[resourceID] = deployState(PENDING)
+		}
+	}
+	return result
 }
 
 func updateResourceIDToDeployStateOnOk(resourceIDToDeployState resourceIDToDeployState, resourceID string) {
