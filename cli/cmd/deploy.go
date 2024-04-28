@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gas/internal/helpers"
 	"gas/internal/resources"
+	"gas/internal/validators"
 	"os"
 	"time"
 
@@ -54,7 +55,7 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		err = resources.ValidateContainerSubdirContents(currResourceContainerSubdirPaths)
+		err = validators.ValidateContainerSubdirContents(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
