@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"gas/internal/helpers"
 	"os"
@@ -58,7 +59,6 @@ func GetIndexFilePaths(resourceContainerSubdirPaths ResourceContainerSubdirPaths
 		}
 
 		for _, file := range files {
-			fmt.Println((file.Name()))
 			if !file.IsDir() && pattern.MatchString(file.Name()) {
 				result = append(result, filepath.Join(srcPath, file.Name()))
 			}
@@ -87,7 +87,7 @@ type Config struct {
 			}]
 		}]
 */
-func GetIndexBuildFileConfigs(resourceIndexBuildFilePaths ResourceIndexBuildFilePaths) (ResourceIndexBuildFileConfigs, error) {
+func GetIndexBuildFileConfigs(resourceContainerSubdirPaths ResourceContainerSubdirPaths, resourceIndexFilePaths ResourceIndexFilePaths, resourceIndexBuildFilePaths ResourceIndexBuildFilePaths) (ResourceIndexBuildFileConfigs, error) {
 	var result ResourceIndexBuildFileConfigs
 
 	embedPath := "embed/get-index-build-file-configs.js"
@@ -98,9 +98,18 @@ func GetIndexBuildFileConfigs(resourceIndexBuildFilePaths ResourceIndexBuildFile
 	}
 
 	nodeCmd := exec.Command("node", "--input-type=module")
-	filePaths := strings.Join(resourceIndexBuildFilePaths, ",")
-	nodeCmd.Env = append(nodeCmd.Env, "FILE_PATHS="+filePaths)
+
+	subdirPaths := strings.Join(resourceContainerSubdirPaths, ",")
+	nodeCmd.Env = append(nodeCmd.Env, "RESOURCE_CONTAINER_SUBDIR_PATHS="+subdirPaths)
+
+	filePaths := strings.Join(resourceIndexFilePaths, ",")
+	nodeCmd.Env = append(nodeCmd.Env, "RESOURCE_INDEX_FILE_PATHS="+filePaths)
+
+	buildFilePaths := strings.Join(resourceIndexBuildFilePaths, ",")
+	nodeCmd.Env = append(nodeCmd.Env, "RESOURCE_INDEX_BUILD_FILE_PATHS="+buildFilePaths)
+
 	nodeCmd.Stdin = bytes.NewReader(content)
+
 	output, err := nodeCmd.CombinedOutput()
 	if err != nil {
 		return result, fmt.Errorf("unable to execute embed %s\n%s", embedPath, output)
@@ -108,17 +117,17 @@ func GetIndexBuildFileConfigs(resourceIndexBuildFilePaths ResourceIndexBuildFile
 
 	strOutput := strings.TrimSpace((string(output)))
 
-	jsError := "Error: unable to get exports\n"
+	fmt.Println("str")
+	fmt.Println(strOutput)
+	fmt.Println("str")
 
-	if strings.Contains(strOutput, jsError) {
-		strOutput = strings.Replace(strOutput, jsError, "", 1)
-
-		return result, fmt.Errorf("unable to get exports in file %s\n%s", "some file path", strOutput)
+	if strings.Contains(strOutput, "Error:") {
+		return result, errors.New("unable to process exported resource configs")
 	}
 
 	err = json.Unmarshal([]byte(strOutput), &result)
 	if err != nil {
-		return result, fmt.Errorf("unable to parse JSON\n%v", err)
+		return result, fmt.Errorf("unable to parse exported resource configs JSON result\n%v", err)
 	}
 
 	return result, nil

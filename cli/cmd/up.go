@@ -62,6 +62,13 @@ var upCmd = &cobra.Command{
 			return
 		}
 
+		currResourceIndexFilePaths, err := resources.GetIndexFilePaths(currResourceContainerSubdirPaths)
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+			return
+		}
+
 		currResourceIndexBuildFilePaths, err := resources.GetIndexBuildFilePaths(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -69,7 +76,7 @@ var upCmd = &cobra.Command{
 			return
 		}
 
-		currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(currResourceIndexBuildFilePaths)
+		currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(currResourceContainerSubdirPaths, currResourceIndexFilePaths, currResourceIndexBuildFilePaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
