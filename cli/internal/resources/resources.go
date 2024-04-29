@@ -293,7 +293,7 @@ func SetIDToInDegrees(resourceMap ResourceIDToData) ResourceIDToInDegrees {
 		}
 	}
 	for resourceID := range resourceMap {
-		if _, exists := result[resourceID]; !exists {
+		if _, ok := result[resourceID]; !ok {
 			result[resourceID] = 0
 		}
 	}
@@ -376,11 +376,11 @@ type GroupToDepthToResourceIDs map[int]map[int][]string
 func SetGroupToDepthToResourceIDs(resourceIDToGroup ResourceIDToGroup, resourceIDToDepth ResourceIDToDepth) GroupToDepthToResourceIDs {
 	result := make(GroupToDepthToResourceIDs)
 	for resourceID, group := range resourceIDToGroup {
-		if _, exists := result[group]; !exists {
+		if _, ok := result[group]; !ok {
 			result[group] = make(map[int][]string)
 		}
 		depth := resourceIDToDepth[resourceID]
-		if _, exists := result[group][depth]; !exists {
+		if _, ok := result[group][depth]; !ok {
 			result[group][depth] = make([]string, 0)
 		}
 		result[group][depth] = append(result[group][depth], resourceID)
@@ -401,7 +401,7 @@ type GroupToResourceIDs map[int][]string
 func SetGroupToResourceIDs(resourceIDToGroup ResourceIDToGroup) GroupToResourceIDs {
 	result := make(GroupToResourceIDs)
 	for resourceID, group := range resourceIDToGroup {
-		if _, exists := result[group]; !exists {
+		if _, ok := result[group]; !ok {
 			result[group] = make([]string, 0)
 		}
 		result[group] = append(result[group], resourceID)
@@ -496,13 +496,13 @@ func SetIDToGroup(resourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf, res
 	result := make(ResourceIDToGroup)
 	group := 0
 	for _, sourceResourceID := range resourceIDsWithInDegreesOfZero {
-		if _, exists := result[sourceResourceID]; !exists {
+		if _, ok := result[sourceResourceID]; !ok {
 			// Initialize source resource's group.
 			result[sourceResourceID] = group
 
 			// Set group for source resource's intermediates.
 			for _, intermediateID := range resourceIDToIntermediateIDs[sourceResourceID] {
-				if _, exists := result[intermediateID]; !exists {
+				if _, ok := result[intermediateID]; !ok {
 					result[intermediateID] = group
 				}
 			}
@@ -572,7 +572,7 @@ func walkDependencies(resourceID string, resourceIDToData ResourceIDToData, memo
 	}
 
 	result := make([]string, 0)
-	if resourceData, exists := resourceIDToData[resourceID]; exists {
+	if resourceData, ok := resourceIDToData[resourceID]; ok {
 		dependencies := resourceData.Dependencies
 		for _, dependency := range dependencies {
 			if !helpers.IsInSlice(result, dependency) {
@@ -608,13 +608,13 @@ func SetIDToStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) R
 	result := make(ResourceIDToState)
 
 	for upJsonResourceID := range upJson {
-		if _, exists := currResourceMap[upJsonResourceID]; !exists {
+		if _, ok := currResourceMap[upJsonResourceID]; !ok {
 			result[upJsonResourceID] = State(DELETED)
 		}
 	}
 
 	for currResourceID, currResource := range currResourceMap {
-		if _, exists := upJson[currResourceID]; !exists {
+		if _, ok := upJson[currResourceID]; !ok {
 			result[currResourceID] = State(CREATED)
 		} else {
 			upResource := upJson[currResourceID]
@@ -660,8 +660,8 @@ func SetGroupsWithStateChanges(resourceIDToGroup ResourceIDToGroup, resourceIDTo
 
 	for resourceID, state := range resourceIDToState {
 		if state != UNCHANGED {
-			group, exists := resourceIDToGroup[resourceID]
-			if exists {
+			group, ok := resourceIDToGroup[resourceID]
+			if ok {
 				if _, alreadyAdded := seenGroups[group]; !alreadyAdded {
 					result = append(result, group)
 					seenGroups[group] = struct{}{}
@@ -701,7 +701,7 @@ type StateToResourceIDs = map[State][]string
 func SetStateToResourceIDs(resourceIDToState ResourceIDToState) StateToResourceIDs {
 	result := make(StateToResourceIDs)
 	for resourceID, state := range resourceIDToState {
-		if _, exists := result[state]; !exists {
+		if _, ok := result[state]; !ok {
 			result[state] = make([]string, 0)
 		}
 		result[state] = append(result[state], resourceID)
