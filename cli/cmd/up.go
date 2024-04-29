@@ -42,8 +42,8 @@ func init() {
 	}
 }
 
-var deployCmd = &cobra.Command{
-	Use:   "deploy",
+var upCmd = &cobra.Command{
+	Use:   "up",
 	Short: "Deploy resources to the cloud",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Deploying resources to the cloud")
