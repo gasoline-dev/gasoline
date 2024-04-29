@@ -87,11 +87,7 @@ var deployCmd = &cobra.Command{
 
 		currResourcePackageJsonNameToID := resources.SetPackageJsonNameToID(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
 
-		currResourceDependencyIDs := resources.SetDependencyIDs(&resources.SetDependencyIDsInput{
-			PackageJsons:                currResourcePackageJsons,
-			PackageJsonNameToResourceID: currResourcePackageJsonNameToID,
-			PackageJsonNameToTrue:       currResourcePackageJsonNameToTrue,
-		})
+		currResourceDependencyIDs := resources.SetDependencyIDs(currResourcePackageJsons, currResourcePackageJsonNameToID, currResourcePackageJsonNameToTrue)
 
 		currResourceIDToData := resources.SetIDToData(currResourceIndexBuildFileConfigs, currResourceDependencyIDs)
 
@@ -106,11 +102,7 @@ var deployCmd = &cobra.Command{
 
 		resourceIDToGroup := resources.SetIDToGroup(resourceIDsWithInDegreesOfZero, resourceIDToIntermediateIDs)
 
-		depthToResourceID := resources.SetDepthToResourceID(&resources.SetDepthToResourceIDInput{
-			ResourceIDs:                    resourceIDs,
-			ResourceIDToData:               currResourceIDToData,
-			ResourceIDsWithInDegreesOfZero: resourceIDsWithInDegreesOfZero,
-		})
+		depthToResourceID := resources.SetDepthToResourceID(resourceIDs, currResourceIDToData, resourceIDsWithInDegreesOfZero)
 
 		resourceIDToDepth := resources.SetIDToDepth(depthToResourceID)
 

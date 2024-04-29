@@ -212,12 +212,6 @@ func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 	return result, nil
 }
 
-type SetDependencyIDsInput struct {
-	PackageJsons                ResourcePackageJsons
-	PackageJsonNameToResourceID PackageJsonNameToResourceID
-	PackageJsonNameToTrue       PackageJsonNameToTrue
-}
-
 type ResourceDependencyIDs [][]string
 
 /*
@@ -227,26 +221,19 @@ Where index 0 is core:base:cloudflare-worker:12345's
 dependency IDs and index 1 is core:base:cloudflare-kv:12345's
 dependency IDs.
 */
-func SetDependencyIDs(input *SetDependencyIDsInput) ResourceDependencyIDs {
+func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIDMap PackageJsonNameToResourceID, packageJsonsNameSet PackageJsonNameToTrue) ResourceDependencyIDs {
 	var result ResourceDependencyIDs
-
-	for _, packageJson := range input.PackageJsons {
+	for _, packageJson := range packageJsons {
 		var internalDependencies []string
 		for dependency := range packageJson.Dependencies {
-			resourceID, ok := input.PackageJsonNameToResourceID[dependency]
-			if ok && input.PackageJsonNameToTrue[dependency] {
+			resourceID, ok := packageJsonNameToResourceIDMap[dependency]
+			if ok && packageJsonsNameSet[dependency] {
 				internalDependencies = append(internalDependencies, resourceID)
 			}
 		}
 		result = append(result, internalDependencies)
 	}
 	return result
-}
-
-type SetDepthToResourceIDInput struct {
-	ResourceIDs                    ResourceIDs
-	ResourceIDToData               ResourceIDToData
-	ResourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf
 }
 
 type DepthToResourceID map[int][]string
@@ -263,21 +250,21 @@ a resource is.
 For example, given a graph of A->B, B->C, A has a depth
 of 0, B has a depth of 1, and C has a depth of 2.
 */
-func SetDepthToResourceID(input *SetDepthToResourceIDInput) DepthToResourceID {
+func SetDepthToResourceID(resourceIDs ResourceIDs, resourceIDToData ResourceIDToData, resourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf) DepthToResourceID {
 	result := make(DepthToResourceID)
 
-	numOfResourceIDsToProcess := len(input.ResourceIDs)
+	numOfResourceIDsToProcess := len(resourceIDs)
 
 	depth := 0
 
-	for _, resourceIDWithInDegreesOfZero := range input.ResourceIDsWithInDegreesOfZero {
+	for _, resourceIDWithInDegreesOfZero := range resourceIDsWithInDegreesOfZero {
 		result[depth] = append(result[depth], resourceIDWithInDegreesOfZero)
 		numOfResourceIDsToProcess--
 	}
 
 	for numOfResourceIDsToProcess > 0 {
 		for _, resourceIDAtDepth := range result[depth] {
-			for _, dependencyID := range input.ResourceIDToData[resourceIDAtDepth].Dependencies {
+			for _, dependencyID := range resourceIDToData[resourceIDAtDepth].Dependencies {
 				result[depth+1] = append(result[depth+1], dependencyID)
 				numOfResourceIDsToProcess--
 			}
