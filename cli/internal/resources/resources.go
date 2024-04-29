@@ -71,7 +71,6 @@ func GetIndexFilePaths(resourceContainerSubdirPaths ResourceContainerSubdirPaths
 type ResourceIndexBuildFileConfigs = []Config
 
 type Config struct {
-	ID   string `json:"id"`
 	Name string `json:"name"`
 	KV   []struct {
 		Binding string `json:"binding"`
@@ -80,7 +79,6 @@ type Config struct {
 
 /*
 	[{
-			ID: "core:base:cloudflare-worker:12345",
 			Name: "CORE_BASE_API",
 			KV: [{
 				binding: "CORE_BASE_KV"
@@ -207,7 +205,7 @@ func GetPackageJsons(resourceContainerSubdirPaths ResourceContainerSubdirPaths) 
 	return result, nil
 }
 
-type ResourcesUpJson ResourceIDToData
+type ResourcesUpJson ResourceNameToData
 
 /*
 TODO
@@ -221,23 +219,22 @@ func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 	return result, nil
 }
 
-type ResourceDependencyIDs [][]string
+type ResourceDependencyNames [][]string
 
 /*
-[["core:base:cloudflare-kv:12345"], []]
+[["CORE_BASE_KV"], []]
 
-Where index 0 is core:base:cloudflare-worker:12345's
-dependency IDs and index 1 is core:base:cloudflare-kv:12345's
-dependency IDs.
+Where index 0 is CORE_BASE_API's dependency names and index 1
+is CORE_BASE_KV's dependency names.
 */
-func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResourceIDMap PackageJsonNameToResourceID, packageJsonsNameSet PackageJsonNameToTrue) ResourceDependencyIDs {
-	var result ResourceDependencyIDs
+func SetDependencyNames(packageJsons ResourcePackageJsons, packageJsonNameToResourceNameMap PackageJsonNameToResourceName, packageJsonsNameSet PackageJsonNameToTrue) ResourceDependencyNames {
+	var result ResourceDependencyNames
 	for _, packageJson := range packageJsons {
 		var internalDependencies []string
 		for dependency := range packageJson.Dependencies {
-			resourceID, ok := packageJsonNameToResourceIDMap[dependency]
+			resourceName, ok := packageJsonNameToResourceNameMap[dependency]
 			if ok && packageJsonsNameSet[dependency] {
-				internalDependencies = append(internalDependencies, resourceID)
+				internalDependencies = append(internalDependencies, resourceName)
 			}
 		}
 		result = append(result, internalDependencies)
@@ -245,12 +242,12 @@ func SetDependencyIDs(packageJsons ResourcePackageJsons, packageJsonNameToResour
 	return result
 }
 
-type DepthToResourceID map[int][]string
+type DepthToResourceName map[int][]string
 
 /*
 	{
-		0: ["core:base:cloudflare-worker:12345"],
-		1: ["core:base:cloudflare-kv:12345"]
+		0: ["CORE_BASE_API"],
+		1: ["CORE_BASE_KV"]
 	}
 
 Depth is an int that describes how far down the graph
@@ -259,23 +256,23 @@ a resource is.
 For example, given a graph of A->B, B->C, A has a depth
 of 0, B has a depth of 1, and C has a depth of 2.
 */
-func SetDepthToResourceID(resourceIDs ResourceIDs, resourceIDToData ResourceIDToData, resourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf) DepthToResourceID {
-	result := make(DepthToResourceID)
+func SetDepthToResourceName(resourceNames ResourceNames, resourceNameToData ResourceNameToData, resourceNamesWithInDegreesOfZero ResourceNamesWithInDegreesOf) DepthToResourceName {
+	result := make(DepthToResourceName)
 
-	numOfResourceIDsToProcess := len(resourceIDs)
+	numOfResourceNamesToProcess := len(resourceNames)
 
 	depth := 0
 
-	for _, resourceIDWithInDegreesOfZero := range resourceIDsWithInDegreesOfZero {
-		result[depth] = append(result[depth], resourceIDWithInDegreesOfZero)
-		numOfResourceIDsToProcess--
+	for _, resourceNameWithInDegreesOfZero := range resourceNamesWithInDegreesOfZero {
+		result[depth] = append(result[depth], resourceNameWithInDegreesOfZero)
+		numOfResourceNamesToProcess--
 	}
 
-	for numOfResourceIDsToProcess > 0 {
-		for _, resourceIDAtDepth := range result[depth] {
-			for _, dependencyID := range resourceIDToData[resourceIDAtDepth].Dependencies {
-				result[depth+1] = append(result[depth+1], dependencyID)
-				numOfResourceIDsToProcess--
+	for numOfResourceNamesToProcess > 0 {
+		for _, resourceNameAtDepth := range result[depth] {
+			for _, dependencyName := range resourceNameToData[resourceNameAtDepth].Dependencies {
+				result[depth+1] = append(result[depth+1], dependencyName)
+				numOfResourceNamesToProcess--
 			}
 		}
 		depth++
@@ -284,32 +281,32 @@ func SetDepthToResourceID(resourceIDs ResourceIDs, resourceIDToData ResourceIDTo
 	return result
 }
 
-type ResourceIDToInDegrees map[string]int
+type ResourceNameToInDegrees map[string]int
 
 /*
 	{
-		"core:base:cloudflare-worker:12345": 0,
-		"core:base:cloudflare-kv:12345" 1
+		"CORE_BASE_API": 0,
+		"CORE_BASE_KV" 1
 	}
 
 In degrees is how many incoming edges a target node has.
 */
-func SetIDToInDegrees(resourceMap ResourceIDToData) ResourceIDToInDegrees {
-	result := make(ResourceIDToInDegrees)
+func SetNameToInDegrees(resourceMap ResourceNameToData) ResourceNameToInDegrees {
+	result := make(ResourceNameToInDegrees)
 	for _, resource := range resourceMap {
-		for _, dep := range resource.Dependencies {
-			result[dep]++
+		for _, resourceDependencyName := range resource.Dependencies {
+			result[resourceDependencyName]++
 		}
 	}
-	for resourceID := range resourceMap {
-		if _, ok := result[resourceID]; !ok {
-			result[resourceID] = 0
+	for resourceName := range resourceMap {
+		if _, ok := result[resourceName]; !ok {
+			result[resourceName] = 0
 		}
 	}
 	return result
 }
 
-type ResourceIDToData map[string]Resource
+type ResourceNameToData map[string]Resource
 
 type Resource struct {
 	Type         string
@@ -320,13 +317,13 @@ type Resource struct {
 /*
 TODO
 */
-func SetIDToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, dependencyIDs ResourceDependencyIDs) ResourceIDToData {
-	result := make(ResourceIDToData)
+func SetNameToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, resourceDependencyNames ResourceDependencyNames) ResourceNameToData {
+	result := make(ResourceNameToData)
 	for index, config := range indexBuildFileConfigs {
-		result[config.ID] = Resource{
-			Type:         strings.Split(config.ID, ":")[2],
+		result[config.Name] = Resource{
+			Type:         "cloudflare-kv",
 			Config:       config,
-			Dependencies: dependencyIDs[index],
+			Dependencies: resourceDependencyNames[index],
 		}
 	}
 	return result
@@ -337,98 +334,98 @@ type GroupToHighestDeployDepth map[int]int
 /*
 TODO
 */
-func SetGroupToHighestDeployDepth(resourceIDToDepth ResourceIDToDepth, resourceIDToState ResourceIDToState, groupsWithStateChanges GroupsWithStateChanges, groupToResourceIDs GroupToResourceIDs) GroupToHighestDeployDepth {
+func SetGroupToHighestDeployDepth(resourceNameToDepth ResourceNameToDepth, resourceNameToState ResourceNameToState, groupsWithStateChanges GroupsWithStateChanges, groupToResourceNames GroupToResourceNames) GroupToHighestDeployDepth {
 	result := make(GroupToHighestDeployDepth)
 	for _, group := range groupsWithStateChanges {
 		deployDepth := 0
 		isFirstResourceToProcess := true
-		for _, resourceID := range groupToResourceIDs[group] {
+		for _, resourceName := range groupToResourceNames[group] {
 			// UNCHANGED resources aren't deployed, so its depth
 			// can't be the deploy depth.
-			if resourceIDToState[resourceID] == State("UNCHANGED") {
+			if resourceNameToState[resourceName] == State("UNCHANGED") {
 				continue
 			}
 
 			// If resource is first to make it this far set deploy
 			// depth so it can be used for comparison in future loops.
 			if isFirstResourceToProcess {
-				result[group] = resourceIDToDepth[resourceID]
-				deployDepth = resourceIDToDepth[resourceID]
+				result[group] = resourceNameToDepth[resourceName]
+				deployDepth = resourceNameToDepth[resourceName]
 				isFirstResourceToProcess = false
 				continue
 			}
 
 			// Update deploy depth if resource's depth is greater than
 			// the comparative deploy depth.
-			if resourceIDToDepth[resourceID] > deployDepth {
-				result[group] = resourceIDToDepth[resourceID]
-				deployDepth = resourceIDToDepth[resourceID]
+			if resourceNameToDepth[resourceName] > deployDepth {
+				result[group] = resourceNameToDepth[resourceName]
+				deployDepth = resourceNameToDepth[resourceName]
 			}
 		}
 	}
 	return result
 }
 
-type GroupToDepthToResourceIDs map[int]map[int][]string
+type GroupToDepthToResourceNames map[int]map[int][]string
 
 /*
 	{
 		0: {
-			0: ["core:base:cloudflare-worker:12345"],
-			1: ["core:base:cloudflare-kv:12345"]
+			0: ["CORE_BASE_API"],
+			1: ["CORE_BASE_KV"]
 		},
 		1: {
-			0: ["admin:base:cloudflare-worker:12345"]
+			0: ["ADMIN_BASE_API"]
 		}
 	}
 */
-func SetGroupToDepthToResourceIDs(resourceIDToGroup ResourceIDToGroup, resourceIDToDepth ResourceIDToDepth) GroupToDepthToResourceIDs {
-	result := make(GroupToDepthToResourceIDs)
-	for resourceID, group := range resourceIDToGroup {
+func SetGroupToDepthToResourceNames(resourceNameToGroup ResourceNameToGroup, resourceNameToDepth ResourceNameToDepth) GroupToDepthToResourceNames {
+	result := make(GroupToDepthToResourceNames)
+	for resourceName, group := range resourceNameToGroup {
 		if _, ok := result[group]; !ok {
 			result[group] = make(map[int][]string)
 		}
-		depth := resourceIDToDepth[resourceID]
+		depth := resourceNameToDepth[resourceName]
 		if _, ok := result[group][depth]; !ok {
 			result[group][depth] = make([]string, 0)
 		}
-		result[group][depth] = append(result[group][depth], resourceID)
+		result[group][depth] = append(result[group][depth], resourceName)
 	}
 	return result
 }
 
-type GroupToResourceIDs map[int][]string
+type GroupToResourceNames map[int][]string
 
 /*
 	{
 		0: [
-			"core:base:cloudflare-worker:12345", "core:base:cloudflare-kv:12345"
+			"CORE_BASE_API", "CORE_BASE_KV"
 		],
-		1: ["admin:base:cloudflare-worker:12345"]
+		1: ["ADMIN_BASE_API"]
 	}
 */
-func SetGroupToResourceIDs(resourceIDToGroup ResourceIDToGroup) GroupToResourceIDs {
-	result := make(GroupToResourceIDs)
-	for resourceID, group := range resourceIDToGroup {
+func SetGroupToResourceNames(resourceNameToGroup ResourceNameToGroup) GroupToResourceNames {
+	result := make(GroupToResourceNames)
+	for resourceName, group := range resourceNameToGroup {
 		if _, ok := result[group]; !ok {
 			result[group] = make([]string, 0)
 		}
-		result[group] = append(result[group], resourceID)
+		result[group] = append(result[group], resourceName)
 	}
 	return result
 }
 
-type PackageJsonNameToResourceID map[string]string
+type PackageJsonNameToResourceName map[string]string
 
 /*
 	{
-		"core-base-api": "core:base:cloudflare-worker:12345"
+		"core-base-api": "CORE_BASE_API"
 	}
 */
-func SetPackageJsonNameToID(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceID {
-	result := make(PackageJsonNameToResourceID)
+func SetPackageJsonNameToResourceName(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceName {
+	result := make(PackageJsonNameToResourceName)
 	for index, packageJson := range packageJsons {
-		result[packageJson.Name] = indexBuildFileConfigs[index].ID
+		result[packageJson.Name] = indexBuildFileConfigs[index].Name
 	}
 	return result
 }
@@ -458,61 +455,61 @@ func SetPackageJsonNameToTrue(packageJsons ResourcePackageJsons) PackageJsonName
 	return result
 }
 
-type ResourceIDs []string
+type ResourceNames []string
 
 /*
-["core:base:cloudflare-worker:12345"]
+["CORE_BASE_API"]
 */
-func SetIDs(resourceIDToData ResourceIDToData) ResourceIDs {
-	var result ResourceIDs
-	for resourceID := range resourceIDToData {
-		result = append(result, resourceID)
+func SetNames(resourceNameToData ResourceNameToData) ResourceNames {
+	var result ResourceNames
+	for resourceName := range resourceNameToData {
+		result = append(result, resourceName)
 	}
 	return result
 }
 
-type ResourceIDToDepth map[string]int
+type ResourceNameToDepth map[string]int
 
 /*
 	{
-		"core:base:cloudflare-kv:12345": 1,
-		"core:base:cloudflare-worker:12345": 0
+		"CORE_BASE_KV": 1,
+		"CORE_BASE_API": 0
 	}
 */
-func SetIDToDepth(depthToResourceID DepthToResourceID) ResourceIDToDepth {
-	result := make(ResourceIDToDepth)
-	for depth, resourceIDs := range depthToResourceID {
-		for _, resourceID := range resourceIDs {
-			result[resourceID] = depth
+func SetNameToDepth(depthToResourceName DepthToResourceName) ResourceNameToDepth {
+	result := make(ResourceNameToDepth)
+	for depth, resourceNames := range depthToResourceName {
+		for _, resourceName := range resourceNames {
+			result[resourceName] = depth
 		}
 	}
 	return result
 }
 
-type ResourceIDToGroup map[string]int
+type ResourceNameToGroup map[string]int
 
 /*
 	{
-		"admin:base:cloudflare-worker:12345": 0,
-		"core:base:cloudflare-worker:12345": 1,
-		"core:base:cloudflare-kv:12345": 1,
+		"ADMIN_BASE_API": 0,
+		"CORE_BASE_API": 1,
+		"CORE_BASE_KV": 1,
 	}
 
-A group is an int assigned to resource IDs that share
+A group is an int assigned to resource names that share
 at least one common relative.
 */
-func SetIDToGroup(resourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf, resourceIDToIntermediateIDs ResourceIDToIntermediateIDs) ResourceIDToGroup {
-	result := make(ResourceIDToGroup)
+func SetNameToGroup(resourceNamesWithInDegreesOfZero ResourceNamesWithInDegreesOf, resourceNameToIntermediateNames ResourceNameToIntermediateNames) ResourceNameToGroup {
+	result := make(ResourceNameToGroup)
 	group := 0
-	for _, sourceResourceID := range resourceIDsWithInDegreesOfZero {
-		if _, ok := result[sourceResourceID]; !ok {
+	for _, sourceResourceName := range resourceNamesWithInDegreesOfZero {
+		if _, ok := result[sourceResourceName]; !ok {
 			// Initialize source resource's group.
-			result[sourceResourceID] = group
+			result[sourceResourceName] = group
 
 			// Set group for source resource's intermediates.
-			for _, intermediateID := range resourceIDToIntermediateIDs[sourceResourceID] {
-				if _, ok := result[intermediateID]; !ok {
-					result[intermediateID] = group
+			for _, intermediateName := range resourceNameToIntermediateNames[sourceResourceName] {
+				if _, ok := result[intermediateName]; !ok {
+					result[intermediateName] = group
 				}
 			}
 
@@ -526,17 +523,17 @@ func SetIDToGroup(resourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf, res
 			// intermediate resources in each's direct path). In this case, A & X
 			// share a common relative in "C". Therefore, A & X should be assigned
 			// to the same group.
-			for _, possibleDistantRelativeID := range resourceIDsWithInDegreesOfZero {
+			for _, possibleDistantRelativeName := range resourceNamesWithInDegreesOfZero {
 				// Skip source resource from the main for loop.
-				if possibleDistantRelativeID != sourceResourceID {
+				if possibleDistantRelativeName != sourceResourceName {
 					// Loop over possible distant relative's intermediates.
-					for _, possibleDistantRelativeIntermediateID := range resourceIDToIntermediateIDs[possibleDistantRelativeID] {
+					for _, possibleDistantRelativeIntermediateName := range resourceNameToIntermediateNames[possibleDistantRelativeName] {
 						// Check if possible distant relative's intermediate
 						// is also an intermediate of source resource.
-						if helpers.IncludesString(resourceIDToIntermediateIDs[sourceResourceID], possibleDistantRelativeIntermediateID) {
+						if helpers.IncludesString(resourceNameToIntermediateNames[sourceResourceName], possibleDistantRelativeIntermediateName) {
 							// If so, possibl distant relative and source resource
 							// are distant relatives and belong to the same group.
-							result[possibleDistantRelativeID] = group
+							result[possibleDistantRelativeName] = group
 						}
 					}
 				}
@@ -547,46 +544,46 @@ func SetIDToGroup(resourceIDsWithInDegreesOfZero ResourceIDsWithInDegreesOf, res
 	return result
 }
 
-type ResourceIDToIntermediateIDs map[string][]string
+type ResourceNameToIntermediateNames map[string][]string
 
 /*
 	{
-		"core:base:cloudflare-worker:1235": ["core:base:cloudflare-kv:12345"],
-		"core:base:cloudflare-kv:12345": []
+		"CORE_BASE_API": ["CORE_BASE_KV"],
+		"CORE_BASE_KV": []
 	}
 
-Intermediate IDs are resource IDs within the source resource's
+Intermediate names are resource names within the source resource's
 directed path when analyzing resource relationships as a graph.
 
 For example, given a graph of A->B, B->C, and X->C, B and C are
 intermediates of A, C is an intermediate of B, and C is an
 intermediate of X.
 
-Finding intermediate IDs is necessary for grouping related resources.
+Finding intermediate names is necessary for grouping related resources.
 It wouldn't be possible to know A and X are relatives in the above
 example without them.
 */
-func SetIDToIntermediateIDs(resourceIDToData ResourceIDToData) ResourceIDToIntermediateIDs {
-	result := make(ResourceIDToIntermediateIDs)
+func SetNameToIntermediateNames(resourceNameToData ResourceNameToData) ResourceNameToIntermediateNames {
+	result := make(ResourceNameToIntermediateNames)
 	memo := make(map[string][]string)
-	for resourceID := range resourceIDToData {
-		result[resourceID] = walkDependencies(resourceID, resourceIDToData, memo)
+	for resourceName := range resourceNameToData {
+		result[resourceName] = walkDependencies(resourceName, resourceNameToData, memo)
 	}
 	return result
 }
 
-func walkDependencies(resourceID string, resourceIDToData ResourceIDToData, memo map[string][]string) []string {
-	if result, found := memo[resourceID]; found {
+func walkDependencies(resourceName string, resourceNameToData ResourceNameToData, memo map[string][]string) []string {
+	if result, found := memo[resourceName]; found {
 		return result
 	}
 
 	result := make([]string, 0)
-	if resourceData, ok := resourceIDToData[resourceID]; ok {
-		dependencies := resourceData.Dependencies
-		for _, dependency := range dependencies {
-			if !helpers.IsInSlice(result, dependency) {
-				result = append(result, dependency)
-				for _, transitiveDependency := range walkDependencies(dependency, resourceIDToData, memo) {
+	if resourceData, ok := resourceNameToData[resourceName]; ok {
+		resourceDependencyNames := resourceData.Dependencies
+		for _, resourceDependencyName := range resourceDependencyNames {
+			if !helpers.IsInSlice(result, resourceDependencyName) {
+				result = append(result, resourceDependencyName)
+				for _, transitiveDependency := range walkDependencies(resourceDependencyName, resourceNameToData, memo) {
 					if !helpers.IsInSlice(result, transitiveDependency) {
 						result = append(result, transitiveDependency)
 					}
@@ -594,7 +591,7 @@ func walkDependencies(resourceID string, resourceIDToData ResourceIDToData, memo
 			}
 		}
 	}
-	memo[resourceID] = result
+	memo[resourceName] = result
 
 	return result
 }
@@ -608,29 +605,29 @@ const (
 	UPDATED   State = "UPDATED"
 )
 
-type ResourceIDToState map[string]State
+type ResourceNameToState map[string]State
 
 /*
 TODO
 */
-func SetIDToStateMap(upJson ResourcesUpJson, currResourceMap ResourceIDToData) ResourceIDToState {
-	result := make(ResourceIDToState)
+func SetNameToStateMap(upJson ResourcesUpJson, currResourceMap ResourceNameToData) ResourceNameToState {
+	result := make(ResourceNameToState)
 
-	for upJsonResourceID := range upJson {
-		if _, ok := currResourceMap[upJsonResourceID]; !ok {
-			result[upJsonResourceID] = State(DELETED)
+	for upJsonResourceName := range upJson {
+		if _, ok := currResourceMap[upJsonResourceName]; !ok {
+			result[upJsonResourceName] = State(DELETED)
 		}
 	}
 
-	for currResourceID, currResource := range currResourceMap {
-		if _, ok := upJson[currResourceID]; !ok {
-			result[currResourceID] = State(CREATED)
+	for currResourceName, currResource := range currResourceMap {
+		if _, ok := upJson[currResourceName]; !ok {
+			result[currResourceName] = State(CREATED)
 		} else {
-			upResource := upJson[currResourceID]
+			upResource := upJson[currResourceName]
 			if IsResourceEqual(upResource, currResource) {
-				result[currResourceID] = State(UNCHANGED)
+				result[currResourceName] = State(UNCHANGED)
 			} else {
-				result[currResourceID] = State(UPDATED)
+				result[currResourceName] = State(UPDATED)
 			}
 		}
 	}
@@ -659,17 +656,16 @@ type GroupsWithStateChanges = []int
 /*
 [0]
 
-Where a resource of core:base:cloudflare-worker:12345
-belonging to group 0 has been created.
+Where a resource of CORE_BASE_API belonging to group 0 has been created.
 */
-func SetGroupsWithStateChanges(resourceIDToGroup ResourceIDToGroup, resourceIDToState ResourceIDToState) GroupsWithStateChanges {
+func SetGroupsWithStateChanges(resourceNameToGroup ResourceNameToGroup, resourceNameToState ResourceNameToState) GroupsWithStateChanges {
 	result := make(GroupsWithStateChanges, 0)
 
 	seenGroups := make(map[int]struct{})
 
-	for resourceID, state := range resourceIDToState {
+	for resourceName, state := range resourceNameToState {
 		if state != UNCHANGED {
-			group, ok := resourceIDToGroup[resourceID]
+			group, ok := resourceNameToGroup[resourceName]
 			if ok {
 				if _, alreadyAdded := seenGroups[group]; !alreadyAdded {
 					result = append(result, group)
@@ -682,22 +678,22 @@ func SetGroupsWithStateChanges(resourceIDToGroup ResourceIDToGroup, resourceIDTo
 	return result
 }
 
-type ResourceIDsWithInDegreesOf []string
+type ResourceNamesWithInDegreesOf []string
 
 /*
 TODO
 */
-func SetIDsWithInDegreesOf(IDToInDegrees ResourceIDToInDegrees, degrees int) ResourceIDsWithInDegreesOf {
-	var result ResourceIDsWithInDegreesOf
-	for resourceID, inDegree := range IDToInDegrees {
+func SetNamesWithInDegreesOf(resourceNameToInDegrees ResourceNameToInDegrees, degrees int) ResourceNamesWithInDegreesOf {
+	var result ResourceNamesWithInDegreesOf
+	for resourceName, inDegree := range resourceNameToInDegrees {
 		if inDegree == degrees {
-			result = append(result, resourceID)
+			result = append(result, resourceName)
 		}
 	}
 	return result
 }
 
-type StateToResourceIDs = map[State][]string
+type StateToResourceNames = map[State][]string
 
 /*
 	{
@@ -707,13 +703,13 @@ type StateToResourceIDs = map[State][]string
 		UPDATED: ["..."]
 	}
 */
-func SetStateToResourceIDs(resourceIDToState ResourceIDToState) StateToResourceIDs {
-	result := make(StateToResourceIDs)
-	for resourceID, state := range resourceIDToState {
+func SetStateToResourceNames(resourceNameToState ResourceNameToState) StateToResourceNames {
+	result := make(StateToResourceNames)
+	for resourceName, state := range resourceNameToState {
 		if _, ok := result[state]; !ok {
 			result[state] = make([]string, 0)
 		}
-		result[state] = append(result[state], resourceID)
+		result[state] = append(result[state], resourceName)
 	}
 	return result
 }
