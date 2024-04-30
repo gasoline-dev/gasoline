@@ -115,10 +115,6 @@ func GetIndexBuildFileConfigs(resourceContainerSubdirPaths ResourceContainerSubd
 
 	strOutput := strings.TrimSpace((string(output)))
 
-	fmt.Println("str")
-	fmt.Println(strOutput)
-	fmt.Println("str")
-
 	if strings.Contains(strOutput, "Error:") {
 		return result, errors.New("unable to process exported resource configs")
 	}
