@@ -16,12 +16,12 @@ import (
 
 type ResourceProcessorOkChan = chan bool
 
-type ResourceProcessors map[string]func(arg interface{}, resourceProcessOkChan ResourceProcessorOkChan)
+type ResourceProcessors map[string]func(resourceConfig any, resourceProcessOkChan ResourceProcessorOkChan)
 
 var resourceProcessors ResourceProcessors = make(ResourceProcessors)
 
 func init() {
-	resourceProcessors["cloudflare-kv:create"] = func(arg interface{}, resourceProcessorOkChan ResourceProcessorOkChan) {
+	resourceProcessors["cloudflare-kv:CREATED"] = func(arg interface{}, resourceProcessorOkChan ResourceProcessorOkChan) {
 		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -229,7 +229,7 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToD
 
 	for _, resourceName := range initialGroupResourceIDsToDeploy {
 		depth := resourceNameToDepth[resourceName]
-		go deployResource(deployResourceOkChan, group, depth, resourceName, resourceNameToDeployState, resourceNameToState)
+		go deployResource(deployResourceOkChan, group, depth, resourceName, resourceNameToDeployState, resourceNameToState, currResourceIDToData)
 	}
 
 	numOfResourcesInGroupToDeploy := setNumOfResourcesInGroupToDeploy(
@@ -288,7 +288,7 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToD
 
 					if shouldDeployResource {
 						depth := resourceNameToDepth[resourceName]
-						go deployResource(deployResourceOkChan, group, depth, resourceName, resourceNameToDeployState, resourceNameToState)
+						go deployResource(deployResourceOkChan, group, depth, resourceName, resourceNameToDeployState, resourceNameToState, currResourceIDToData)
 					}
 				}
 			}
@@ -298,7 +298,7 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToD
 
 type DeployResourceOkChan chan bool
 
-func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceName string, resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.ResourceNameToState) {
+func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceName string, resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.ResourceNameToState, currResourceIDToData resources.ResourceNameToData) {
 	updateResourceIDToDeployStateOnStart(resourceNameToDeployState, resourceNameToState, resourceName)
 
 	timestamp := time.Now().UnixMilli()
@@ -307,7 +307,9 @@ func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth 
 
 	resourceProcessorOkChan := make(ResourceProcessorOkChan)
 
-	go resourceProcessors["cloudflare-kv:create"]("test", resourceProcessorOkChan)
+	resourceProcessorKey := currResourceIDToData[resourceName].Type + ":" + string(resourceNameToState[resourceName])
+
+	go resourceProcessors[string(resourceProcessorKey)](currResourceIDToData[resourceName].Config, resourceProcessorOkChan)
 
 	if <-resourceProcessorOkChan {
 		updateResourceIDToDeployStateOnOk(

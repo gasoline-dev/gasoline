@@ -310,6 +310,30 @@ type Resource struct {
 	Dependencies []string
 }
 
+type ResourceConfig interface {
+	GetValues() map[string]any
+}
+
+type CloudflareWorker struct {
+	Type string
+	KV   []struct {
+		Binding string `json:"binding"`
+	} `json:"kv,omitempty"`
+}
+
+func (cloudflareWorker CloudflareWorker) GetValues() map[string]any {
+	return map[string]any{"Type": cloudflareWorker.Type, "X": cloudflareWorker.KV}
+}
+
+type CloudflareKV struct {
+	Type string
+	Idk  string
+}
+
+func (cloudflareKV CloudflareKV) GetValues() map[string]any {
+	return map[string]any{"Type": cloudflareKV.Type, "X": cloudflareKV.Idk}
+}
+
 /*
 TODO
 */

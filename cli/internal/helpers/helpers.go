@@ -4,7 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
+
+/*
+CORE_BASE_API -> Core-Base-Api
+*/
+func CapitalSnakeCaseToTrainCase(s string) string {
+	caser := cases.Title(language.English)
+	words := strings.Split(s, "_")
+	for i, word := range words {
+		words[i] = caser.String(strings.ToLower(word))
+	}
+	return strings.Join(words, "-")
+}
 
 // IncludesString checks if a string slice contains a given value.
 func IncludesString(slice []string, value string) bool {
