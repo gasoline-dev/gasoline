@@ -311,9 +311,10 @@ type Resource struct {
 }
 
 type ResourceConfig interface {
-	GetValues() map[string]any
+	GetValues() map[string]string
 }
 
+/*
 type CloudflareWorker struct {
 	Type string
 	KV   []struct {
@@ -324,14 +325,14 @@ type CloudflareWorker struct {
 func (cloudflareWorker CloudflareWorker) GetValues() map[string]any {
 	return map[string]any{"Type": cloudflareWorker.Type, "X": cloudflareWorker.KV}
 }
+*/
 
-type CloudflareKV struct {
-	Type string
-	Idk  string
+type B struct {
+	Y string
 }
 
-func (cloudflareKV CloudflareKV) GetValues() map[string]any {
-	return map[string]any{"Type": cloudflareKV.Type, "X": cloudflareKV.Idk}
+func (b B) GetValues() map[string]string {
+	return map[string]string{"Y": b.Y}
 }
 
 /*
