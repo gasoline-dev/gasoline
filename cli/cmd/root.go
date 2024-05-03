@@ -48,7 +48,6 @@ func initConfig() {
 	if err != nil {
 		fmt.Printf("Error: unable to read config file %s\n", err)
 		os.Exit(1)
-		return
 	}
 
 	godotenv.Load()
@@ -59,7 +58,6 @@ func initConfig() {
 	if project == "" {
 		fmt.Printf("Error: 'project' property is required in config file '%s'\n", viper.ConfigFileUsed())
 		os.Exit(1)
-		return
 	}
 
 	requiredEnvVars := []string{"CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"}
@@ -67,7 +65,6 @@ func initConfig() {
 	if err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
-		return
 	}
 }
 

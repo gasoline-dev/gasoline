@@ -52,42 +52,36 @@ var upCmd = &cobra.Command{
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
-			return
 		}
 
 		err = validators.ValidateContainerSubdirContents(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
-			return
 		}
 
 		currResourceIndexFilePaths, err := resources.GetIndexFilePaths(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
-			return
 		}
 
 		currResourceIndexBuildFilePaths, err := resources.GetIndexBuildFilePaths(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
-			return
 		}
 
 		currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(currResourceContainerSubdirPaths, currResourceIndexFilePaths, currResourceIndexBuildFilePaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
-			return
 		}
 
 		currResourcePackageJsons, err := resources.GetPackageJsons(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
-			return
 		}
 
 		currResourcePackageJsonNameToTrue := resources.SetPackageJsonNameToTrue(currResourcePackageJsons)
@@ -126,7 +120,6 @@ var upCmd = &cobra.Command{
 			if err != nil {
 				fmt.Println("Error:", err)
 				os.Exit(1)
-				return
 			}
 		}
 
@@ -134,7 +127,6 @@ var upCmd = &cobra.Command{
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
-			return
 		}
 
 		resourceNameToState := resources.SetNameToStateMap(resourcesUpJson, currResourceNameToData)
@@ -145,7 +137,6 @@ var upCmd = &cobra.Command{
 
 		if !hasResourceNamesToDeploy {
 			fmt.Println("No resource changes to deploy")
-			return
 		}
 
 		err = deploy(resourceNameToState, resourceNameToGroup, resourceNameToDepth, groupToDepthToResourceNames, currResourceNameToData)
@@ -153,7 +144,6 @@ var upCmd = &cobra.Command{
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
-			return
 		}
 
 		fmt.Println("Deployment successful")
