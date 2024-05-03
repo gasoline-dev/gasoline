@@ -16,12 +16,18 @@ import (
 
 type ResourceProcessorOkChan = chan bool
 
-type ResourceProcessors map[string]func(resourceConfig resources.ResourceConfig, resourceProcessOkChan ResourceProcessorOkChan)
+type ResourceProcessors map[string]func(resourceConfig interface{}, resourceProcessOkChan ResourceProcessorOkChan)
 
 var resourceProcessors ResourceProcessors = make(ResourceProcessors)
 
 func init() {
-	resourceProcessors["cloudflare-kv:CREATED"] = func(arg resources.ResourceConfig, resourceProcessorOkChan ResourceProcessorOkChan) {
+	resourceProcessors["cloudflare-kv:CREATED"] = func(config interface{}, resourceProcessorOkChan ResourceProcessorOkChan) {
+		c := config.(*resources.CloudflareKVConfig)
+
+		fmt.Println("!!!!!")
+		fmt.Println(c.Name)
+		fmt.Println("!!!!!")
+
 		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -77,6 +83,10 @@ var upCmd = &cobra.Command{
 			fmt.Println("Error:", err)
 			os.Exit(1)
 		}
+
+		currResourceNameToConfig := resources.SetNameToConfig(currResourceIndexBuildFileConfigs)
+
+		helpers.PrettyPrint(currResourceNameToConfig)
 
 		currResourcePackageJsons, err := resources.GetPackageJsons(currResourceContainerSubdirPaths)
 		if err != nil {
@@ -137,6 +147,7 @@ var upCmd = &cobra.Command{
 
 		if !hasResourceNamesToDeploy {
 			fmt.Println("No resource changes to deploy")
+			os.Exit(0)
 		}
 
 		err = deploy(resourceNameToState, resourceNameToGroup, resourceNameToDepth, groupToDepthToResourceNames, currResourceNameToData)
@@ -299,23 +310,7 @@ func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth 
 
 	resourceProcessorKey := currResourceNameToData[resourceName].Type + ":" + string(resourceNameToState[resourceName])
 
-	/*
-		a := A{Type: "A", X: "x"}
-			b := B{Type: "B", Y: "y"}
-
-			resources := []ResourceConfig{a, b}
-	*/
-
-	kv := resources.B{Y: "y"}
-
-	/*
-		idk := resources.CloudflareKVConfig{
-			Type: "test",
-			Idk:  "test",
-		}
-	*/
-
-	go resourceProcessors[string(resourceProcessorKey)](kv, resourceProcessorOkChan)
+	go resourceProcessors[string(resourceProcessorKey)](currResourceNameToData[resourceName].Config, resourceProcessorOkChan)
 
 	if <-resourceProcessorOkChan {
 		updateResourceNameToDeployStateOnOk(

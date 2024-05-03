@@ -68,14 +68,14 @@ func GetIndexFilePaths(resourceContainerSubdirPaths ResourceContainerSubdirPaths
 	return result, nil
 }
 
-type ResourceIndexBuildFileConfigs = []Config
+/*
+TypeScript type equivalent:
 
-type Config struct {
-	Name string `json:"name"`
-	KV   []struct {
-		Binding string `json:"binding"`
-	} `json:"kv,omitempty"`
-}
+	Array<{
+		[key: string]: any
+	}>
+*/
+type ResourceIndexBuildFileConfigs = []map[string]interface{}
 
 /*
 	[{
@@ -306,33 +306,8 @@ type ResourceNameToData map[string]Resource
 
 type Resource struct {
 	Type         string
-	Config       Config
+	Config       interface{}
 	Dependencies []string
-}
-
-type ResourceConfig interface {
-	GetValues() map[string]string
-}
-
-/*
-type CloudflareWorker struct {
-	Type string
-	KV   []struct {
-		Binding string `json:"binding"`
-	} `json:"kv,omitempty"`
-}
-
-func (cloudflareWorker CloudflareWorker) GetValues() map[string]any {
-	return map[string]any{"Type": cloudflareWorker.Type, "X": cloudflareWorker.KV}
-}
-*/
-
-type B struct {
-	Y string
-}
-
-func (b B) GetValues() map[string]string {
-	return map[string]string{"Y": b.Y}
 }
 
 /*
@@ -340,14 +315,80 @@ TODO
 */
 func SetNameToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, resourceDependencyNames ResourceDependencyNames) ResourceNameToData {
 	result := make(ResourceNameToData)
-	for index, config := range indexBuildFileConfigs {
-		result[config.Name] = Resource{
-			Type:         "cloudflare-kv",
-			Config:       config,
+	for index := range indexBuildFileConfigs {
+		result["CORE_BASE_KV"] = Resource{
+			Type: "cloudflare-kv",
+			Config: &CloudflareKVConfig{
+				Type: "cloudflare-kv",
+				Name: "CORE_BASE_KV",
+			},
 			Dependencies: resourceDependencyNames[index],
 		}
 	}
 	return result
+}
+
+type NameToConfigs map[string]interface{}
+
+/*
+TODO
+*/
+func SetNameToConfig(indexBuildFileConfigs ResourceIndexBuildFileConfigs) NameToConfigs {
+	result := make(NameToConfigs)
+	for _, config := range indexBuildFileConfigs {
+		resourceType := config["type"].(string)
+		resourceName := config["name"].(string)
+		result[resourceName] = configs[resourceType](config)
+	}
+	return result
+}
+
+var configs = map[string]func(config config) interface{}{
+	"cloudflare-kv": func(config config) interface{} {
+		return &CloudflareKVConfig{
+			Type: config["type"].(string),
+			Name: config["name"].(string),
+		}
+	},
+	"cloudflare-worker": func(config config) interface{} {
+		return &CloudflareWorkerConfig{}
+	},
+}
+
+/*
+TypeScript type equivalent:
+
+	Array<{
+		[key: string]: any
+	}>
+*/
+type config map[string]interface{}
+
+type ResourceConfigCommon struct {
+	Type string
+	Name string
+}
+
+type CloudflareKVConfig struct {
+	Type string
+	Name string
+}
+
+type CloudflareWorkerConfig struct {
+	Type string
+	Name string
+	KV   []struct {
+		Binding string
+	}
+}
+
+type NameToDependencies map[string][]string
+
+/*
+TODO
+*/
+func SetNameToDependencies() {
+	//
 }
 
 type GroupToHighestDeployDepth map[int]int
@@ -446,7 +487,8 @@ type PackageJsonNameToResourceName map[string]string
 func SetPackageJsonNameToResourceName(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceName {
 	result := make(PackageJsonNameToResourceName)
 	for index, packageJson := range packageJsons {
-		result[packageJson.Name] = indexBuildFileConfigs[index].Name
+		resourceName := indexBuildFileConfigs[index]["name"].(string)
+		result[packageJson.Name] = resourceName
 	}
 	return result
 }
