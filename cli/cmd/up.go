@@ -24,19 +24,20 @@ func init() {
 	resourceProcessors["cloudflare-kv:CREATED"] = func(config interface{}, resourceProcessorOkChan ResourceProcessorOkChan) {
 		c := config.(*resources.CloudflareKVConfig)
 
-		fmt.Println("!!!!!")
-		fmt.Println(c.Name)
-		fmt.Println("!!!!!")
-
 		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
+
 		if err != nil {
 			fmt.Println("Error:", err)
 			resourceProcessorOkChan <- false
 			return
 		}
 
-		req := cloudflare.CreateWorkersKVNamespaceParams{Title: "test_namespace2"}
+		title := viper.GetString("project") + "-" + helpers.CapitalSnakeCaseToTrainCase(c.Name)
+
+		req := cloudflare.CreateWorkersKVNamespaceParams{Title: title}
+
 		response, err := api.CreateWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), req)
+
 		if err != nil {
 			fmt.Println("Error:", err)
 			resourceProcessorOkChan <- false
