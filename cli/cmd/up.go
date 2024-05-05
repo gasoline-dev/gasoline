@@ -101,20 +101,22 @@ var upCmd = &cobra.Command{
 
 		currResourceDependencyNames := resources.SetDependencyNames(currResourcePackageJsons, currResourcePackageJsonNameToResourceName, currResourcePackageJsonNameToTrue)
 
+		currResourceNameToDependencies := resources.SetNameToDependencies(currResourceIndexBuildFileConfigs, currResourceDependencyNames)
+
 		currResourceNameToData := resources.SetNameToData(currResourceIndexBuildFileConfigs, currResourceDependencyNames)
 
-		resourceNameToInDegrees := resources.SetNameToInDegrees(currResourceNameToData)
+		resourceNameToInDegrees := resources.SetNameToInDegrees(currResourceNameToDependencies)
 
 		resourceNamesWithInDegreesOfZero := resources.SetNamesWithInDegreesOf(resourceNameToInDegrees, 0)
 
 		// TODO: Might not need this
 		resourceNames := resources.SetNames(currResourceNameToData)
 
-		resourceNameToIntermediateNames := resources.SetNameToIntermediateNames(currResourceNameToData)
+		resourceNameToIntermediateNames := resources.SetNameToIntermediateNames(currResourceNameToDependencies)
 
 		resourceNameToGroup := resources.SetNameToGroup(resourceNamesWithInDegreesOfZero, resourceNameToIntermediateNames)
 
-		depthToResourceName := resources.SetDepthToName(resourceNames, currResourceNameToData, resourceNamesWithInDegreesOfZero)
+		depthToResourceName := resources.SetDepthToName(resourceNames, currResourceNameToDependencies, resourceNamesWithInDegreesOfZero)
 
 		resourceNameToDepth := resources.SetNameToDepth(depthToResourceName)
 

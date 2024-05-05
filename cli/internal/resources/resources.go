@@ -252,7 +252,7 @@ a resource is.
 For example, given a graph of A->B, B->C, A has a depth
 of 0, B has a depth of 1, and C has a depth of 2.
 */
-func SetDepthToName(names Names, nameToData NameToData, namesWithInDegreesOfZero namesWithInDegreesOf) DepthToName {
+func SetDepthToName(names Names, nameToDependencies NameToDependencies, namesWithInDegreesOfZero namesWithInDegreesOf) DepthToName {
 	result := make(DepthToName)
 
 	numOfNamesToProcess := len(names)
@@ -266,7 +266,7 @@ func SetDepthToName(names Names, nameToData NameToData, namesWithInDegreesOfZero
 
 	for numOfNamesToProcess > 0 {
 		for _, nameAtDepth := range result[depth] {
-			for _, dependencyName := range nameToData[nameAtDepth].Dependencies {
+			for _, dependencyName := range nameToDependencies[nameAtDepth] {
 				result[depth+1] = append(result[depth+1], dependencyName)
 				numOfNamesToProcess--
 			}
@@ -285,20 +285,28 @@ type NameToInDegrees map[string]int
 		"CORE_BASE_KV" 1
 	}
 
-In degrees is how many incoming edges a target node has.
+In degrees is how many incoming edges a target resource has.
 */
-func SetNameToInDegrees(nameToData NameToData) NameToInDegrees {
+func SetNameToInDegrees(nameToDependencies NameToDependencies) NameToInDegrees {
 	result := make(NameToInDegrees)
-	for _, resource := range nameToData {
-		for _, dependencyName := range resource.Dependencies {
+
+	// Loop over resources and their dependencies.
+	for _, dependencies := range nameToDependencies {
+		// Increment resource's in degrees everytime it's
+		// found to be a dependency of another resource.
+		for _, dependencyName := range dependencies {
 			result[dependencyName]++
 		}
 	}
-	for name := range nameToData {
+
+	for name := range nameToDependencies {
+		// Resource has to have an in degrees of 0 if it
+		// isn't in the result.
 		if _, ok := result[name]; !ok {
 			result[name] = 0
 		}
 	}
+
 	return result
 }
 
@@ -328,17 +336,17 @@ func SetNameToData(indexBuildFileConfigs IndexBuildFileConfigs, dependencyNames 
 	return result
 }
 
-type NameToConfigs map[string]interface{}
+type NameToConfig map[string]interface{}
 
 /*
 TODO
 */
-func SetNameToConfig(indexBuildFileConfigs IndexBuildFileConfigs) NameToConfigs {
-	result := make(NameToConfigs)
+func SetNameToConfig(indexBuildFileConfigs IndexBuildFileConfigs) NameToConfig {
+	result := make(NameToConfig)
 	for _, config := range indexBuildFileConfigs {
 		resourceType := config["type"].(string)
-		resourceName := config["name"].(string)
-		result[resourceName] = configs[resourceType](config)
+		name := config["name"].(string)
+		result[name] = configs[resourceType](config)
 	}
 	return result
 }
@@ -387,8 +395,13 @@ type NameToDependencies map[string][]string
 /*
 TODO
 */
-func SetNameToDependencies() {
-	//
+func SetNameToDependencies(indexBuildFileConfigs IndexBuildFileConfigs, dependencyNames DependencyNames) NameToDependencies {
+	result := make(NameToDependencies)
+	for index, config := range indexBuildFileConfigs {
+		name := config["name"].(string)
+		result[name] = dependencyNames[index]
+	}
+	return result
 }
 
 type GroupToHighestDeployDepth map[int]int
@@ -626,27 +639,26 @@ Finding intermediate names is necessary for grouping related resources.
 It wouldn't be possible to know A and X are relatives in the above
 example without them.
 */
-func SetNameToIntermediateNames(nameToData NameToData) NameToIntermediateNames {
+func SetNameToIntermediateNames(nameToDependencies NameToDependencies) NameToIntermediateNames {
 	result := make(NameToIntermediateNames)
 	memo := make(map[string][]string)
-	for name := range nameToData {
-		result[name] = walkDependencies(name, nameToData, memo)
+	for name := range nameToDependencies {
+		result[name] = walkDependencies(name, nameToDependencies, memo)
 	}
 	return result
 }
 
-func walkDependencies(name string, nameToData NameToData, memo map[string][]string) []string {
+func walkDependencies(name string, nameToDependencies NameToDependencies, memo map[string][]string) []string {
 	if result, found := memo[name]; found {
 		return result
 	}
 
 	result := make([]string, 0)
-	if resourceData, ok := nameToData[name]; ok {
-		dependencyNames := resourceData.Dependencies
+	if dependencyNames, ok := nameToDependencies[name]; ok {
 		for _, dependencyName := range dependencyNames {
 			if !helpers.IsInSlice(result, dependencyName) {
 				result = append(result, dependencyName)
-				for _, transitiveDependency := range walkDependencies(dependencyName, nameToData, memo) {
+				for _, transitiveDependency := range walkDependencies(dependencyName, nameToDependencies, memo) {
 					if !helpers.IsInSlice(result, transitiveDependency) {
 						result = append(result, transitiveDependency)
 					}
