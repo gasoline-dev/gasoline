@@ -97,7 +97,7 @@ var upCmd = &cobra.Command{
 
 		currResourcePackageJsonNameToTrue := resources.SetPackageJsonNameToTrue(currResourcePackageJsons)
 
-		currResourcePackageJsonNameToResourceName := resources.SetPackageJsonNameToResourceName(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
+		currResourcePackageJsonNameToResourceName := resources.SetPackageJsonNameToName(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
 
 		currResourceDependencyNames := resources.SetDependencyNames(currResourcePackageJsons, currResourcePackageJsonNameToResourceName, currResourcePackageJsonNameToTrue)
 
@@ -114,11 +114,11 @@ var upCmd = &cobra.Command{
 
 		resourceNameToGroup := resources.SetNameToGroup(resourceNamesWithInDegreesOfZero, resourceNameToIntermediateNames)
 
-		depthToResourceName := resources.SetDepthToResourceName(resourceNames, currResourceNameToData, resourceNamesWithInDegreesOfZero)
+		depthToResourceName := resources.SetDepthToName(resourceNames, currResourceNameToData, resourceNamesWithInDegreesOfZero)
 
 		resourceNameToDepth := resources.SetNameToDepth(depthToResourceName)
 
-		groupToDepthToResourceNames := resources.SetGroupToDepthToResourceNames(resourceNameToGroup, resourceNameToDepth)
+		groupToDepthToResourceNames := resources.SetGroupToDepthToNames(resourceNameToGroup, resourceNameToDepth)
 
 		// TODO: json path can be configged?
 		// TODO: Or implement up -> driver -> local | gh in the config?
@@ -142,7 +142,7 @@ var upCmd = &cobra.Command{
 
 		resourceNameToState := resources.SetNameToStateMap(resourcesUpJson, currResourceNameToData)
 
-		stateToResourceNames := resources.SetStateToResourceNames(resourceNameToState)
+		stateToResourceNames := resources.SetStateToNames(resourceNameToState)
 
 		hasResourceNamesToDeploy := hasResourceNamesToDeploy(stateToResourceNames)
 
@@ -162,7 +162,7 @@ var upCmd = &cobra.Command{
 	},
 }
 
-func deploy(resourceNameToState resources.ResourceNameToState, resourceNameToGroup resources.ResourceNameToGroup, resourceNameToDepth resources.ResourceNameToDepth, groupToDepthToResourceNames resources.GroupToDepthToResourceNames, currResourceNameToData resources.ResourceNameToData) error {
+func deploy(resourceNameToState resources.NameToState, resourceNameToGroup resources.NameToGroup, resourceNameToDepth resources.NameToDepth, groupToDepthToResourceNames resources.GroupToDepthToNames, currResourceNameToData resources.NameToData) error {
 	logResourceNamePreDeployStates(groupToDepthToResourceNames, resourceNameToState)
 
 	resourceNameToDeployState := updateResourceNameToDeployStateOfPending(resourceNameToState)
@@ -176,10 +176,10 @@ func deploy(resourceNameToState resources.ResourceNameToState, resourceNameToGro
 	return nil
 }
 
-func deployGroups(resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.ResourceNameToState, groupToDepthToResourceNames resources.GroupToDepthToResourceNames, currResourceNameToData resources.ResourceNameToData, resourceNameToDepth resources.ResourceNameToDepth, resourceNameToGroup resources.ResourceNameToGroup) error {
+func deployGroups(resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.NameToState, groupToDepthToResourceNames resources.GroupToDepthToNames, currResourceNameToData resources.NameToData, resourceNameToDepth resources.NameToDepth, resourceNameToGroup resources.NameToGroup) error {
 	groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceNameToGroup, resourceNameToState)
 
-	groupsToResourceNames := resources.SetGroupToResourceNames(resourceNameToGroup)
+	groupsToResourceNames := resources.SetGroupToNames(resourceNameToGroup)
 
 	groupToHighestDeployDepth := resources.SetGroupToHighestDeployDepth(
 		resourceNameToDepth,
@@ -221,7 +221,7 @@ func deployGroups(resourceNameToDeployState resourceNameToDeployState, resourceN
 
 type DeployGroupOkChan chan bool
 
-func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.ResourceNameToState, groupToHighestDeployDepth resources.GroupToHighestDeployDepth, groupToDepthToResourceNames resources.GroupToDepthToResourceNames, currResourceNameToData resources.ResourceNameToData, resourceNameToDepth resources.ResourceNameToDepth, groupsToResourceNames resources.GroupToResourceNames) {
+func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.NameToState, groupToHighestDeployDepth resources.GroupToHighestDeployDepth, groupToDepthToResourceNames resources.GroupToDepthToNames, currResourceNameToData resources.NameToData, resourceNameToDepth resources.NameToDepth, groupsToResourceNames resources.GroupToNames) {
 
 	deployResourceOkChan := make(DeployResourceOkChan)
 
@@ -300,7 +300,7 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToD
 
 type DeployResourceOkChan chan bool
 
-func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceName string, resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.ResourceNameToState, currResourceNameToData resources.ResourceNameToData) {
+func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceName string, resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.NameToState, currResourceNameToData resources.NameToData) {
 	updateResourceNameToDeployStateOnStart(resourceNameToDeployState, resourceNameToState, resourceName)
 
 	timestamp := time.Now().UnixMilli()
@@ -370,7 +370,7 @@ const (
 	UPDATE_IN_PROGRESS deployState = "UPDATE_IN_PROGRESS"
 )
 
-func hasResourceNamesToDeploy(stateToResourceNames resources.StateToResourceNames) bool {
+func hasResourceNamesToDeploy(stateToResourceNames resources.StateToNames) bool {
 	statesToDeploy := []resources.State{resources.State(resources.CREATED), resources.State(resources.DELETED), resources.State(resources.UPDATED)}
 	for _, state := range statesToDeploy {
 		if _, exists := stateToResourceNames[state]; exists {
@@ -396,7 +396,7 @@ func logResourceNameDeployState(group int, depth int, resourceName string, times
 	)
 }
 
-func logResourceNamePreDeployStates(groupToDepthToResourceName resources.GroupToDepthToResourceNames, resourceNameToState resources.ResourceNameToState) {
+func logResourceNamePreDeployStates(groupToDepthToResourceName resources.GroupToDepthToNames, resourceNameToState resources.NameToState) {
 	fmt.Println("# Pre-Deploy States:")
 	for group, depthToResourceName := range groupToDepthToResourceName {
 		for depth, resourceNames := range depthToResourceName {
@@ -429,7 +429,7 @@ at depth 3 only. e would be blocked until d finished because
 d has a higher depth than e. That's not optimal. They should
 be started at the same time and deployed concurrently.
 */
-func setInitialGroupResourceNamesToDeploy(highestDepthContainingAResourceToDeploy int, group int, groupToDepthToResourceNames resources.GroupToDepthToResourceNames, resourceNameToData resources.ResourceNameToData, resourceNameToDeployState resourceNameToDeployState) initialResourceNamesToDeploy {
+func setInitialGroupResourceNamesToDeploy(highestDepthContainingAResourceToDeploy int, group int, groupToDepthToResourceNames resources.GroupToDepthToNames, resourceNameToData resources.NameToData, resourceNameToDeployState resourceNameToDeployState) initialResourceNamesToDeploy {
 	var result initialResourceNamesToDeploy
 
 	// Add every resource at highest deploy depth containing
@@ -460,7 +460,7 @@ func setInitialGroupResourceNamesToDeploy(highestDepthContainingAResourceToDeplo
 
 type numOfResourcesInGroupToDeploy int
 
-func setNumOfResourcesInGroupToDeploy(groupToResourceNames resources.GroupToResourceNames, resourceNameToState resources.ResourceNameToState, group int) numOfResourcesInGroupToDeploy {
+func setNumOfResourcesInGroupToDeploy(groupToResourceNames resources.GroupToNames, resourceNameToState resources.NameToState, group int) numOfResourcesInGroupToDeploy {
 	result := numOfResourcesInGroupToDeploy(0)
 	for _, resourceName := range groupToResourceNames[group] {
 		if resourceNameToState[resourceName] != resources.State(resources.UNCHANGED) {
@@ -492,7 +492,7 @@ func updateResourceNameToDeployStateOnErr(resourceNameToDeployState resourceName
 	}
 }
 
-func updateResourceNameToDeployStateOfPending(resourceNameToState resources.ResourceNameToState) resourceNameToDeployState {
+func updateResourceNameToDeployStateOfPending(resourceNameToState resources.NameToState) resourceNameToDeployState {
 	result := make(resourceNameToDeployState)
 	for resourceName, state := range resourceNameToState {
 		if state != resources.State(resources.UNCHANGED) {
@@ -513,7 +513,7 @@ func updateResourceNameToDeployStateOnOk(resourceNameToDeployState resourceNameT
 	}
 }
 
-func updateResourceNameToDeployStateOnStart(resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.ResourceNameToState, resourceName string) {
+func updateResourceNameToDeployStateOnStart(resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.NameToState, resourceName string) {
 	switch resourceNameToState[resourceName] {
 	case resources.State(resources.CREATED):
 		resourceNameToDeployState[resourceName] = deployState(CREATE_IN_PROGRESS)

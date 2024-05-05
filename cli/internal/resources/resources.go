@@ -18,39 +18,39 @@ import (
 //go:embed embed/get-index-build-file-configs.js
 var getIndexBuildFileConfigsEmbed embed.FS
 
-type ResourceContainerSubdirPaths []string
+type ContainerSubdirPaths []string
 
 /*
 ["gas/core-base-api"]
 */
-func GetContainerSubdirPaths(resourceContainerDir string) (ResourceContainerSubdirPaths, error) {
-	var result ResourceContainerSubdirPaths
+func GetContainerSubdirPaths(containerDir string) (ContainerSubdirPaths, error) {
+	var result ContainerSubdirPaths
 
-	entries, err := os.ReadDir(resourceContainerDir)
+	entries, err := os.ReadDir(containerDir)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read resource container dir %s", resourceContainerDir)
+		return nil, fmt.Errorf("unable to read resource container dir %s", containerDir)
 	}
 
 	for _, entry := range entries {
 		if entry.IsDir() {
-			result = append(result, filepath.Join(resourceContainerDir, entry.Name()))
+			result = append(result, filepath.Join(containerDir, entry.Name()))
 		}
 	}
 
 	return result, nil
 }
 
-type ResourceIndexFilePaths = []string
+type IndexFilePaths = []string
 
 /*
 ["gas/core-base-api/src/core-base-api._index.ts"]
 */
-func GetIndexFilePaths(resourceContainerSubdirPaths ResourceContainerSubdirPaths) (ResourceIndexFilePaths, error) {
-	var result ResourceIndexFilePaths
+func GetIndexFilePaths(containerSubdirPaths ContainerSubdirPaths) (IndexFilePaths, error) {
+	var result IndexFilePaths
 
 	pattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.ts$`)
 
-	for _, subdirPath := range resourceContainerSubdirPaths {
+	for _, subdirPath := range containerSubdirPaths {
 		srcPath := filepath.Join(subdirPath, "src")
 
 		files, err := os.ReadDir(srcPath)
@@ -75,7 +75,7 @@ TypeScript type equivalent:
 		[key: string]: any
 	}>
 */
-type ResourceIndexBuildFileConfigs = []map[string]interface{}
+type IndexBuildFileConfigs = []map[string]interface{}
 
 /*
 	[{
@@ -85,8 +85,8 @@ type ResourceIndexBuildFileConfigs = []map[string]interface{}
 			}]
 		}]
 */
-func GetIndexBuildFileConfigs(resourceContainerSubdirPaths ResourceContainerSubdirPaths, resourceIndexFilePaths ResourceIndexFilePaths, resourceIndexBuildFilePaths ResourceIndexBuildFilePaths) (ResourceIndexBuildFileConfigs, error) {
-	var result ResourceIndexBuildFileConfigs
+func GetIndexBuildFileConfigs(containerSubdirPaths ContainerSubdirPaths, indexFilePaths IndexFilePaths, indexBuildFilePaths indexBuildFilePaths) (IndexBuildFileConfigs, error) {
+	var result IndexBuildFileConfigs
 
 	embedPath := "embed/get-index-build-file-configs.js"
 
@@ -97,13 +97,13 @@ func GetIndexBuildFileConfigs(resourceContainerSubdirPaths ResourceContainerSubd
 
 	nodeCmd := exec.Command("node", "--input-type=module")
 
-	subdirPaths := strings.Join(resourceContainerSubdirPaths, ",")
+	subdirPaths := strings.Join(containerSubdirPaths, ",")
 	nodeCmd.Env = append(nodeCmd.Env, "RESOURCE_CONTAINER_SUBDIR_PATHS="+subdirPaths)
 
-	filePaths := strings.Join(resourceIndexFilePaths, ",")
+	filePaths := strings.Join(indexFilePaths, ",")
 	nodeCmd.Env = append(nodeCmd.Env, "RESOURCE_INDEX_FILE_PATHS="+filePaths)
 
-	buildFilePaths := strings.Join(resourceIndexBuildFilePaths, ",")
+	buildFilePaths := strings.Join(indexBuildFilePaths, ",")
 	nodeCmd.Env = append(nodeCmd.Env, "RESOURCE_INDEX_BUILD_FILE_PATHS="+buildFilePaths)
 
 	nodeCmd.Stdin = bytes.NewReader(content)
@@ -127,17 +127,17 @@ func GetIndexBuildFileConfigs(resourceContainerSubdirPaths ResourceContainerSubd
 	return result, nil
 }
 
-type ResourceIndexBuildFilePaths = []string
+type indexBuildFilePaths = []string
 
 /*
 ["gas/core-base-api/build/core-base-api._index.js"]
 */
-func GetIndexBuildFilePaths(resourceContainerSubdirPaths ResourceContainerSubdirPaths) (ResourceIndexBuildFilePaths, error) {
-	var result ResourceIndexBuildFilePaths
+func GetIndexBuildFilePaths(containerSubdirPaths ContainerSubdirPaths) (indexBuildFilePaths, error) {
+	var result indexBuildFilePaths
 
 	pattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.js$`)
 
-	for _, subdirPath := range resourceContainerSubdirPaths {
+	for _, subdirPath := range containerSubdirPaths {
 		buildPath := filepath.Join(subdirPath, "build")
 
 		files, err := os.ReadDir(buildPath)
@@ -155,7 +155,7 @@ func GetIndexBuildFilePaths(resourceContainerSubdirPaths ResourceContainerSubdir
 	return result, nil
 }
 
-type ResourcePackageJsons []PackageJson
+type PackageJsons []PackageJson
 
 type PackageJson struct {
 	Name            string            `json:"name"`
@@ -178,10 +178,10 @@ TODO
 		DevDependencies: {}
 	}]
 */
-func GetPackageJsons(resourceContainerSubdirPaths ResourceContainerSubdirPaths) (ResourcePackageJsons, error) {
-	var result ResourcePackageJsons
+func GetPackageJsons(containerSubdirPaths ContainerSubdirPaths) (PackageJsons, error) {
+	var result PackageJsons
 
-	for _, subdirPath := range resourceContainerSubdirPaths {
+	for _, subdirPath := range containerSubdirPaths {
 		packageJsonPath := filepath.Join(subdirPath, "package.json")
 
 		data, err := os.ReadFile(packageJsonPath)
@@ -201,13 +201,13 @@ func GetPackageJsons(resourceContainerSubdirPaths ResourceContainerSubdirPaths) 
 	return result, nil
 }
 
-type ResourcesUpJson ResourceNameToData
+type UpJson NameToData
 
 /*
 TODO
 */
-func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
-	var result ResourcesUpJson
+func GetUpJson(resourcesUpJsonPath string) (UpJson, error) {
+	var result UpJson
 	err := helpers.UnmarshallFile(resourcesUpJsonPath, &result)
 	if err != nil {
 		return nil, err
@@ -215,7 +215,7 @@ func GetUpJson(resourcesUpJsonPath string) (ResourcesUpJson, error) {
 	return result, nil
 }
 
-type ResourceDependencyNames [][]string
+type DependencyNames [][]string
 
 /*
 [["CORE_BASE_KV"], []]
@@ -223,22 +223,22 @@ type ResourceDependencyNames [][]string
 Where index 0 is CORE_BASE_API's dependency names and index 1
 is CORE_BASE_KV's dependency names.
 */
-func SetDependencyNames(packageJsons ResourcePackageJsons, packageJsonNameToResourceNameMap PackageJsonNameToResourceName, packageJsonsNameSet PackageJsonNameToTrue) ResourceDependencyNames {
-	var result ResourceDependencyNames
+func SetDependencyNames(packageJsons PackageJsons, packageJsonNameToNameMap PackageJsonNameToName, packageJsonsNameSet PackageJsonNameToTrue) DependencyNames {
+	var result DependencyNames
 	for _, packageJson := range packageJsons {
-		var internalDependencies []string
-		for dependency := range packageJson.Dependencies {
-			resourceName, ok := packageJsonNameToResourceNameMap[dependency]
-			if ok && packageJsonsNameSet[dependency] {
-				internalDependencies = append(internalDependencies, resourceName)
+		var internalDependencyNames []string
+		for dependencyName := range packageJson.Dependencies {
+			resourceName, ok := packageJsonNameToNameMap[dependencyName]
+			if ok && packageJsonsNameSet[dependencyName] {
+				internalDependencyNames = append(internalDependencyNames, resourceName)
 			}
 		}
-		result = append(result, internalDependencies)
+		result = append(result, internalDependencyNames)
 	}
 	return result
 }
 
-type DepthToResourceName map[int][]string
+type DepthToName map[int][]string
 
 /*
 	{
@@ -252,23 +252,23 @@ a resource is.
 For example, given a graph of A->B, B->C, A has a depth
 of 0, B has a depth of 1, and C has a depth of 2.
 */
-func SetDepthToResourceName(resourceNames ResourceNames, resourceNameToData ResourceNameToData, resourceNamesWithInDegreesOfZero ResourceNamesWithInDegreesOf) DepthToResourceName {
-	result := make(DepthToResourceName)
+func SetDepthToName(names Names, nameToData NameToData, namesWithInDegreesOfZero namesWithInDegreesOf) DepthToName {
+	result := make(DepthToName)
 
-	numOfResourceNamesToProcess := len(resourceNames)
+	numOfNamesToProcess := len(names)
 
 	depth := 0
 
-	for _, resourceNameWithInDegreesOfZero := range resourceNamesWithInDegreesOfZero {
-		result[depth] = append(result[depth], resourceNameWithInDegreesOfZero)
-		numOfResourceNamesToProcess--
+	for _, nameWithInDegreesOfZero := range namesWithInDegreesOfZero {
+		result[depth] = append(result[depth], nameWithInDegreesOfZero)
+		numOfNamesToProcess--
 	}
 
-	for numOfResourceNamesToProcess > 0 {
-		for _, resourceNameAtDepth := range result[depth] {
-			for _, dependencyName := range resourceNameToData[resourceNameAtDepth].Dependencies {
+	for numOfNamesToProcess > 0 {
+		for _, nameAtDepth := range result[depth] {
+			for _, dependencyName := range nameToData[nameAtDepth].Dependencies {
 				result[depth+1] = append(result[depth+1], dependencyName)
-				numOfResourceNamesToProcess--
+				numOfNamesToProcess--
 			}
 		}
 		depth++
@@ -277,7 +277,7 @@ func SetDepthToResourceName(resourceNames ResourceNames, resourceNameToData Reso
 	return result
 }
 
-type ResourceNameToInDegrees map[string]int
+type NameToInDegrees map[string]int
 
 /*
 	{
@@ -287,22 +287,22 @@ type ResourceNameToInDegrees map[string]int
 
 In degrees is how many incoming edges a target node has.
 */
-func SetNameToInDegrees(resourceMap ResourceNameToData) ResourceNameToInDegrees {
-	result := make(ResourceNameToInDegrees)
-	for _, resource := range resourceMap {
-		for _, resourceDependencyName := range resource.Dependencies {
-			result[resourceDependencyName]++
+func SetNameToInDegrees(nameToData NameToData) NameToInDegrees {
+	result := make(NameToInDegrees)
+	for _, resource := range nameToData {
+		for _, dependencyName := range resource.Dependencies {
+			result[dependencyName]++
 		}
 	}
-	for resourceName := range resourceMap {
-		if _, ok := result[resourceName]; !ok {
-			result[resourceName] = 0
+	for name := range nameToData {
+		if _, ok := result[name]; !ok {
+			result[name] = 0
 		}
 	}
 	return result
 }
 
-type ResourceNameToData map[string]Resource
+type NameToData map[string]Resource
 
 type Resource struct {
 	Type         string
@@ -313,8 +313,8 @@ type Resource struct {
 /*
 TODO
 */
-func SetNameToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, resourceDependencyNames ResourceDependencyNames) ResourceNameToData {
-	result := make(ResourceNameToData)
+func SetNameToData(indexBuildFileConfigs IndexBuildFileConfigs, dependencyNames DependencyNames) NameToData {
+	result := make(NameToData)
 	for index := range indexBuildFileConfigs {
 		result["CORE_BASE_KV"] = Resource{
 			Type: "cloudflare-kv",
@@ -322,7 +322,7 @@ func SetNameToData(indexBuildFileConfigs ResourceIndexBuildFileConfigs, resource
 				Type: "cloudflare-kv",
 				Name: "CORE_BASE_KV",
 			},
-			Dependencies: resourceDependencyNames[index],
+			Dependencies: dependencyNames[index],
 		}
 	}
 	return result
@@ -333,7 +333,7 @@ type NameToConfigs map[string]interface{}
 /*
 TODO
 */
-func SetNameToConfig(indexBuildFileConfigs ResourceIndexBuildFileConfigs) NameToConfigs {
+func SetNameToConfig(indexBuildFileConfigs IndexBuildFileConfigs) NameToConfigs {
 	result := make(NameToConfigs)
 	for _, config := range indexBuildFileConfigs {
 		resourceType := config["type"].(string)
@@ -364,7 +364,7 @@ TypeScript type equivalent:
 */
 type config map[string]interface{}
 
-type ResourceConfigCommon struct {
+type ConfigCommon struct {
 	Type string
 	Name string
 }
@@ -396,39 +396,39 @@ type GroupToHighestDeployDepth map[int]int
 /*
 TODO
 */
-func SetGroupToHighestDeployDepth(resourceNameToDepth ResourceNameToDepth, resourceNameToState ResourceNameToState, groupsWithStateChanges GroupsWithStateChanges, groupToResourceNames GroupToResourceNames) GroupToHighestDeployDepth {
+func SetGroupToHighestDeployDepth(nameToDepth NameToDepth, nameToState NameToState, groupsWithStateChanges GroupsWithStateChanges, groupToNames GroupToNames) GroupToHighestDeployDepth {
 	result := make(GroupToHighestDeployDepth)
 	for _, group := range groupsWithStateChanges {
 		deployDepth := 0
 		isFirstResourceToProcess := true
-		for _, resourceName := range groupToResourceNames[group] {
+		for _, name := range groupToNames[group] {
 			// UNCHANGED resources aren't deployed, so its depth
 			// can't be the deploy depth.
-			if resourceNameToState[resourceName] == State("UNCHANGED") {
+			if nameToState[name] == State("UNCHANGED") {
 				continue
 			}
 
 			// If resource is first to make it this far set deploy
 			// depth so it can be used for comparison in future loops.
 			if isFirstResourceToProcess {
-				result[group] = resourceNameToDepth[resourceName]
-				deployDepth = resourceNameToDepth[resourceName]
+				result[group] = nameToDepth[name]
+				deployDepth = nameToDepth[name]
 				isFirstResourceToProcess = false
 				continue
 			}
 
 			// Update deploy depth if resource's depth is greater than
 			// the comparative deploy depth.
-			if resourceNameToDepth[resourceName] > deployDepth {
-				result[group] = resourceNameToDepth[resourceName]
-				deployDepth = resourceNameToDepth[resourceName]
+			if nameToDepth[name] > deployDepth {
+				result[group] = nameToDepth[name]
+				deployDepth = nameToDepth[name]
 			}
 		}
 	}
 	return result
 }
 
-type GroupToDepthToResourceNames map[int]map[int][]string
+type GroupToDepthToNames map[int]map[int][]string
 
 /*
 	{
@@ -441,22 +441,22 @@ type GroupToDepthToResourceNames map[int]map[int][]string
 		}
 	}
 */
-func SetGroupToDepthToResourceNames(resourceNameToGroup ResourceNameToGroup, resourceNameToDepth ResourceNameToDepth) GroupToDepthToResourceNames {
-	result := make(GroupToDepthToResourceNames)
-	for resourceName, group := range resourceNameToGroup {
+func SetGroupToDepthToNames(nameToGroup NameToGroup, nameToDepth NameToDepth) GroupToDepthToNames {
+	result := make(GroupToDepthToNames)
+	for name, group := range nameToGroup {
 		if _, ok := result[group]; !ok {
 			result[group] = make(map[int][]string)
 		}
-		depth := resourceNameToDepth[resourceName]
+		depth := nameToDepth[name]
 		if _, ok := result[group][depth]; !ok {
 			result[group][depth] = make([]string, 0)
 		}
-		result[group][depth] = append(result[group][depth], resourceName)
+		result[group][depth] = append(result[group][depth], name)
 	}
 	return result
 }
 
-type GroupToResourceNames map[int][]string
+type GroupToNames map[int][]string
 
 /*
 	{
@@ -466,26 +466,26 @@ type GroupToResourceNames map[int][]string
 		1: ["ADMIN_BASE_API"]
 	}
 */
-func SetGroupToResourceNames(resourceNameToGroup ResourceNameToGroup) GroupToResourceNames {
-	result := make(GroupToResourceNames)
-	for resourceName, group := range resourceNameToGroup {
+func SetGroupToNames(nameToGroup NameToGroup) GroupToNames {
+	result := make(GroupToNames)
+	for name, group := range nameToGroup {
 		if _, ok := result[group]; !ok {
 			result[group] = make([]string, 0)
 		}
-		result[group] = append(result[group], resourceName)
+		result[group] = append(result[group], name)
 	}
 	return result
 }
 
-type PackageJsonNameToResourceName map[string]string
+type PackageJsonNameToName map[string]string
 
 /*
 	{
 		"core-base-api": "CORE_BASE_API"
 	}
 */
-func SetPackageJsonNameToResourceName(packageJsons ResourcePackageJsons, indexBuildFileConfigs ResourceIndexBuildFileConfigs) PackageJsonNameToResourceName {
-	result := make(PackageJsonNameToResourceName)
+func SetPackageJsonNameToName(packageJsons PackageJsons, indexBuildFileConfigs IndexBuildFileConfigs) PackageJsonNameToName {
+	result := make(PackageJsonNameToName)
 	for index, packageJson := range packageJsons {
 		resourceName := indexBuildFileConfigs[index]["name"].(string)
 		result[packageJson.Name] = resourceName
@@ -510,7 +510,7 @@ when looping over CORE_BASE_API's package.json dependencies, each
 dependency can be checked against this map. If a check returns true,
 then the dependency is another resource.
 */
-func SetPackageJsonNameToTrue(packageJsons ResourcePackageJsons) PackageJsonNameToTrue {
+func SetPackageJsonNameToTrue(packageJsons PackageJsons) PackageJsonNameToTrue {
 	result := make(PackageJsonNameToTrue)
 	for _, packageJson := range packageJsons {
 		result[packageJson.Name] = true
@@ -518,20 +518,20 @@ func SetPackageJsonNameToTrue(packageJsons ResourcePackageJsons) PackageJsonName
 	return result
 }
 
-type ResourceNames []string
+type Names []string
 
 /*
 ["CORE_BASE_API"]
 */
-func SetNames(resourceNameToData ResourceNameToData) ResourceNames {
-	var result ResourceNames
-	for resourceName := range resourceNameToData {
-		result = append(result, resourceName)
+func SetNames(nameToData NameToData) Names {
+	var result Names
+	for name := range nameToData {
+		result = append(result, name)
 	}
 	return result
 }
 
-type ResourceNameToDepth map[string]int
+type NameToDepth map[string]int
 
 /*
 	{
@@ -539,17 +539,17 @@ type ResourceNameToDepth map[string]int
 		"CORE_BASE_API": 0
 	}
 */
-func SetNameToDepth(depthToResourceName DepthToResourceName) ResourceNameToDepth {
-	result := make(ResourceNameToDepth)
-	for depth, resourceNames := range depthToResourceName {
-		for _, resourceName := range resourceNames {
-			result[resourceName] = depth
+func SetNameToDepth(depthToName DepthToName) NameToDepth {
+	result := make(NameToDepth)
+	for depth, names := range depthToName {
+		for _, name := range names {
+			result[name] = depth
 		}
 	}
 	return result
 }
 
-type ResourceNameToGroup map[string]int
+type NameToGroup map[string]int
 
 /*
 	{
@@ -561,16 +561,16 @@ type ResourceNameToGroup map[string]int
 A group is an int assigned to resource names that share
 at least one common relative.
 */
-func SetNameToGroup(resourceNamesWithInDegreesOfZero ResourceNamesWithInDegreesOf, resourceNameToIntermediateNames ResourceNameToIntermediateNames) ResourceNameToGroup {
-	result := make(ResourceNameToGroup)
+func SetNameToGroup(namesWithInDegreesOfZero namesWithInDegreesOf, nameToIntermediateNames NameToIntermediateNames) NameToGroup {
+	result := make(NameToGroup)
 	group := 0
-	for _, sourceResourceName := range resourceNamesWithInDegreesOfZero {
-		if _, ok := result[sourceResourceName]; !ok {
+	for _, sourceName := range namesWithInDegreesOfZero {
+		if _, ok := result[sourceName]; !ok {
 			// Initialize source resource's group.
-			result[sourceResourceName] = group
+			result[sourceName] = group
 
 			// Set group for source resource's intermediates.
-			for _, intermediateName := range resourceNameToIntermediateNames[sourceResourceName] {
+			for _, intermediateName := range nameToIntermediateNames[sourceName] {
 				if _, ok := result[intermediateName]; !ok {
 					result[intermediateName] = group
 				}
@@ -586,14 +586,14 @@ func SetNameToGroup(resourceNamesWithInDegreesOfZero ResourceNamesWithInDegreesO
 			// intermediate resources in each's direct path). In this case, A & X
 			// share a common relative in "C". Therefore, A & X should be assigned
 			// to the same group.
-			for _, possibleDistantRelativeName := range resourceNamesWithInDegreesOfZero {
+			for _, possibleDistantRelativeName := range namesWithInDegreesOfZero {
 				// Skip source resource from the main for loop.
-				if possibleDistantRelativeName != sourceResourceName {
+				if possibleDistantRelativeName != sourceName {
 					// Loop over possible distant relative's intermediates.
-					for _, possibleDistantRelativeIntermediateName := range resourceNameToIntermediateNames[possibleDistantRelativeName] {
+					for _, possibleDistantRelativeIntermediateName := range nameToIntermediateNames[possibleDistantRelativeName] {
 						// Check if possible distant relative's intermediate
 						// is also an intermediate of source resource.
-						if helpers.IncludesString(resourceNameToIntermediateNames[sourceResourceName], possibleDistantRelativeIntermediateName) {
+						if helpers.IncludesString(nameToIntermediateNames[sourceName], possibleDistantRelativeIntermediateName) {
 							// If so, possibl distant relative and source resource
 							// are distant relatives and belong to the same group.
 							result[possibleDistantRelativeName] = group
@@ -607,7 +607,7 @@ func SetNameToGroup(resourceNamesWithInDegreesOfZero ResourceNamesWithInDegreesO
 	return result
 }
 
-type ResourceNameToIntermediateNames map[string][]string
+type NameToIntermediateNames map[string][]string
 
 /*
 	{
@@ -615,7 +615,7 @@ type ResourceNameToIntermediateNames map[string][]string
 		"CORE_BASE_KV": []
 	}
 
-Intermediate names are resource names within the source resource's
+Intermediate names are names within the source resource's
 directed path when analyzing resource relationships as a graph.
 
 For example, given a graph of A->B, B->C, and X->C, B and C are
@@ -626,27 +626,27 @@ Finding intermediate names is necessary for grouping related resources.
 It wouldn't be possible to know A and X are relatives in the above
 example without them.
 */
-func SetNameToIntermediateNames(resourceNameToData ResourceNameToData) ResourceNameToIntermediateNames {
-	result := make(ResourceNameToIntermediateNames)
+func SetNameToIntermediateNames(nameToData NameToData) NameToIntermediateNames {
+	result := make(NameToIntermediateNames)
 	memo := make(map[string][]string)
-	for resourceName := range resourceNameToData {
-		result[resourceName] = walkDependencies(resourceName, resourceNameToData, memo)
+	for name := range nameToData {
+		result[name] = walkDependencies(name, nameToData, memo)
 	}
 	return result
 }
 
-func walkDependencies(resourceName string, resourceNameToData ResourceNameToData, memo map[string][]string) []string {
-	if result, found := memo[resourceName]; found {
+func walkDependencies(name string, nameToData NameToData, memo map[string][]string) []string {
+	if result, found := memo[name]; found {
 		return result
 	}
 
 	result := make([]string, 0)
-	if resourceData, ok := resourceNameToData[resourceName]; ok {
-		resourceDependencyNames := resourceData.Dependencies
-		for _, resourceDependencyName := range resourceDependencyNames {
-			if !helpers.IsInSlice(result, resourceDependencyName) {
-				result = append(result, resourceDependencyName)
-				for _, transitiveDependency := range walkDependencies(resourceDependencyName, resourceNameToData, memo) {
+	if resourceData, ok := nameToData[name]; ok {
+		dependencyNames := resourceData.Dependencies
+		for _, dependencyName := range dependencyNames {
+			if !helpers.IsInSlice(result, dependencyName) {
+				result = append(result, dependencyName)
+				for _, transitiveDependency := range walkDependencies(dependencyName, nameToData, memo) {
 					if !helpers.IsInSlice(result, transitiveDependency) {
 						result = append(result, transitiveDependency)
 					}
@@ -654,7 +654,7 @@ func walkDependencies(resourceName string, resourceNameToData ResourceNameToData
 			}
 		}
 	}
-	memo[resourceName] = result
+	memo[name] = result
 
 	return result
 }
@@ -668,29 +668,29 @@ const (
 	UPDATED   State = "UPDATED"
 )
 
-type ResourceNameToState map[string]State
+type NameToState map[string]State
 
 /*
 TODO
 */
-func SetNameToStateMap(upJson ResourcesUpJson, currResourceMap ResourceNameToData) ResourceNameToState {
-	result := make(ResourceNameToState)
+func SetNameToStateMap(upJson UpJson, nameToData NameToData) NameToState {
+	result := make(NameToState)
 
-	for upJsonResourceName := range upJson {
-		if _, ok := currResourceMap[upJsonResourceName]; !ok {
-			result[upJsonResourceName] = State(DELETED)
+	for name := range upJson {
+		if _, ok := nameToData[name]; !ok {
+			result[name] = State(DELETED)
 		}
 	}
 
-	for currResourceName, currResource := range currResourceMap {
-		if _, ok := upJson[currResourceName]; !ok {
-			result[currResourceName] = State(CREATED)
+	for name, resource := range nameToData {
+		if _, ok := upJson[name]; !ok {
+			result[name] = State(CREATED)
 		} else {
-			upResource := upJson[currResourceName]
-			if IsResourceEqual(upResource, currResource) {
-				result[currResourceName] = State(UNCHANGED)
+			upResource := upJson[name]
+			if IsResourceEqual(upResource, resource) {
+				result[name] = State(UNCHANGED)
 			} else {
-				result[currResourceName] = State(UPDATED)
+				result[name] = State(UPDATED)
 			}
 		}
 	}
@@ -721,14 +721,14 @@ type GroupsWithStateChanges = []int
 
 Where a resource of CORE_BASE_API belonging to group 0 has been created.
 */
-func SetGroupsWithStateChanges(resourceNameToGroup ResourceNameToGroup, resourceNameToState ResourceNameToState) GroupsWithStateChanges {
+func SetGroupsWithStateChanges(nameToGroup NameToGroup, nameToState NameToState) GroupsWithStateChanges {
 	result := make(GroupsWithStateChanges, 0)
 
 	seenGroups := make(map[int]struct{})
 
-	for resourceName, state := range resourceNameToState {
+	for name, state := range nameToState {
 		if state != UNCHANGED {
-			group, ok := resourceNameToGroup[resourceName]
+			group, ok := nameToGroup[name]
 			if ok {
 				if _, alreadyAdded := seenGroups[group]; !alreadyAdded {
 					result = append(result, group)
@@ -741,22 +741,22 @@ func SetGroupsWithStateChanges(resourceNameToGroup ResourceNameToGroup, resource
 	return result
 }
 
-type ResourceNamesWithInDegreesOf []string
+type namesWithInDegreesOf []string
 
 /*
 TODO
 */
-func SetNamesWithInDegreesOf(resourceNameToInDegrees ResourceNameToInDegrees, degrees int) ResourceNamesWithInDegreesOf {
-	var result ResourceNamesWithInDegreesOf
-	for resourceName, inDegree := range resourceNameToInDegrees {
+func SetNamesWithInDegreesOf(nameToInDegrees NameToInDegrees, degrees int) namesWithInDegreesOf {
+	var result namesWithInDegreesOf
+	for name, inDegree := range nameToInDegrees {
 		if inDegree == degrees {
-			result = append(result, resourceName)
+			result = append(result, name)
 		}
 	}
 	return result
 }
 
-type StateToResourceNames = map[State][]string
+type StateToNames = map[State][]string
 
 /*
 	{
@@ -766,13 +766,13 @@ type StateToResourceNames = map[State][]string
 		UPDATED: ["..."]
 	}
 */
-func SetStateToResourceNames(resourceNameToState ResourceNameToState) StateToResourceNames {
-	result := make(StateToResourceNames)
-	for resourceName, state := range resourceNameToState {
+func SetStateToNames(nameToState NameToState) StateToNames {
+	result := make(StateToNames)
+	for name, state := range nameToState {
 		if _, ok := result[state]; !ok {
 			result[state] = make([]string, 0)
 		}
-		result[state] = append(result[state], resourceName)
+		result[state] = append(result[state], name)
 	}
 	return result
 }
