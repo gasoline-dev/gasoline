@@ -201,6 +201,24 @@ func GetPackageJsons(containerSubdirPaths ContainerSubdirPaths) (PackageJsons, e
 	return result, nil
 }
 
+type UpJsonNew map[string]interface{}
+
+func GetUpJsonNew(filePath string) (UpJsonNew, error) {
+	var result UpJsonNew
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read up .json file %s\n%v", filePath, err)
+	}
+
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse up .json file %s\n%v", filePath, err)
+	}
+
+	return result, nil
+}
+
 type UpJson NameToData
 
 /*
@@ -682,6 +700,28 @@ const (
 
 type NameToState map[string]State
 
+func SetNameToStateMapNew() {}
+
+func isEqualNew(upConfig map[string]interface{}, upNameToDependencies UpNameToDependencies, resourceConfig map[string]interface{}, resourceNameToDependencies NameToDependencies) bool {
+	upConfigType := upConfig["type"].(string)
+	resource2ConfigType := resourceConfig["type"].(string)
+
+	// This probably shouldn't even happen?
+	if upConfigType != resource2ConfigType {
+		return false
+	}
+
+	if !reflect.DeepEqual(upConfig, resourceConfig) {
+		return false
+	}
+
+	if !reflect.DeepEqual(upNameToDependencies, resourceNameToDependencies) {
+		return false
+	}
+
+	return true
+}
+
 /*
 TODO
 */
@@ -699,7 +739,7 @@ func SetNameToStateMap(upJson UpJson, nameToData NameToData) NameToState {
 			result[name] = State(CREATED)
 		} else {
 			upResource := upJson[name]
-			if IsResourceEqual(upResource, resource) {
+			if isEqual(upResource, resource) {
 				result[name] = State(UNCHANGED)
 			} else {
 				result[name] = State(UPDATED)
@@ -713,7 +753,7 @@ func SetNameToStateMap(upJson UpJson, nameToData NameToData) NameToState {
 /*
 TODO
 */
-func IsResourceEqual(resource1, resource2 Resource) bool {
+func isEqual(resource1, resource2 Resource) bool {
 	if resource1.Type != resource2.Type {
 		return false
 	}
@@ -785,6 +825,28 @@ func SetStateToNames(nameToState NameToState) StateToNames {
 			result[state] = make([]string, 0)
 		}
 		result[state] = append(result[state], name)
+	}
+	return result
+}
+
+type UpNameToConfig map[string]interface{}
+
+type UpNameToDependencies map[string][]string
+
+func SetUpNameToDependencies(upJson UpJsonNew) UpNameToDependencies {
+	result := make(UpNameToDependencies)
+	for name, data := range upJson {
+		dependenciesInterface := data.(map[string]interface{})["dependencies"]
+		if dependenciesInterface != nil {
+			dependenciesSlice := dependenciesInterface.([]interface{})
+			dependencies := make([]string, len(dependenciesSlice))
+			for index, dependency := range dependenciesSlice {
+				dependencies[index] = dependency.(string)
+			}
+			result[name] = dependencies
+		} else {
+			result[name] = []string{}
+		}
 	}
 	return result
 }

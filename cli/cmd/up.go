@@ -136,6 +136,17 @@ var upCmd = &cobra.Command{
 			}
 		}
 
+		resourcesUpJsonNew, err := resources.GetUpJsonNew(resourcesUpJsonPath)
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+		}
+
+		resourcesUpNameToDependencies := resources.SetUpNameToDependencies(resourcesUpJsonNew)
+		fmt.Println("up name to dependencies")
+		helpers.PrettyPrint(resourcesUpNameToDependencies)
+		os.Exit(0)
+
 		resourcesUpJson, err := resources.GetUpJson(resourcesUpJsonPath)
 		if err != nil {
 			fmt.Println("Error:", err)
