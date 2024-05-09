@@ -146,9 +146,6 @@ var upCmd = &cobra.Command{
 
 		resourceNameToState := resources.SetNameToStateMap(upResourceNameToConfig, currResourceNameToConfig, upResourceNameToDependencies, currResourceNameToDependencies)
 
-		helpers.PrettyPrint(resourceNameToState)
-		os.Exit(0)
-
 		stateToResourceNames := resources.SetStateToNames(resourceNameToState)
 
 		hasResourceNamesToDeploy := hasResourceNamesToDeploy(stateToResourceNames)

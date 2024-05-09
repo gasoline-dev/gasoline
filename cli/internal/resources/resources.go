@@ -356,9 +356,6 @@ func SetNameToData(indexBuildFileConfigs IndexBuildFileConfigs, dependencyNames 
 
 type NameToConfig map[string]interface{}
 
-/*
-TODO
-*/
 func SetNameToConfig(indexBuildFileConfigs IndexBuildFileConfigs) NameToConfig {
 	result := make(NameToConfig)
 	for _, config := range indexBuildFileConfigs {
@@ -375,9 +372,6 @@ var configs = map[string]func(config config) interface{}{
 			Type: config["type"].(string),
 			Name: config["name"].(string),
 		}
-	},
-	"cloudflare-worker": func(config config) interface{} {
-		return &CloudflareWorkerConfig{}
 	},
 }
 
@@ -417,7 +411,11 @@ func SetNameToDependencies(indexBuildFileConfigs IndexBuildFileConfigs, dependen
 	result := make(NameToDependencies)
 	for index, config := range indexBuildFileConfigs {
 		name := config["name"].(string)
-		result[name] = dependencyNames[index]
+		if dependencyNames[index] != nil {
+			result[name] = dependencyNames[index]
+		} else {
+			result[name] = make([]string, 0)
+		}
 	}
 	return result
 }
@@ -714,8 +712,6 @@ func SetNameToStateMap(upNameToConfig UpNameToConfig, nameToConfig NameToConfig,
 			result[name] = State(CREATED)
 		} else {
 			if !reflect.DeepEqual(upNameToConfig[name], nameToConfig[name]) {
-				helpers.PrettyPrint(upNameToConfig[name])
-				helpers.PrettyPrint(nameToConfig[name])
 				result[name] = State(UPDATED)
 				continue
 			}
@@ -800,7 +796,9 @@ type UpNameToConfig map[string]interface{}
 func SetUpNameToConfig(upJson UpJsonNew) UpNameToConfig {
 	result := make(UpNameToConfig)
 	for name, data := range upJson {
-		result[name] = data.(map[string]interface{})["config"]
+		config := data.(map[string]interface{})["config"].(map[string]interface{})
+		resourceType := config["type"].(string)
+		result[name] = configs[resourceType](config)
 	}
 	return result
 }
@@ -819,7 +817,7 @@ func SetUpNameToDependencies(upJson UpJsonNew) UpNameToDependencies {
 			}
 			result[name] = dependencies
 		} else {
-			result[name] = []string{}
+			result[name] = make([]string, 0)
 		}
 	}
 	return result
