@@ -201,10 +201,10 @@ func GetPackageJsons(containerSubdirPaths ContainerSubdirPaths) (PackageJsons, e
 	return result, nil
 }
 
-type UpJsonNew map[string]interface{}
+type UpJson map[string]interface{}
 
-func GetUpJsonNew(filePath string) (UpJsonNew, error) {
-	var result UpJsonNew
+func GetUpJson(filePath string) (UpJson, error) {
+	var result UpJson
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -216,20 +216,6 @@ func GetUpJsonNew(filePath string) (UpJsonNew, error) {
 		return nil, fmt.Errorf("unable to parse up .json file %s\n%v", filePath, err)
 	}
 
-	return result, nil
-}
-
-type UpJson NameToData
-
-/*
-TODO
-*/
-func GetUpJson(resourcesUpJsonPath string) (UpJson, error) {
-	var result UpJson
-	err := helpers.UnmarshallFile(resourcesUpJsonPath, &result)
-	if err != nil {
-		return nil, err
-	}
 	return result, nil
 }
 
@@ -793,7 +779,7 @@ func SetStateToNames(nameToState NameToState) StateToNames {
 
 type UpNameToConfig map[string]interface{}
 
-func SetUpNameToConfig(upJson UpJsonNew) UpNameToConfig {
+func SetUpNameToConfig(upJson UpJson) UpNameToConfig {
 	result := make(UpNameToConfig)
 	for name, data := range upJson {
 		config := data.(map[string]interface{})["config"].(map[string]interface{})
@@ -805,7 +791,7 @@ func SetUpNameToConfig(upJson UpJsonNew) UpNameToConfig {
 
 type UpNameToDependencies map[string][]string
 
-func SetUpNameToDependencies(upJson UpJsonNew) UpNameToDependencies {
+func SetUpNameToDependencies(upJson UpJson) UpNameToDependencies {
 	result := make(UpNameToDependencies)
 	for name, data := range upJson {
 		dependenciesInterface := data.(map[string]interface{})["dependencies"]

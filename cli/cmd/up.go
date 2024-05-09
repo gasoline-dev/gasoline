@@ -134,15 +134,15 @@ var upCmd = &cobra.Command{
 			}
 		}
 
-		resourcesUpJsonNew, err := resources.GetUpJsonNew(resourcesUpJsonPath)
+		resourcesUpJson, err := resources.GetUpJson(resourcesUpJsonPath)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 		}
 
-		upResourceNameToDependencies := resources.SetUpNameToDependencies(resourcesUpJsonNew)
+		upResourceNameToDependencies := resources.SetUpNameToDependencies(resourcesUpJson)
 
-		upResourceNameToConfig := resources.SetUpNameToConfig(resourcesUpJsonNew)
+		upResourceNameToConfig := resources.SetUpNameToConfig(resourcesUpJson)
 
 		resourceNameToState := resources.SetNameToStateMap(upResourceNameToConfig, currResourceNameToConfig, upResourceNameToDependencies, currResourceNameToDependencies)
 
