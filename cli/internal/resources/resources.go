@@ -700,70 +700,36 @@ const (
 
 type NameToState map[string]State
 
-func SetNameToStateMapNew() {}
-
-func isEqualNew(upConfig map[string]interface{}, upNameToDependencies UpNameToDependencies, resourceConfig map[string]interface{}, resourceNameToDependencies NameToDependencies) bool {
-	upConfigType := upConfig["type"].(string)
-	resource2ConfigType := resourceConfig["type"].(string)
-
-	// This probably shouldn't even happen?
-	if upConfigType != resource2ConfigType {
-		return false
-	}
-
-	if !reflect.DeepEqual(upConfig, resourceConfig) {
-		return false
-	}
-
-	if !reflect.DeepEqual(upNameToDependencies, resourceNameToDependencies) {
-		return false
-	}
-
-	return true
-}
-
-/*
-TODO
-*/
-func SetNameToStateMap(upJson UpJson, nameToData NameToData) NameToState {
+func SetNameToStateMap(upNameToConfig UpNameToConfig, nameToConfig NameToConfig, upNameToDependencies UpNameToDependencies, nameToDependencies NameToDependencies) NameToState {
 	result := make(NameToState)
 
-	for name := range upJson {
-		if _, ok := nameToData[name]; !ok {
+	for name := range upNameToConfig {
+		if _, ok := nameToConfig[name]; !ok {
 			result[name] = State(DELETED)
 		}
 	}
 
-	for name, resource := range nameToData {
-		if _, ok := upJson[name]; !ok {
+	for name := range nameToConfig {
+		if _, ok := upNameToConfig[name]; !ok {
 			result[name] = State(CREATED)
 		} else {
-			upResource := upJson[name]
-			if isEqual(upResource, resource) {
-				result[name] = State(UNCHANGED)
-			} else {
+			if !reflect.DeepEqual(upNameToConfig[name], nameToConfig[name]) {
+				helpers.PrettyPrint(upNameToConfig[name])
+				helpers.PrettyPrint(nameToConfig[name])
 				result[name] = State(UPDATED)
+				continue
 			}
+
+			if !reflect.DeepEqual(upNameToDependencies[name], nameToDependencies[name]) {
+				result[name] = State(UPDATED)
+				continue
+			}
+
+			result[name] = State(UNCHANGED)
 		}
 	}
 
 	return result
-}
-
-/*
-TODO
-*/
-func isEqual(resource1, resource2 Resource) bool {
-	if resource1.Type != resource2.Type {
-		return false
-	}
-	if !reflect.DeepEqual(resource1.Config, resource2.Config) {
-		return false
-	}
-	if !reflect.DeepEqual(resource1.Dependencies, resource2.Dependencies) {
-		return false
-	}
-	return true
 }
 
 type GroupsWithStateChanges = []int
@@ -830,6 +796,14 @@ func SetStateToNames(nameToState NameToState) StateToNames {
 }
 
 type UpNameToConfig map[string]interface{}
+
+func SetUpNameToConfig(upJson UpJsonNew) UpNameToConfig {
+	result := make(UpNameToConfig)
+	for name, data := range upJson {
+		result[name] = data.(map[string]interface{})["config"]
+	}
+	return result
+}
 
 type UpNameToDependencies map[string][]string
 

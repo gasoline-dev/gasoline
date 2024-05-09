@@ -87,8 +87,6 @@ var upCmd = &cobra.Command{
 
 		currResourceNameToConfig := resources.SetNameToConfig(currResourceIndexBuildFileConfigs)
 
-		helpers.PrettyPrint(currResourceNameToConfig)
-
 		currResourcePackageJsons, err := resources.GetPackageJsons(currResourceContainerSubdirPaths)
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -142,18 +140,14 @@ var upCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		resourcesUpNameToDependencies := resources.SetUpNameToDependencies(resourcesUpJsonNew)
-		fmt.Println("up name to dependencies")
-		helpers.PrettyPrint(resourcesUpNameToDependencies)
+		upResourceNameToDependencies := resources.SetUpNameToDependencies(resourcesUpJsonNew)
+
+		upResourceNameToConfig := resources.SetUpNameToConfig(resourcesUpJsonNew)
+
+		resourceNameToState := resources.SetNameToStateMap(upResourceNameToConfig, currResourceNameToConfig, upResourceNameToDependencies, currResourceNameToDependencies)
+
+		helpers.PrettyPrint(resourceNameToState)
 		os.Exit(0)
-
-		resourcesUpJson, err := resources.GetUpJson(resourcesUpJsonPath)
-		if err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
-
-		resourceNameToState := resources.SetNameToStateMap(resourcesUpJson, currResourceNameToData)
 
 		stateToResourceNames := resources.SetStateToNames(resourceNameToState)
 
