@@ -256,10 +256,10 @@ a resource is.
 For example, given a graph of A->B, B->C, A has a depth
 of 0, B has a depth of 1, and C has a depth of 2.
 */
-func SetDepthToName(names Names, nameToDependencies NameToDependencies, namesWithInDegreesOfZero namesWithInDegreesOf) DepthToName {
+func SetDepthToName(nameToDependencies NameToDependencies, namesWithInDegreesOfZero namesWithInDegreesOf) DepthToName {
 	result := make(DepthToName)
 
-	numOfNamesToProcess := len(names)
+	numOfNamesToProcess := len(nameToDependencies)
 
 	depth := 0
 
@@ -311,32 +311,6 @@ func SetNameToInDegrees(nameToDependencies NameToDependencies) NameToInDegrees {
 		}
 	}
 
-	return result
-}
-
-type NameToData map[string]Resource
-
-type Resource struct {
-	Type         string
-	Config       interface{}
-	Dependencies []string
-}
-
-/*
-TODO
-*/
-func SetNameToData(indexBuildFileConfigs IndexBuildFileConfigs, dependencyNames DependencyNames) NameToData {
-	result := make(NameToData)
-	for index := range indexBuildFileConfigs {
-		result["CORE_BASE_KV"] = Resource{
-			Type: "cloudflare-kv",
-			Config: &CloudflareKVConfig{
-				Type: "cloudflare-kv",
-				Name: "CORE_BASE_KV",
-			},
-			Dependencies: dependencyNames[index],
-		}
-	}
 	return result
 }
 
@@ -529,19 +503,6 @@ func SetPackageJsonNameToTrue(packageJsons PackageJsons) PackageJsonNameToTrue {
 	result := make(PackageJsonNameToTrue)
 	for _, packageJson := range packageJsons {
 		result[packageJson.Name] = true
-	}
-	return result
-}
-
-type Names []string
-
-/*
-["CORE_BASE_API"]
-*/
-func SetNames(nameToData NameToData) Names {
-	var result Names
-	for name := range nameToData {
-		result = append(result, name)
 	}
 	return result
 }

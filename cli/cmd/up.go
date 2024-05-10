@@ -7,6 +7,7 @@ import (
 	"gas/internal/resources"
 	"gas/internal/validators"
 	"os"
+	"reflect"
 	"time"
 
 	"github.com/cloudflare/cloudflare-go"
@@ -101,20 +102,15 @@ var upCmd = &cobra.Command{
 
 		currResourceNameToDependencies := resources.SetNameToDependencies(currResourceIndexBuildFileConfigs, currResourceDependencyNames)
 
-		currResourceNameToData := resources.SetNameToData(currResourceIndexBuildFileConfigs, currResourceDependencyNames)
-
 		resourceNameToInDegrees := resources.SetNameToInDegrees(currResourceNameToDependencies)
 
 		resourceNamesWithInDegreesOfZero := resources.SetNamesWithInDegreesOf(resourceNameToInDegrees, 0)
-
-		// TODO: Might not need this
-		resourceNames := resources.SetNames(currResourceNameToData)
 
 		resourceNameToIntermediateNames := resources.SetNameToIntermediateNames(currResourceNameToDependencies)
 
 		resourceNameToGroup := resources.SetNameToGroup(resourceNamesWithInDegreesOfZero, resourceNameToIntermediateNames)
 
-		depthToResourceName := resources.SetDepthToName(resourceNames, currResourceNameToDependencies, resourceNamesWithInDegreesOfZero)
+		depthToResourceName := resources.SetDepthToName(currResourceNameToDependencies, resourceNamesWithInDegreesOfZero)
 
 		resourceNameToDepth := resources.SetNameToDepth(depthToResourceName)
 
@@ -156,7 +152,8 @@ var upCmd = &cobra.Command{
 		}
 
 		err = deploy(
-			currResourceNameToData,
+			currResourceNameToConfig,
+			currResourceNameToDependencies,
 			groupToDepthToResourceNames,
 			resourceNameToDepth,
 			resourceNameToGroup,
@@ -173,7 +170,8 @@ var upCmd = &cobra.Command{
 }
 
 func deploy(
-	currResourceNameToData resources.NameToData,
+	currResourceNameToConfig resources.NameToConfig,
+	currResourceNameToDependencies resources.NameToDependencies,
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToGroup resources.NameToGroup,
@@ -184,7 +182,8 @@ func deploy(
 	resourceNameToDeployState := updateResourceNameToDeployStateOfPending(resourceNameToState)
 
 	err := deployGroups(
-		currResourceNameToData,
+		currResourceNameToConfig,
+		currResourceNameToDependencies,
 		groupToDepthToResourceNames,
 		resourceNameToDepth,
 		resourceNameToDeployState,
@@ -200,7 +199,8 @@ func deploy(
 }
 
 func deployGroups(
-	currResourceNameToData resources.NameToData,
+	currResourceNameToConfig resources.NameToConfig,
+	currResourceNameToDependencies resources.NameToDependencies,
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToDeployState resourceNameToDeployState,
@@ -224,7 +224,8 @@ func deployGroups(
 
 	for _, group := range groupsWithStateChanges {
 		go deployGroup(
-			currResourceNameToData,
+			currResourceNameToConfig,
+			currResourceNameToDependencies,
 			deployGroupOkChan,
 			group,
 			groupToDepthToResourceNames,
@@ -262,7 +263,8 @@ func deployGroups(
 type DeployGroupOkChan chan bool
 
 func deployGroup(
-	currResourceNameToData resources.NameToData,
+	currResourceNameToConfig resources.NameToConfig,
+	currResourceNameToDependencies resources.NameToDependencies,
 	deployGroupOkChan DeployGroupOkChan,
 	group int,
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
@@ -277,12 +279,12 @@ func deployGroup(
 
 	highestGroupDeployDepth := groupToHighestDeployDepth[group]
 
-	initialGroupResourceNamesToDeploy := setInitialGroupResourceNamesToDeploy(highestGroupDeployDepth, group, groupToDepthToResourceNames, currResourceNameToData, resourceNameToDeployState)
+	initialGroupResourceNamesToDeploy := setInitialGroupResourceNamesToDeploy(highestGroupDeployDepth, group, groupToDepthToResourceNames, currResourceNameToDependencies, resourceNameToDeployState)
 
 	for _, resourceName := range initialGroupResourceNamesToDeploy {
 		depth := resourceNameToDepth[resourceName]
 		go deployResource(
-			currResourceNameToData,
+			currResourceNameToConfig,
 			depth,
 			deployResourceOkChan,
 			group,
@@ -330,7 +332,7 @@ func deployGroup(
 					shouldDeployResource := true
 
 					// Is resource dependent on another deploying resource?
-					for _, dependencyName := range currResourceNameToData[resourceName].Dependencies {
+					for _, dependencyName := range currResourceNameToDependencies[resourceName] {
 						activeStates := map[deployState]bool{
 							deployState(CREATE_IN_PROGRESS): true,
 							deployState(DELETE_IN_PROGRESS): true,
@@ -349,7 +351,7 @@ func deployGroup(
 					if shouldDeployResource {
 						depth := resourceNameToDepth[resourceName]
 						go deployResource(
-							currResourceNameToData,
+							currResourceNameToConfig,
 							depth,
 							deployResourceOkChan,
 							group,
@@ -367,7 +369,7 @@ func deployGroup(
 type DeployResourceOkChan chan bool
 
 func deployResource(
-	currResourceNameToData resources.NameToData,
+	currResourceNameToConfig resources.NameToConfig,
 	depth int,
 	deployResourceOkChan DeployResourceOkChan,
 	group int,
@@ -383,9 +385,11 @@ func deployResource(
 
 	resourceProcessorOkChan := make(ResourceProcessorOkChan)
 
-	resourceProcessorKey := currResourceNameToData[resourceName].Type + ":" + string(resourceNameToState[resourceName])
+	resourceType := reflect.ValueOf(currResourceNameToConfig[resourceName]).Elem().FieldByName("Type").String()
 
-	go resourceProcessors[string(resourceProcessorKey)](currResourceNameToData[resourceName].Config, resourceProcessorOkChan)
+	resourceProcessorKey := resourceType + ":" + string(resourceNameToState[resourceName])
+
+	go resourceProcessors[string(resourceProcessorKey)](currResourceNameToConfig[resourceName], resourceProcessorOkChan)
 
 	if <-resourceProcessorOkChan {
 		updateResourceNameToDeployStateOnOk(
@@ -503,7 +507,7 @@ at depth 3 only. e would be blocked until d finished because
 d has a higher depth than e. That's not optimal. They should
 be started at the same time and deployed concurrently.
 */
-func setInitialGroupResourceNamesToDeploy(highestDepthContainingAResourceToDeploy int, group int, groupToDepthToResourceNames resources.GroupToDepthToNames, resourceNameToData resources.NameToData, resourceNameToDeployState resourceNameToDeployState) initialResourceNamesToDeploy {
+func setInitialGroupResourceNamesToDeploy(highestDepthContainingAResourceToDeploy int, group int, groupToDepthToResourceNames resources.GroupToDepthToNames, resourceNameToDependencies resources.NameToDependencies, resourceNameToDeployState resourceNameToDeployState) initialResourceNamesToDeploy {
 	var result initialResourceNamesToDeploy
 
 	// Add every resource at highest deploy depth containing
@@ -517,7 +521,7 @@ func setInitialGroupResourceNamesToDeploy(highestDepthContainingAResourceToDeplo
 	depthToCheck := highestDepthContainingAResourceToDeploy - 1
 	for depthToCheck > 0 {
 		for _, resourceNameAtDepthToCheck := range groupToDepthToResourceNames[group][depthToCheck] {
-			for _, dependencyName := range resourceNameToData[resourceNameAtDepthToCheck].Dependencies {
+			for _, dependencyName := range resourceNameToDependencies[resourceNameAtDepthToCheck] {
 				// If resource at depth to check is PENDING and is not
 				// dependent on any resource in the ongoing result, then
 				// append it to the result.
