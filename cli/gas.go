@@ -1,4 +1,4 @@
-package main
+package gas
 
 import "gas/cmd"
 
