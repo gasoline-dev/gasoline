@@ -155,7 +155,13 @@ var upCmd = &cobra.Command{
 			os.Exit(0)
 		}
 
-		err = deploy(resourceNameToState, resourceNameToGroup, resourceNameToDepth, groupToDepthToResourceNames, currResourceNameToData)
+		err = deploy(
+			currResourceNameToData,
+			groupToDepthToResourceNames,
+			resourceNameToDepth,
+			resourceNameToGroup,
+			resourceNameToState,
+		)
 
 		if err != nil {
 			fmt.Println("Error:", err)
@@ -166,12 +172,25 @@ var upCmd = &cobra.Command{
 	},
 }
 
-func deploy(resourceNameToState resources.NameToState, resourceNameToGroup resources.NameToGroup, resourceNameToDepth resources.NameToDepth, groupToDepthToResourceNames resources.GroupToDepthToNames, currResourceNameToData resources.NameToData) error {
+func deploy(
+	currResourceNameToData resources.NameToData,
+	groupToDepthToResourceNames resources.GroupToDepthToNames,
+	resourceNameToDepth resources.NameToDepth,
+	resourceNameToGroup resources.NameToGroup,
+	resourceNameToState resources.NameToState,
+) error {
 	logResourceNamePreDeployStates(groupToDepthToResourceNames, resourceNameToState)
 
 	resourceNameToDeployState := updateResourceNameToDeployStateOfPending(resourceNameToState)
 
-	err := deployGroups(resourceNameToDeployState, resourceNameToState, groupToDepthToResourceNames, currResourceNameToData, resourceNameToDepth, resourceNameToGroup)
+	err := deployGroups(
+		currResourceNameToData,
+		groupToDepthToResourceNames,
+		resourceNameToDepth,
+		resourceNameToDeployState,
+		resourceNameToGroup,
+		resourceNameToState,
+	)
 
 	if err != nil {
 		return err
@@ -180,7 +199,14 @@ func deploy(resourceNameToState resources.NameToState, resourceNameToGroup resou
 	return nil
 }
 
-func deployGroups(resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.NameToState, groupToDepthToResourceNames resources.GroupToDepthToNames, currResourceNameToData resources.NameToData, resourceNameToDepth resources.NameToDepth, resourceNameToGroup resources.NameToGroup) error {
+func deployGroups(
+	currResourceNameToData resources.NameToData,
+	groupToDepthToResourceNames resources.GroupToDepthToNames,
+	resourceNameToDepth resources.NameToDepth,
+	resourceNameToDeployState resourceNameToDeployState,
+	resourceNameToGroup resources.NameToGroup,
+	resourceNameToState resources.NameToState,
+) error {
 	groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceNameToGroup, resourceNameToState)
 
 	groupsToResourceNames := resources.SetGroupToNames(resourceNameToGroup)
@@ -197,7 +223,17 @@ func deployGroups(resourceNameToDeployState resourceNameToDeployState, resourceN
 	deployGroupOkChan := make(DeployGroupOkChan)
 
 	for _, group := range groupsWithStateChanges {
-		go deployGroup(group, deployGroupOkChan, resourceNameToDeployState, resourceNameToState, groupToHighestDeployDepth, groupToDepthToResourceNames, currResourceNameToData, resourceNameToDepth, groupsToResourceNames)
+		go deployGroup(
+			currResourceNameToData,
+			deployGroupOkChan,
+			group,
+			groupToDepthToResourceNames,
+			groupToHighestDeployDepth,
+			groupsToResourceNames,
+			resourceNameToDepth,
+			resourceNameToDeployState,
+			resourceNameToState,
+		)
 	}
 
 	numOfGroupsDeployedOk := 0
@@ -225,7 +261,17 @@ func deployGroups(resourceNameToDeployState resourceNameToDeployState, resourceN
 
 type DeployGroupOkChan chan bool
 
-func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.NameToState, groupToHighestDeployDepth resources.GroupToHighestDeployDepth, groupToDepthToResourceNames resources.GroupToDepthToNames, currResourceNameToData resources.NameToData, resourceNameToDepth resources.NameToDepth, groupsToResourceNames resources.GroupToNames) {
+func deployGroup(
+	currResourceNameToData resources.NameToData,
+	deployGroupOkChan DeployGroupOkChan,
+	group int,
+	groupToDepthToResourceNames resources.GroupToDepthToNames,
+	groupToHighestDeployDepth resources.GroupToHighestDeployDepth,
+	groupsToResourceNames resources.GroupToNames,
+	resourceNameToDepth resources.NameToDepth,
+	resourceNameToDeployState resourceNameToDeployState,
+	resourceNameToState resources.NameToState,
+) {
 
 	deployResourceOkChan := make(DeployResourceOkChan)
 
@@ -235,7 +281,15 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToD
 
 	for _, resourceName := range initialGroupResourceNamesToDeploy {
 		depth := resourceNameToDepth[resourceName]
-		go deployResource(deployResourceOkChan, group, depth, resourceName, resourceNameToDeployState, resourceNameToState, currResourceNameToData)
+		go deployResource(
+			currResourceNameToData,
+			depth,
+			deployResourceOkChan,
+			group,
+			resourceName,
+			resourceNameToDeployState,
+			resourceNameToState,
+		)
 	}
 
 	numOfResourcesInGroupToDeploy := setNumOfResourcesInGroupToDeploy(
@@ -294,7 +348,15 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToD
 
 					if shouldDeployResource {
 						depth := resourceNameToDepth[resourceName]
-						go deployResource(deployResourceOkChan, group, depth, resourceName, resourceNameToDeployState, resourceNameToState, currResourceNameToData)
+						go deployResource(
+							currResourceNameToData,
+							depth,
+							deployResourceOkChan,
+							group,
+							resourceName,
+							resourceNameToDeployState,
+							resourceNameToState,
+						)
 					}
 				}
 			}
@@ -304,7 +366,15 @@ func deployGroup(group int, deployGroupOkChan DeployGroupOkChan, resourceNameToD
 
 type DeployResourceOkChan chan bool
 
-func deployResource(deployResourceOkChan DeployResourceOkChan, group int, depth int, resourceName string, resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.NameToState, currResourceNameToData resources.NameToData) {
+func deployResource(
+	currResourceNameToData resources.NameToData,
+	depth int,
+	deployResourceOkChan DeployResourceOkChan,
+	group int,
+	resourceName string,
+	resourceNameToDeployState resourceNameToDeployState,
+	resourceNameToState resources.NameToState,
+) {
 	updateResourceNameToDeployStateOnStart(resourceNameToDeployState, resourceNameToState, resourceName)
 
 	timestamp := time.Now().UnixMilli()
