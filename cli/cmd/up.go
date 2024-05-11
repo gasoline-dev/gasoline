@@ -470,6 +470,7 @@ func (c *resourceDeployStateContainer) log(group int, depth int, name string, ti
 }
 
 func (c *resourceDeployStateContainer) setComplete(name string) {
+	c.mu.Lock()
 	switch c.nameToDeployState[name] {
 	case deployState(CREATE_IN_PROGRESS):
 		c.nameToDeployState[name] = deployState(CREATE_COMPLETE)
@@ -478,9 +479,11 @@ func (c *resourceDeployStateContainer) setComplete(name string) {
 	case deployState(UPDATE_IN_PROGRESS):
 		c.nameToDeployState[name] = deployState(UPDATE_COMPLETE)
 	}
+	c.mu.Unlock()
 }
 
 func (c *resourceDeployStateContainer) setFailed(name string) {
+	c.mu.Lock()
 	switch c.nameToDeployState[name] {
 	case deployState(CREATE_IN_PROGRESS):
 		c.nameToDeployState[name] = deployState(CREATE_FAILED)
@@ -489,6 +492,7 @@ func (c *resourceDeployStateContainer) setFailed(name string) {
 	case deployState(UPDATE_IN_PROGRESS):
 		c.nameToDeployState[name] = deployState(UPDATE_FAILED)
 	}
+	c.mu.Unlock()
 }
 
 func (c *resourceDeployStateContainer) setInProgress(resourceName string, resourceNameToState resources.NameToState) {
@@ -515,12 +519,14 @@ func (c *resourceDeployStateContainer) setPending(nameToState resources.NameToSt
 }
 
 func (c *resourceDeployStateContainer) setPendingToCanceled() int {
+	c.mu.Lock()
 	result := 0
 	for name, state := range c.nameToDeployState {
 		if state == deployState(PENDING) {
 			c.nameToDeployState[name] = deployState(CANCELED)
 		}
 	}
+	c.mu.Unlock()
 	return result
 }
 
