@@ -8,6 +8,7 @@ import (
 	"gas/internal/validators"
 	"os"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/cloudflare/cloudflare-go"
@@ -179,14 +180,18 @@ func deploy(
 ) error {
 	logResourceNamePreDeployStates(groupToDepthToResourceNames, resourceNameToState)
 
-	resourceNameToDeployState := updateResourceNameToDeployStateOfPending(resourceNameToState)
+	resourceDeployState := &resourceDeployStateContainer{
+		nameToDeployState: make(map[string]deployState),
+	}
+
+	resourceDeployState.setPending(resourceNameToState)
 
 	err := deployGroups(
 		currResourceNameToConfig,
 		currResourceNameToDependencies,
 		groupToDepthToResourceNames,
+		resourceDeployState,
 		resourceNameToDepth,
-		resourceNameToDeployState,
 		resourceNameToGroup,
 		resourceNameToState,
 	)
@@ -202,8 +207,8 @@ func deployGroups(
 	currResourceNameToConfig resources.NameToConfig,
 	currResourceNameToDependencies resources.NameToDependencies,
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
+	resourceDeployState *resourceDeployStateContainer,
 	resourceNameToDepth resources.NameToDepth,
-	resourceNameToDeployState resourceNameToDeployState,
 	resourceNameToGroup resources.NameToGroup,
 	resourceNameToState resources.NameToState,
 ) error {
@@ -231,8 +236,8 @@ func deployGroups(
 			groupToDepthToResourceNames,
 			groupToHighestDeployDepth,
 			groupsToResourceNames,
+			resourceDeployState,
 			resourceNameToDepth,
-			resourceNameToDeployState,
 			resourceNameToState,
 		)
 	}
@@ -270,8 +275,8 @@ func deployGroup(
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
 	groupToHighestDeployDepth resources.GroupToHighestDeployDepth,
 	groupsToResourceNames resources.GroupToNames,
+	resourceDeployState *resourceDeployStateContainer,
 	resourceNameToDepth resources.NameToDepth,
-	resourceNameToDeployState resourceNameToDeployState,
 	resourceNameToState resources.NameToState,
 ) {
 
@@ -279,7 +284,7 @@ func deployGroup(
 
 	highestGroupDeployDepth := groupToHighestDeployDepth[group]
 
-	initialGroupResourceNamesToDeploy := setInitialGroupResourceNamesToDeploy(highestGroupDeployDepth, group, groupToDepthToResourceNames, currResourceNameToDependencies, resourceNameToDeployState)
+	initialGroupResourceNamesToDeploy := setInitialGroupResourceNamesToDeploy(highestGroupDeployDepth, group, groupToDepthToResourceNames, resourceDeployState, currResourceNameToDependencies)
 
 	for _, resourceName := range initialGroupResourceNamesToDeploy {
 		depth := resourceNameToDepth[resourceName]
@@ -288,8 +293,8 @@ func deployGroup(
 			depth,
 			deployResourceOkChan,
 			group,
+			resourceDeployState,
 			resourceName,
-			resourceNameToDeployState,
 			resourceNameToState,
 		)
 	}
@@ -313,7 +318,7 @@ func deployGroup(
 			// Check for 0 because resources should only
 			// be canceled one time.
 			if numOfResourcesDeployedCanceled == 0 {
-				numOfResourcesDeployedCanceled = updateResourceNameToDeployStateOfCanceled(resourceNameToDeployState)
+				numOfResourcesDeployedCanceled = resourceDeployState.setPendingToCanceled()
 			}
 		}
 
@@ -328,7 +333,7 @@ func deployGroup(
 			return
 		} else {
 			for _, resourceName := range groupsToResourceNames[group] {
-				if resourceNameToDeployState[resourceName] == deployState("PENDING") {
+				if resourceDeployState.nameToDeployState[resourceName] == deployState("PENDING") {
 					shouldDeployResource := true
 
 					// Is resource dependent on another deploying resource?
@@ -340,7 +345,7 @@ func deployGroup(
 							deployState(UPDATE_IN_PROGRESS): true,
 						}
 
-						dependencyNameDeployState := resourceNameToDeployState[dependencyName]
+						dependencyNameDeployState := resourceDeployState.nameToDeployState[dependencyName]
 
 						if activeStates[dependencyNameDeployState] {
 							shouldDeployResource = false
@@ -355,8 +360,8 @@ func deployGroup(
 							depth,
 							deployResourceOkChan,
 							group,
+							resourceDeployState,
 							resourceName,
-							resourceNameToDeployState,
 							resourceNameToState,
 						)
 					}
@@ -373,15 +378,20 @@ func deployResource(
 	depth int,
 	deployResourceOkChan DeployResourceOkChan,
 	group int,
+	resourceDeployState *resourceDeployStateContainer,
 	resourceName string,
-	resourceNameToDeployState resourceNameToDeployState,
 	resourceNameToState resources.NameToState,
 ) {
-	updateResourceNameToDeployStateOnStart(resourceNameToDeployState, resourceNameToState, resourceName)
+	resourceDeployState.setInProgress(resourceName, resourceNameToState)
 
 	timestamp := time.Now().UnixMilli()
 
-	logResourceNameDeployState(group, depth, resourceName, timestamp, resourceNameToDeployState)
+	resourceDeployState.log(
+		group,
+		depth,
+		resourceName,
+		timestamp,
+	)
 
 	resourceProcessorOkChan := make(ResourceProcessorOkChan)
 
@@ -392,19 +402,15 @@ func deployResource(
 	go resourceProcessors[string(resourceProcessorKey)](currResourceNameToConfig[resourceName], resourceProcessorOkChan)
 
 	if <-resourceProcessorOkChan {
-		updateResourceNameToDeployStateOnOk(
-			resourceNameToDeployState,
-			resourceName,
-		)
+		resourceDeployState.setComplete(resourceName)
 
 		timestamp = time.Now().UnixMilli()
 
-		logResourceNameDeployState(
+		resourceDeployState.log(
 			group,
 			depth,
 			resourceName,
 			timestamp,
-			resourceNameToDeployState,
 		)
 
 		deployResourceOkChan <- true
@@ -412,25 +418,24 @@ func deployResource(
 		return
 	}
 
-	updateResourceNameToDeployStateOnErr(
-		resourceNameToDeployState,
-		resourceName,
-	)
+	resourceDeployState.setFailed(resourceName)
 
 	timestamp = time.Now().UnixMilli()
 
-	logResourceNameDeployState(
+	resourceDeployState.log(
 		group,
 		depth,
 		resourceName,
 		timestamp,
-		resourceNameToDeployState,
 	)
 
 	deployResourceOkChan <- false
 }
 
-type resourceNameToDeployState map[string]deployState
+type resourceDeployStateContainer struct {
+	mu                sync.Mutex
+	nameToDeployState map[string]deployState
+}
 
 type deployState string
 
@@ -448,17 +453,7 @@ const (
 	UPDATE_IN_PROGRESS deployState = "UPDATE_IN_PROGRESS"
 )
 
-func hasResourceNamesToDeploy(stateToResourceNames resources.StateToNames) bool {
-	statesToDeploy := []resources.State{resources.State(resources.CREATED), resources.State(resources.DELETED), resources.State(resources.UPDATED)}
-	for _, state := range statesToDeploy {
-		if _, exists := stateToResourceNames[state]; exists {
-			return true
-		}
-	}
-	return false
-}
-
-func logResourceNameDeployState(group int, depth int, resourceName string, timestamp int64, resourceNameToDeployState resourceNameToDeployState) {
+func (c *resourceDeployStateContainer) log(group int, depth int, name string, timestamp int64) {
 	date := time.Unix(0, timestamp*int64(time.Millisecond))
 	hours := fmt.Sprintf("%02d", date.Hour())
 	minutes := fmt.Sprintf("%02d", date.Minute())
@@ -469,9 +464,74 @@ func logResourceNameDeployState(group int, depth int, resourceName string, times
 		formattedTime,
 		group,
 		depth,
-		resourceName,
-		resourceNameToDeployState[resourceName],
+		name,
+		c.nameToDeployState[name],
 	)
+}
+
+func (c *resourceDeployStateContainer) setComplete(name string) {
+	switch c.nameToDeployState[name] {
+	case deployState(CREATE_IN_PROGRESS):
+		c.nameToDeployState[name] = deployState(CREATE_COMPLETE)
+	case deployState(DELETE_IN_PROGRESS):
+		c.nameToDeployState[name] = deployState(DELETE_COMPLETE)
+	case deployState(UPDATE_IN_PROGRESS):
+		c.nameToDeployState[name] = deployState(UPDATE_COMPLETE)
+	}
+}
+
+func (c *resourceDeployStateContainer) setFailed(name string) {
+	switch c.nameToDeployState[name] {
+	case deployState(CREATE_IN_PROGRESS):
+		c.nameToDeployState[name] = deployState(CREATE_FAILED)
+	case deployState(DELETE_IN_PROGRESS):
+		c.nameToDeployState[name] = deployState(DELETE_FAILED)
+	case deployState(UPDATE_IN_PROGRESS):
+		c.nameToDeployState[name] = deployState(UPDATE_FAILED)
+	}
+}
+
+func (c *resourceDeployStateContainer) setInProgress(resourceName string, resourceNameToState resources.NameToState) {
+	c.mu.Lock()
+	switch resourceNameToState[resourceName] {
+	case resources.State(resources.CREATED):
+		c.nameToDeployState[resourceName] = deployState(CREATE_IN_PROGRESS)
+	case resources.State(resources.DELETED):
+		c.nameToDeployState[resourceName] = deployState(DELETE_IN_PROGRESS)
+	case resources.State(resources.UPDATED):
+		c.nameToDeployState[resourceName] = deployState(UPDATE_IN_PROGRESS)
+	}
+	c.mu.Unlock()
+}
+
+func (c *resourceDeployStateContainer) setPending(nameToState resources.NameToState) {
+	c.mu.Lock()
+	for name, state := range nameToState {
+		if state != resources.State(resources.UNCHANGED) {
+			c.nameToDeployState[name] = deployState(PENDING)
+		}
+	}
+	c.mu.Unlock()
+}
+
+func (c *resourceDeployStateContainer) setPendingToCanceled() int {
+	result := 0
+	for name, state := range c.nameToDeployState {
+		if state == deployState(PENDING) {
+			c.nameToDeployState[name] = deployState(CANCELED)
+		}
+	}
+	return result
+}
+
+func hasResourceNamesToDeploy(stateToResourceNames resources.StateToNames) bool {
+	statesToDeploy := []resources.State{resources.State(resources.CREATED), resources.State(resources.DELETED), resources.State(resources.UPDATED)}
+	for _, state := range statesToDeploy {
+		if _, exists := stateToResourceNames[state]; exists {
+			return true
+		}
+	}
+	return false
 }
 
 func logResourceNamePreDeployStates(groupToDepthToResourceName resources.GroupToDepthToNames, resourceNameToState resources.NameToState) {
@@ -507,7 +567,13 @@ at depth 3 only. e would be blocked until d finished because
 d has a higher depth than e. That's not optimal. They should
 be started at the same time and deployed concurrently.
 */
-func setInitialGroupResourceNamesToDeploy(highestDepthContainingAResourceToDeploy int, group int, groupToDepthToResourceNames resources.GroupToDepthToNames, resourceNameToDependencies resources.NameToDependencies, resourceNameToDeployState resourceNameToDeployState) initialResourceNamesToDeploy {
+func setInitialGroupResourceNamesToDeploy(
+	highestDepthContainingAResourceToDeploy int,
+	group int,
+	groupToDepthToResourceNames resources.GroupToDepthToNames,
+	resourceDeployState *resourceDeployStateContainer,
+	resourceNameToDependencies resources.NameToDependencies,
+) initialResourceNamesToDeploy {
 	var result initialResourceNamesToDeploy
 
 	// Add every resource at highest deploy depth containing
@@ -525,7 +591,7 @@ func setInitialGroupResourceNamesToDeploy(highestDepthContainingAResourceToDeplo
 				// If resource at depth to check is PENDING and is not
 				// dependent on any resource in the ongoing result, then
 				// append it to the result.
-				if resourceNameToDeployState[resourceNameAtDepthToCheck] == deployState("PENDING") && !helpers.IsInSlice(result, dependencyName) {
+				if resourceDeployState.nameToDeployState[resourceNameAtDepthToCheck] == deployState("PENDING") && !helpers.IsInSlice(result, dependencyName) {
 					result = append(result, resourceNameAtDepthToCheck)
 				}
 			}
@@ -546,58 +612,4 @@ func setNumOfResourcesInGroupToDeploy(groupToResourceNames resources.GroupToName
 		}
 	}
 	return result
-}
-
-func updateResourceNameToDeployStateOfCanceled(resourceNameToDeployState resourceNameToDeployState) int {
-	result := 0
-	for resourceName, resourceDeployState := range resourceNameToDeployState {
-		if resourceDeployState == deployState(PENDING) {
-			resourceNameToDeployState[resourceName] = deployState(CANCELED)
-			result++
-		}
-	}
-	return result
-}
-
-func updateResourceNameToDeployStateOnErr(resourceNameToDeployState resourceNameToDeployState, resourceName string) {
-	switch resourceNameToDeployState[resourceName] {
-	case deployState(CREATE_IN_PROGRESS):
-		resourceNameToDeployState[resourceName] = deployState(CREATE_FAILED)
-	case deployState(DELETE_IN_PROGRESS):
-		resourceNameToDeployState[resourceName] = deployState(DELETE_FAILED)
-	case deployState(UPDATE_IN_PROGRESS):
-		resourceNameToDeployState[resourceName] = deployState(UPDATE_FAILED)
-	}
-}
-
-func updateResourceNameToDeployStateOfPending(resourceNameToState resources.NameToState) resourceNameToDeployState {
-	result := make(resourceNameToDeployState)
-	for resourceName, state := range resourceNameToState {
-		if state != resources.State(resources.UNCHANGED) {
-			result[resourceName] = deployState(PENDING)
-		}
-	}
-	return result
-}
-
-func updateResourceNameToDeployStateOnOk(resourceNameToDeployState resourceNameToDeployState, resourceName string) {
-	switch resourceNameToDeployState[resourceName] {
-	case deployState(CREATE_IN_PROGRESS):
-		resourceNameToDeployState[resourceName] = deployState(CREATE_COMPLETE)
-	case deployState(DELETE_IN_PROGRESS):
-		resourceNameToDeployState[resourceName] = deployState(DELETE_COMPLETE)
-	case deployState(UPDATE_IN_PROGRESS):
-		resourceNameToDeployState[resourceName] = deployState(UPDATE_COMPLETE)
-	}
-}
-
-func updateResourceNameToDeployStateOnStart(resourceNameToDeployState resourceNameToDeployState, resourceNameToState resources.NameToState, resourceName string) {
-	switch resourceNameToState[resourceName] {
-	case resources.State(resources.CREATED):
-		resourceNameToDeployState[resourceName] = deployState(CREATE_IN_PROGRESS)
-	case resources.State(resources.DELETED):
-		resourceNameToDeployState[resourceName] = deployState(DELETE_IN_PROGRESS)
-	case resources.State(resources.UPDATED):
-		resourceNameToDeployState[resourceName] = deployState(UPDATE_IN_PROGRESS)
-	}
 }
