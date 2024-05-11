@@ -18,12 +18,14 @@ import (
 
 type ResourceProcessorOkChan = chan bool
 
-type ResourceProcessors map[string]func(resourceConfig interface{}, resourceProcessOkChan ResourceProcessorOkChan)
+type ResourceProcessors map[string]func(resourceConfig interface{}, resourceProcessOkChan ResourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer)
 
 var resourceProcessors ResourceProcessors = make(ResourceProcessors)
 
 func init() {
-	resourceProcessors["cloudflare-kv:CREATED"] = func(config interface{}, resourceProcessorOkChan ResourceProcessorOkChan) {
+	resourceProcessors["cloudflare-kv:CREATED"] = func(config interface{}, resourceProcessorOkChan ResourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer) {
+		resourceDeployOutput.set("CORE_BASE_KV", "")
+
 		c := config.(*resources.CloudflareKVConfig)
 
 		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
@@ -186,15 +188,23 @@ func deploy(
 
 	resourceDeployState.setPending(resourceNameToState)
 
+	resourceDeployOutput := &resourceDeployOutputContainer{
+		nameToOutput: make(map[string]interface{}),
+	}
+
 	err := deployGroups(
 		currResourceNameToConfig,
 		currResourceNameToDependencies,
 		groupToDepthToResourceNames,
+		resourceDeployOutput,
 		resourceDeployState,
 		resourceNameToDepth,
 		resourceNameToGroup,
 		resourceNameToState,
 	)
+
+	// TODO: do something with this:
+	// fmt.Println(resourceDeployOutput.nameToOutput["CORE_BASE_KV"])
 
 	if err != nil {
 		return err
@@ -207,6 +217,7 @@ func deployGroups(
 	currResourceNameToConfig resources.NameToConfig,
 	currResourceNameToDependencies resources.NameToDependencies,
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
+	resourceDeployOutput *resourceDeployOutputContainer,
 	resourceDeployState *resourceDeployStateContainer,
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToGroup resources.NameToGroup,
@@ -236,6 +247,7 @@ func deployGroups(
 			groupToDepthToResourceNames,
 			groupToHighestDeployDepth,
 			groupsToResourceNames,
+			resourceDeployOutput,
 			resourceDeployState,
 			resourceNameToDepth,
 			resourceNameToState,
@@ -275,6 +287,7 @@ func deployGroup(
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
 	groupToHighestDeployDepth resources.GroupToHighestDeployDepth,
 	groupsToResourceNames resources.GroupToNames,
+	resourceDeployOutput *resourceDeployOutputContainer,
 	resourceDeployState *resourceDeployStateContainer,
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToState resources.NameToState,
@@ -293,6 +306,7 @@ func deployGroup(
 			depth,
 			deployResourceOkChan,
 			group,
+			resourceDeployOutput,
 			resourceDeployState,
 			resourceName,
 			resourceNameToState,
@@ -360,6 +374,7 @@ func deployGroup(
 							depth,
 							deployResourceOkChan,
 							group,
+							resourceDeployOutput,
 							resourceDeployState,
 							resourceName,
 							resourceNameToState,
@@ -378,6 +393,7 @@ func deployResource(
 	depth int,
 	deployResourceOkChan DeployResourceOkChan,
 	group int,
+	resourceDeployOutput *resourceDeployOutputContainer,
 	resourceDeployState *resourceDeployStateContainer,
 	resourceName string,
 	resourceNameToState resources.NameToState,
@@ -399,7 +415,7 @@ func deployResource(
 
 	resourceProcessorKey := resourceType + ":" + string(resourceNameToState[resourceName])
 
-	go resourceProcessors[string(resourceProcessorKey)](currResourceNameToConfig[resourceName], resourceProcessorOkChan)
+	go resourceProcessors[string(resourceProcessorKey)](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceDeployOutput)
 
 	if <-resourceProcessorOkChan {
 		resourceDeployState.setComplete(resourceName)
@@ -528,6 +544,30 @@ func (c *resourceDeployStateContainer) setPendingToCanceled() int {
 	}
 	c.mu.Unlock()
 	return result
+}
+
+type resourceDeployOutputContainer struct {
+	mu           sync.Mutex
+	nameToOutput map[string]interface{}
+}
+
+func (c *resourceDeployOutputContainer) set(name string, output interface{}) {
+	c.mu.Lock()
+	c.nameToOutput[name] = outputs["cloudflare-kv:CREATED"](output)
+	c.mu.Unlock()
+}
+
+var outputs = map[string]func(output interface{}) interface{}{
+	"cloudflare-kv:CREATED": func(output interface{}) interface{} {
+		fmt.Println(output)
+		return &CloudflareKVOutput{
+			ID: "TEST",
+		}
+	},
+}
+
+type CloudflareKVOutput struct {
+	ID string
 }
 
 func hasResourceNamesToDeploy(stateToResourceNames resources.StateToNames) bool {
