@@ -16,23 +16,24 @@ import (
 	"github.com/spf13/viper"
 )
 
-type ResourceProcessorOkChan = chan bool
+type resourceProcessorOkChan = chan bool
 
-type ResourceProcessors map[string]func(resourceConfig interface{}, resourceProcessOkChan ResourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer)
+type resourceProcessorKey string
 
-var resourceProcessors ResourceProcessors = make(ResourceProcessors)
+const (
+	CLOUDFLARE_KV_CREATED resourceProcessorKey = "cloudflare-kv:CREATED"
+)
 
-func init() {
-	resourceProcessors["cloudflare-kv:CREATED"] = func(config interface{}, resourceProcessorOkChan ResourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer) {
-		resourceDeployOutput.set("CORE_BASE_KV", "")
+type resourceProcessorsType map[resourceProcessorKey]func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer)
 
-		c := config.(*resources.CloudflareKVConfig)
+var resourceProcessors resourceProcessorsType = resourceProcessorsType{
+	CLOUDFLARE_KV_CREATED: func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer) {
+		c := resourceConfig.(*resources.CloudflareKVConfig)
 
 		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
-
 		if err != nil {
 			fmt.Println("Error:", err)
-			resourceProcessorOkChan <- false
+			resourceProcessOkChan <- false
 			return
 		}
 
@@ -44,13 +45,38 @@ func init() {
 
 		if err != nil {
 			fmt.Println("Error:", err)
-			resourceProcessorOkChan <- false
+			resourceProcessOkChan <- false
 			return
 		}
 
+		resourceDeployOutput.set(c.Name, CLOUDFLARE_KV_CREATED, response)
+
 		fmt.Println(response)
-		resourceProcessorOkChan <- true
-	}
+		resourceProcessOkChan <- true
+	},
+}
+
+type CloudflareKVOutput struct {
+	ID string
+}
+
+type resourceDeployOutputContainer struct {
+	mu           sync.Mutex
+	nameToOutput map[string]interface{}
+}
+
+func (c *resourceDeployOutputContainer) set(name string, key resourceProcessorKey, output interface{}) {
+	c.mu.Lock()
+	c.nameToOutput[name] = outputs[key](output)
+	c.mu.Unlock()
+}
+
+var outputs = map[resourceProcessorKey]func(output interface{}) interface{}{
+	CLOUDFLARE_KV_CREATED: func(output interface{}) interface{} {
+		return &CloudflareKVOutput{
+			ID: "TEST",
+		}
+	},
 }
 
 var upCmd = &cobra.Command{
@@ -203,12 +229,12 @@ func deploy(
 		resourceNameToState,
 	)
 
-	// TODO: do something with this:
-	// fmt.Println(resourceDeployOutput.nameToOutput["CORE_BASE_KV"])
-
 	if err != nil {
 		return err
 	}
+
+	// TODO: handle gas.up.json
+	fmt.Println(resourceDeployOutput.nameToOutput["CORE_BASE_KV"])
 
 	return nil
 }
@@ -409,13 +435,13 @@ func deployResource(
 		timestamp,
 	)
 
-	resourceProcessorOkChan := make(ResourceProcessorOkChan)
+	resourceProcessorOkChan := make(resourceProcessorOkChan)
 
 	resourceType := reflect.ValueOf(currResourceNameToConfig[resourceName]).Elem().FieldByName("Type").String()
 
-	resourceProcessorKey := resourceType + ":" + string(resourceNameToState[resourceName])
+	resourceProcessorKey := resourceProcessorKey(resourceType + ":" + string(resourceNameToState[resourceName]))
 
-	go resourceProcessors[string(resourceProcessorKey)](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceDeployOutput)
+	go resourceProcessors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceDeployOutput)
 
 	if <-resourceProcessorOkChan {
 		resourceDeployState.setComplete(resourceName)
@@ -544,30 +570,6 @@ func (c *resourceDeployStateContainer) setPendingToCanceled() int {
 	}
 	c.mu.Unlock()
 	return result
-}
-
-type resourceDeployOutputContainer struct {
-	mu           sync.Mutex
-	nameToOutput map[string]interface{}
-}
-
-func (c *resourceDeployOutputContainer) set(name string, output interface{}) {
-	c.mu.Lock()
-	c.nameToOutput[name] = outputs["cloudflare-kv:CREATED"](output)
-	c.mu.Unlock()
-}
-
-var outputs = map[string]func(output interface{}) interface{}{
-	"cloudflare-kv:CREATED": func(output interface{}) interface{} {
-		fmt.Println(output)
-		return &CloudflareKVOutput{
-			ID: "TEST",
-		}
-	},
-}
-
-type CloudflareKVOutput struct {
-	ID string
 }
 
 func hasResourceNamesToDeploy(stateToResourceNames resources.StateToNames) bool {
