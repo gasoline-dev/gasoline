@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"gas/internal/helpers"
 	"gas/internal/resources"
@@ -170,8 +171,32 @@ func deploy(
 		return err
 	}
 
-	// TODO: handle gas.up.json
-	fmt.Println(resourceDeployOutput.nameToOutput["CORE_BASE_KV"])
+	newUpjson := make(resources.UpJson)
+
+	for resourceName, output := range resourceDeployOutput.nameToOutput {
+		newUpjson[resourceName] = struct {
+			Config       interface{} `json:"config"`
+			Dependencies []string    `json:"dependencies"`
+			Output       interface{} `json:"output"`
+		}{
+			Config:       currResourceNameToConfig[resourceName],
+			Dependencies: currResourceNameToDependencies[resourceName],
+			Output:       output,
+		}
+	}
+
+	jsonData, err := json.MarshalIndent(newUpjson, "", "  ")
+	if err != nil {
+		fmt.Println("error marshalling to JSON:", err)
+		return nil
+	}
+
+	fileName := "gas.up.json"
+	err = os.WriteFile(fileName, jsonData, 0644)
+	if err != nil {
+		fmt.Println("error writing to file:", err)
+		return nil
+	}
 
 	return nil
 }
@@ -572,7 +597,7 @@ var resourceDeployOutputs = map[resourceProcessorKey]func(output interface{}) in
 }
 
 type CloudflareKVOutput struct {
-	ID string
+	ID string `json:"id"`
 }
 
 func hasResourceNamesToDeploy(stateToResourceNames resources.StateToNames) bool {

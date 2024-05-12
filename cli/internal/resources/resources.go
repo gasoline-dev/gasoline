@@ -201,7 +201,11 @@ func GetPackageJsons(containerSubdirPaths ContainerSubdirPaths) (PackageJsons, e
 	return result, nil
 }
 
-type UpJson map[string]interface{}
+type UpJson map[string]struct {
+	Config       interface{} `json:"config"`
+	Dependencies []string    `json:"dependencies"`
+	Output       interface{} `json:"output"`
+}
 
 func GetUpJson(filePath string) (UpJson, error) {
 	var result UpJson
@@ -329,37 +333,30 @@ func SetNameToConfig(indexBuildFileConfigs IndexBuildFileConfigs) NameToConfig {
 var configs = map[string]func(config config) interface{}{
 	"cloudflare-kv": func(config config) interface{} {
 		return &CloudflareKVConfig{
-			Type: config["type"].(string),
-			Name: config["name"].(string),
+			ConfigCommon: ConfigCommon{
+				Type: config["type"].(string),
+				Name: config["name"].(string),
+			},
 		}
 	},
 }
 
-/*
-TypeScript type equivalent:
-
-	Array<{
-		[key: string]: any
-	}>
-*/
 type config map[string]interface{}
 
 type ConfigCommon struct {
-	Type string
-	Name string
+	Type string `json:"type"`
+	Name string `json:"name"`
 }
 
 type CloudflareKVConfig struct {
-	Type string
-	Name string
+	ConfigCommon
 }
 
 type CloudflareWorkerConfig struct {
-	Type string
-	Name string
-	KV   []struct {
-		Binding string
-	}
+	ConfigCommon
+	KV []struct {
+		Binding string `json:"binding"`
+	} `json:"kv"`
 }
 
 type NameToDependencies map[string][]string
@@ -743,7 +740,7 @@ type UpNameToConfig map[string]interface{}
 func SetUpNameToConfig(upJson UpJson) UpNameToConfig {
 	result := make(UpNameToConfig)
 	for name, data := range upJson {
-		config := data.(map[string]interface{})["config"].(map[string]interface{})
+		config := data.Config.(map[string]interface{})
 		resourceType := config["type"].(string)
 		result[name] = configs[resourceType](config)
 	}
@@ -755,13 +752,8 @@ type UpNameToDependencies map[string][]string
 func SetUpNameToDependencies(upJson UpJson) UpNameToDependencies {
 	result := make(UpNameToDependencies)
 	for name, data := range upJson {
-		dependenciesInterface := data.(map[string]interface{})["dependencies"]
-		if dependenciesInterface != nil {
-			dependenciesSlice := dependenciesInterface.([]interface{})
-			dependencies := make([]string, len(dependenciesSlice))
-			for index, dependency := range dependenciesSlice {
-				dependencies[index] = dependency.(string)
-			}
+		dependencies := data.Dependencies
+		if len(dependencies) > 0 {
 			result[name] = dependencies
 		} else {
 			result[name] = make([]string, 0)
