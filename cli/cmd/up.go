@@ -378,7 +378,7 @@ func deployResource(
 
 	resourceProcessorKey := resourceProcessorKey(resourceType + ":" + string(resourceNameToState[resourceName]))
 
-	go resourceProcessorFactory[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceDeployOutput)
+	go resourceProcessors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceDeployOutput)
 
 	if <-resourceProcessorOkChan {
 		resourceDeployState.setComplete(resourceName)
@@ -509,7 +509,7 @@ func (c *resourceDeployStateContainer) setPendingToCanceled() int {
 	return result
 }
 
-type resourceProcessorFactoryType map[resourceProcessorKey]func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer)
+type resourceProcessorsType map[resourceProcessorKey]func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer)
 
 type resourceProcessorOkChan = chan bool
 
@@ -519,7 +519,7 @@ const (
 	CLOUDFLARE_KV_CREATED resourceProcessorKey = "cloudflare-kv:CREATED"
 )
 
-var resourceProcessorFactory resourceProcessorFactoryType = resourceProcessorFactoryType{
+var resourceProcessors resourceProcessorsType = resourceProcessorsType{
 	CLOUDFLARE_KV_CREATED: func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer) {
 		c := resourceConfig.(*resources.CloudflareKVConfig)
 
@@ -544,7 +544,8 @@ var resourceProcessorFactory resourceProcessorFactoryType = resourceProcessorFac
 
 		resourceDeployOutput.set(c.Name, CLOUDFLARE_KV_CREATED, res)
 
-		fmt.Println(res)
+		helpers.PrettyPrint(res)
+
 		resourceProcessOkChan <- true
 	},
 }
@@ -557,13 +558,15 @@ type resourceDeployOutputContainer struct {
 func (c *resourceDeployOutputContainer) set(name string, key resourceProcessorKey, output interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.nameToOutput[name] = resourceDeployOutputFactory[key](output)
+	c.nameToOutput[name] = resourceDeployOutputs[key](output)
 }
 
-var resourceDeployOutputFactory = map[resourceProcessorKey]func(output interface{}) interface{}{
-	CLOUDFLARE_KV_CREATED: func(output interface{}) interface{} {
+var resourceDeployOutputs = map[resourceProcessorKey]func(output interface{}) interface{}{
+	CLOUDFLARE_KV_CREATED: func(res interface{}) interface{} {
+		r := res.(cloudflare.WorkersKVNamespaceResponse)
+
 		return &CloudflareKVOutput{
-			ID: "TEST",
+			ID: r.Result.ID,
 		}
 	},
 }
