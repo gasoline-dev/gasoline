@@ -152,15 +152,15 @@ func deploy(
 
 	resourceNameToDeployState.setPending(resourceNameToState)
 
-	resourceDeployOutput := &resourceDeployOutputContainer{
-		nameToOutput: make(map[string]interface{}),
+	resourceNameToDeployOutput := &resourceNameToDeployOutputContainer{
+		m: make(map[string]interface{}),
 	}
 
 	err := deployGroups(
 		currResourceNameToConfig,
 		currResourceNameToDependencies,
 		groupToDepthToResourceNames,
-		resourceDeployOutput,
+		resourceNameToDeployOutput,
 		resourceNameToDeployState,
 		resourceNameToDepth,
 		resourceNameToGroup,
@@ -173,7 +173,7 @@ func deploy(
 
 	newUpjson := make(resources.UpJson)
 
-	for resourceName, output := range resourceDeployOutput.nameToOutput {
+	for resourceName, output := range resourceNameToDeployOutput.m {
 		newUpjson[resourceName] = struct {
 			Config       interface{} `json:"config"`
 			Dependencies []string    `json:"dependencies"`
@@ -205,7 +205,7 @@ func deployGroups(
 	currResourceNameToConfig resources.NameToConfig,
 	currResourceNameToDependencies resources.NameToDependencies,
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
-	resourceDeployOutput *resourceDeployOutputContainer,
+	resourceNameToDeployOutput *resourceNameToDeployOutputContainer,
 	resourceNameToDeployState *resourceNameToDeployStateContainer,
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToGroup resources.NameToGroup,
@@ -235,7 +235,7 @@ func deployGroups(
 			groupToDepthToResourceNames,
 			groupToHighestDeployDepth,
 			groupsToResourceNames,
-			resourceDeployOutput,
+			resourceNameToDeployOutput,
 			resourceNameToDeployState,
 			resourceNameToDepth,
 			resourceNameToState,
@@ -275,7 +275,7 @@ func deployGroup(
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
 	groupToHighestDeployDepth resources.GroupToHighestDeployDepth,
 	groupsToResourceNames resources.GroupToNames,
-	resourceDeployOutput *resourceDeployOutputContainer,
+	resourceNameToDeployOutput *resourceNameToDeployOutputContainer,
 	resourceNameToDeployState *resourceNameToDeployStateContainer,
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToState resources.NameToState,
@@ -294,7 +294,7 @@ func deployGroup(
 			depth,
 			deployResourceOkChan,
 			group,
-			resourceDeployOutput,
+			resourceNameToDeployOutput,
 			resourceNameToDeployState,
 			resourceName,
 			resourceNameToState,
@@ -362,7 +362,7 @@ func deployGroup(
 							depth,
 							deployResourceOkChan,
 							group,
-							resourceDeployOutput,
+							resourceNameToDeployOutput,
 							resourceNameToDeployState,
 							resourceName,
 							resourceNameToState,
@@ -381,7 +381,7 @@ func deployResource(
 	depth int,
 	deployResourceOkChan DeployResourceOkChan,
 	group int,
-	resourceDeployOutput *resourceDeployOutputContainer,
+	resourceNameTODeployOutput *resourceNameToDeployOutputContainer,
 	resourceNameToDeployState *resourceNameToDeployStateContainer,
 	resourceName string,
 	resourceNameToState resources.NameToState,
@@ -403,7 +403,7 @@ func deployResource(
 
 	resourceProcessorKey := resourceProcessorKey(resourceType + ":" + string(resourceNameToState[resourceName]))
 
-	go resourceProcessors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceDeployOutput)
+	go resourceProcessors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceNameTODeployOutput)
 
 	if <-resourceProcessorOkChan {
 		resourceNameToDeployState.setComplete(resourceName)
@@ -534,7 +534,7 @@ func (c *resourceNameToDeployStateContainer) setPendingToCanceled() int {
 	return result
 }
 
-type resourceProcessorsType map[resourceProcessorKey]func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer)
+type resourceProcessorsType map[resourceProcessorKey]func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceNameToDeployOutputContainer)
 
 type resourceProcessorOkChan = chan bool
 
@@ -545,7 +545,7 @@ const (
 )
 
 var resourceProcessors resourceProcessorsType = resourceProcessorsType{
-	CLOUDFLARE_KV_CREATED: func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceDeployOutputContainer) {
+	CLOUDFLARE_KV_CREATED: func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceNameToDeployOutputContainer) {
 		c := resourceConfig.(*resources.CloudflareKVConfig)
 
 		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
@@ -575,15 +575,15 @@ var resourceProcessors resourceProcessorsType = resourceProcessorsType{
 	},
 }
 
-type resourceDeployOutputContainer struct {
-	mu           sync.Mutex
-	nameToOutput map[string]interface{}
+type resourceNameToDeployOutputContainer struct {
+	m  map[string]interface{}
+	mu sync.Mutex
 }
 
-func (c *resourceDeployOutputContainer) set(name string, key resourceProcessorKey, output interface{}) {
+func (c *resourceNameToDeployOutputContainer) set(name string, key resourceProcessorKey, output interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.nameToOutput[name] = resourceDeployOutputs[key](output)
+	c.m[name] = resourceDeployOutputs[key](output)
 }
 
 var resourceDeployOutputs = map[resourceProcessorKey]func(output interface{}) interface{}{
