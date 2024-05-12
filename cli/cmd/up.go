@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"gas/internal/helpers"
@@ -9,10 +8,8 @@ import (
 	"gas/internal/validators"
 	"os"
 	"reflect"
-	"sync"
 	"time"
 
-	"github.com/cloudflare/cloudflare-go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -23,7 +20,9 @@ var upCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Deploying resources to the cloud")
 
-		currResourceContainerSubdirPaths, err := resources.GetContainerSubdirPaths(viper.GetString("resourceContainerDir"))
+		resourceContainerDir := viper.GetString("resourceContainerDirPath")
+
+		currResourceContainerSubdirPaths, err := resources.GetContainerSubdirPaths(resourceContainerDir)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
@@ -47,7 +46,11 @@ var upCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(currResourceContainerSubdirPaths, currResourceIndexFilePaths, currResourceIndexBuildFilePaths)
+		currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(
+			currResourceContainerSubdirPaths,
+			currResourceIndexFilePaths,
+			currResourceIndexBuildFilePaths,
+		)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
@@ -63,11 +66,21 @@ var upCmd = &cobra.Command{
 
 		currResourcePackageJsonNameToTrue := resources.SetPackageJsonNameToTrue(currResourcePackageJsons)
 
-		currResourcePackageJsonNameToResourceName := resources.SetPackageJsonNameToName(currResourcePackageJsons, currResourceIndexBuildFileConfigs)
+		currResourcePackageJsonNameToResourceName := resources.SetPackageJsonNameToName(
+			currResourcePackageJsons,
+			currResourceIndexBuildFileConfigs,
+		)
 
-		currResourceDependencyNames := resources.SetDependencyNames(currResourcePackageJsons, currResourcePackageJsonNameToResourceName, currResourcePackageJsonNameToTrue)
+		currResourceDependencyNames := resources.SetDependencyNames(
+			currResourcePackageJsons,
+			currResourcePackageJsonNameToResourceName,
+			currResourcePackageJsonNameToTrue,
+		)
 
-		currResourceNameToDependencies := resources.SetNameToDependencies(currResourceIndexBuildFileConfigs, currResourceDependencyNames)
+		currResourceNameToDependencies := resources.SetNameToDependencies(
+			currResourceIndexBuildFileConfigs,
+			currResourceDependencyNames,
+		)
 
 		resourceNameToInDegrees := resources.SetNameToInDegrees(currResourceNameToDependencies)
 
@@ -83,31 +96,24 @@ var upCmd = &cobra.Command{
 
 		groupToDepthToResourceNames := resources.SetGroupToDepthToNames(resourceNameToGroup, resourceNameToDepth)
 
-		// TODO: json path can be configged?
-		// TODO: Or implement up -> driver -> local | gh in the config?
-		resourcesUpJsonPath := "gas.up.json"
+		upJsonPath := viper.GetString("upJsonPath")
 
-		isResourcesUpJsonPresent := helpers.IsFilePresent(resourcesUpJsonPath)
-
-		if !isResourcesUpJsonPresent {
-			err = helpers.WriteFile(resourcesUpJsonPath, "{}")
-			if err != nil {
-				fmt.Println("Error:", err)
-				os.Exit(1)
-			}
-		}
-
-		resourcesUpJson, err := resources.GetUpJson(resourcesUpJsonPath)
+		upJson, err := resources.GetUpJson(upJsonPath)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
 		}
 
-		upResourceNameToDependencies := resources.SetUpNameToDependencies(resourcesUpJson)
+		upResourceNameToDependencies := resources.SetUpNameToDependencies(upJson)
 
-		upResourceNameToConfig := resources.SetUpNameToConfig(resourcesUpJson)
+		upResourceNameToConfig := resources.SetUpNameToConfig(upJson)
 
-		resourceNameToState := resources.SetNameToStateMap(upResourceNameToConfig, currResourceNameToConfig, upResourceNameToDependencies, currResourceNameToDependencies)
+		resourceNameToState := resources.SetNameToState(
+			upResourceNameToConfig,
+			currResourceNameToConfig,
+			upResourceNameToDependencies,
+			currResourceNameToDependencies,
+		)
 
 		stateToResourceNames := resources.SetStateToNames(resourceNameToState)
 
@@ -146,14 +152,14 @@ func deploy(
 ) error {
 	logResourceNamePreDeployStates(groupToDepthToResourceNames, resourceNameToState)
 
-	resourceNameToDeployState := &resourceNameToDeployStateContainer{
-		m: make(map[string]deployState),
+	resourceNameToDeployState := &resources.NameToDeployStateContainer{
+		M: make(map[string]resources.DeployState),
 	}
 
-	resourceNameToDeployState.setPending(resourceNameToState)
+	resourceNameToDeployState.SetPending(resourceNameToState)
 
-	resourceNameToDeployOutput := &resourceNameToDeployOutputContainer{
-		m: make(map[string]interface{}),
+	resourceNameToDeployOutput := &resources.NameToDeployOutputContainer{
+		M: make(map[string]interface{}),
 	}
 
 	err := deployGroups(
@@ -173,7 +179,7 @@ func deploy(
 
 	newUpjson := make(resources.UpJson)
 
-	for resourceName, output := range resourceNameToDeployOutput.m {
+	for resourceName, output := range resourceNameToDeployOutput.M {
 		newUpjson[resourceName] = struct {
 			Config       interface{} `json:"config"`
 			Dependencies []string    `json:"dependencies"`
@@ -205,8 +211,8 @@ func deployGroups(
 	currResourceNameToConfig resources.NameToConfig,
 	currResourceNameToDependencies resources.NameToDependencies,
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
-	resourceNameToDeployOutput *resourceNameToDeployOutputContainer,
-	resourceNameToDeployState *resourceNameToDeployStateContainer,
+	resourceNameToDeployOutput *resources.NameToDeployOutputContainer,
+	resourceNameToDeployState *resources.NameToDeployStateContainer,
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToGroup resources.NameToGroup,
 	resourceNameToState resources.NameToState,
@@ -275,8 +281,8 @@ func deployGroup(
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
 	groupToHighestDeployDepth resources.GroupToHighestDeployDepth,
 	groupsToResourceNames resources.GroupToNames,
-	resourceNameToDeployOutput *resourceNameToDeployOutputContainer,
-	resourceNameToDeployState *resourceNameToDeployStateContainer,
+	resourceNameToDeployOutput *resources.NameToDeployOutputContainer,
+	resourceNameToDeployState *resources.NameToDeployStateContainer,
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToState resources.NameToState,
 ) {
@@ -285,7 +291,13 @@ func deployGroup(
 
 	highestGroupDeployDepth := groupToHighestDeployDepth[group]
 
-	initialGroupResourceNamesToDeploy := setInitialGroupResourceNamesToDeploy(highestGroupDeployDepth, group, groupToDepthToResourceNames, resourceNameToDeployState, currResourceNameToDependencies)
+	initialGroupResourceNamesToDeploy := setInitialGroupResourceNamesToDeploy(
+		highestGroupDeployDepth,
+		group,
+		groupToDepthToResourceNames,
+		resourceNameToDeployState,
+		currResourceNameToDependencies,
+	)
 
 	for _, resourceName := range initialGroupResourceNamesToDeploy {
 		depth := resourceNameToDepth[resourceName]
@@ -320,11 +332,13 @@ func deployGroup(
 			// Check for 0 because resources should only
 			// be canceled one time.
 			if numOfResourcesDeployedCanceled == 0 {
-				numOfResourcesDeployedCanceled = resourceNameToDeployState.setPendingToCanceled()
+				numOfResourcesDeployedCanceled = resourceNameToDeployState.SetPendingToCanceled()
 			}
 		}
 
-		numOfResourcesInFinalDeployState := numOfResourcesDeployedOk + numOfResourcesDeployedErr + numOfResourcesDeployedCanceled
+		numOfResourcesInFinalDeployState := numOfResourcesDeployedOk +
+			numOfResourcesDeployedErr +
+			numOfResourcesDeployedCanceled
 
 		if numOfResourcesInFinalDeployState == int(numOfResourcesInGroupToDeploy) {
 			if numOfResourcesDeployedErr == 0 {
@@ -335,19 +349,19 @@ func deployGroup(
 			return
 		} else {
 			for _, resourceName := range groupsToResourceNames[group] {
-				if resourceNameToDeployState.m[resourceName] == deployState("PENDING") {
+				if resourceNameToDeployState.M[resourceName] == resources.DeployState("PENDING") {
 					shouldDeployResource := true
 
 					// Is resource dependent on another deploying resource?
 					for _, dependencyName := range currResourceNameToDependencies[resourceName] {
-						activeStates := map[deployState]bool{
-							deployState(CREATE_IN_PROGRESS): true,
-							deployState(DELETE_IN_PROGRESS): true,
-							deployState(PENDING):            true,
-							deployState(UPDATE_IN_PROGRESS): true,
+						activeStates := map[resources.DeployState]bool{
+							resources.DeployState(resources.CREATE_IN_PROGRESS): true,
+							resources.DeployState(resources.DELETE_IN_PROGRESS): true,
+							resources.DeployState(resources.PENDING):            true,
+							resources.DeployState(resources.UPDATE_IN_PROGRESS): true,
 						}
 
-						dependencyNameDeployState := resourceNameToDeployState.m[dependencyName]
+						dependencyNameDeployState := resourceNameToDeployState.M[dependencyName]
 
 						if activeStates[dependencyNameDeployState] {
 							shouldDeployResource = false
@@ -381,36 +395,36 @@ func deployResource(
 	depth int,
 	deployResourceOkChan DeployResourceOkChan,
 	group int,
-	resourceNameTODeployOutput *resourceNameToDeployOutputContainer,
-	resourceNameToDeployState *resourceNameToDeployStateContainer,
+	resourceNameTODeployOutput *resources.NameToDeployOutputContainer,
+	resourceNameToDeployState *resources.NameToDeployStateContainer,
 	resourceName string,
 	resourceNameToState resources.NameToState,
 ) {
-	resourceNameToDeployState.setInProgress(resourceName, resourceNameToState)
+	resourceNameToDeployState.SetInProgress(resourceName, resourceNameToState)
 
 	timestamp := time.Now().UnixMilli()
 
-	resourceNameToDeployState.log(
+	resourceNameToDeployState.Log(
 		group,
 		depth,
 		resourceName,
 		timestamp,
 	)
 
-	resourceProcessorOkChan := make(resourceProcessorOkChan)
+	resourceProcessorOkChan := make(resources.ProcessorOkChan)
 
 	resourceType := reflect.ValueOf(currResourceNameToConfig[resourceName]).Elem().FieldByName("Type").String()
 
-	resourceProcessorKey := resourceProcessorKey(resourceType + ":" + string(resourceNameToState[resourceName]))
+	resourceProcessorKey := resources.ProcessorKey(resourceType + ":" + string(resourceNameToState[resourceName]))
 
-	go resourceProcessors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceNameTODeployOutput)
+	go resources.Processors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceNameTODeployOutput)
 
 	if <-resourceProcessorOkChan {
-		resourceNameToDeployState.setComplete(resourceName)
+		resourceNameToDeployState.SetComplete(resourceName)
 
 		timestamp = time.Now().UnixMilli()
 
-		resourceNameToDeployState.log(
+		resourceNameToDeployState.Log(
 			group,
 			depth,
 			resourceName,
@@ -422,11 +436,11 @@ func deployResource(
 		return
 	}
 
-	resourceNameToDeployState.setFailed(resourceName)
+	resourceNameToDeployState.SetFailed(resourceName)
 
 	timestamp = time.Now().UnixMilli()
 
-	resourceNameToDeployState.log(
+	resourceNameToDeployState.Log(
 		group,
 		depth,
 		resourceName,
@@ -436,172 +450,12 @@ func deployResource(
 	deployResourceOkChan <- false
 }
 
-type resourceNameToDeployStateContainer struct {
-	m  map[string]deployState
-	mu sync.Mutex
-}
-
-type deployState string
-
-const (
-	CANCELED           deployState = "CANCELED"
-	CREATE_COMPLETE    deployState = "CREATE_COMPLETE"
-	CREATE_FAILED      deployState = "CREATE_FAILED"
-	CREATE_IN_PROGRESS deployState = "CREATE_IN_PROGRESS"
-	DELETE_COMPLETE    deployState = "DELETE_COMPLETE"
-	DELETE_FAILED      deployState = "DEPLOY_FAILED"
-	DELETE_IN_PROGRESS deployState = "DELETE_IN_PROGRESS"
-	PENDING            deployState = "PENDING"
-	UPDATE_COMPLETE    deployState = "UPDATE_COMPLETE"
-	UPDATE_FAILED      deployState = "UPDATE_FAILED"
-	UPDATE_IN_PROGRESS deployState = "UPDATE_IN_PROGRESS"
-)
-
-func (c *resourceNameToDeployStateContainer) log(group int, depth int, name string, timestamp int64) {
-	date := time.Unix(0, timestamp*int64(time.Millisecond))
-	hours := fmt.Sprintf("%02d", date.Hour())
-	minutes := fmt.Sprintf("%02d", date.Minute())
-	seconds := fmt.Sprintf("%02d", date.Second())
-	formattedTime := fmt.Sprintf("%s:%s:%s", hours, minutes, seconds)
-
-	fmt.Printf("[%s] Group %d -> Depth %d -> %s -> %s\n",
-		formattedTime,
-		group,
-		depth,
-		name,
-		c.m[name],
-	)
-}
-
-func (c *resourceNameToDeployStateContainer) setComplete(name string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	switch c.m[name] {
-	case deployState(CREATE_IN_PROGRESS):
-		c.m[name] = deployState(CREATE_COMPLETE)
-	case deployState(DELETE_IN_PROGRESS):
-		c.m[name] = deployState(DELETE_COMPLETE)
-	case deployState(UPDATE_IN_PROGRESS):
-		c.m[name] = deployState(UPDATE_COMPLETE)
-	}
-}
-
-func (c *resourceNameToDeployStateContainer) setFailed(name string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	switch c.m[name] {
-	case deployState(CREATE_IN_PROGRESS):
-		c.m[name] = deployState(CREATE_FAILED)
-	case deployState(DELETE_IN_PROGRESS):
-		c.m[name] = deployState(DELETE_FAILED)
-	case deployState(UPDATE_IN_PROGRESS):
-		c.m[name] = deployState(UPDATE_FAILED)
-	}
-}
-
-func (c *resourceNameToDeployStateContainer) setInProgress(name string, resourceNameToState resources.NameToState) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	switch resourceNameToState[name] {
-	case resources.State(resources.CREATED):
-		c.m[name] = deployState(CREATE_IN_PROGRESS)
-	case resources.State(resources.DELETED):
-		c.m[name] = deployState(DELETE_IN_PROGRESS)
-	case resources.State(resources.UPDATED):
-		c.m[name] = deployState(UPDATE_IN_PROGRESS)
-	}
-}
-
-func (c *resourceNameToDeployStateContainer) setPending(nameToState resources.NameToState) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	for name, state := range nameToState {
-		if state != resources.State(resources.UNCHANGED) {
-			c.m[name] = deployState(PENDING)
-		}
-	}
-}
-
-func (c *resourceNameToDeployStateContainer) setPendingToCanceled() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	result := 0
-	for name, state := range c.m {
-		if state == deployState(PENDING) {
-			c.m[name] = deployState(CANCELED)
-		}
-	}
-	return result
-}
-
-type resourceProcessorsType map[resourceProcessorKey]func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceNameToDeployOutputContainer)
-
-type resourceProcessorOkChan = chan bool
-
-type resourceProcessorKey string
-
-const (
-	CLOUDFLARE_KV_CREATED resourceProcessorKey = "cloudflare-kv:CREATED"
-)
-
-var resourceProcessors resourceProcessorsType = resourceProcessorsType{
-	CLOUDFLARE_KV_CREATED: func(resourceConfig interface{}, resourceProcessOkChan resourceProcessorOkChan, resourceDeployOutput *resourceNameToDeployOutputContainer) {
-		c := resourceConfig.(*resources.CloudflareKVConfig)
-
-		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
-		if err != nil {
-			fmt.Println("Error:", err)
-			resourceProcessOkChan <- false
-			return
-		}
-
-		title := viper.GetString("project") + "-" + helpers.CapitalSnakeCaseToTrainCase(c.Name)
-
-		req := cloudflare.CreateWorkersKVNamespaceParams{Title: title}
-
-		res, err := api.CreateWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), req)
-
-		if err != nil {
-			fmt.Println("Error:", err)
-			resourceProcessOkChan <- false
-			return
-		}
-
-		resourceDeployOutput.set(c.Name, CLOUDFLARE_KV_CREATED, res)
-
-		helpers.PrettyPrint(res)
-
-		resourceProcessOkChan <- true
-	},
-}
-
-type resourceNameToDeployOutputContainer struct {
-	m  map[string]interface{}
-	mu sync.Mutex
-}
-
-func (c *resourceNameToDeployOutputContainer) set(name string, key resourceProcessorKey, output interface{}) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.m[name] = resourceDeployOutputs[key](output)
-}
-
-var resourceDeployOutputs = map[resourceProcessorKey]func(output interface{}) interface{}{
-	CLOUDFLARE_KV_CREATED: func(res interface{}) interface{} {
-		r := res.(cloudflare.WorkersKVNamespaceResponse)
-
-		return &CloudflareKVOutput{
-			ID: r.Result.ID,
-		}
-	},
-}
-
-type CloudflareKVOutput struct {
-	ID string `json:"id"`
-}
-
 func hasResourceNamesToDeploy(stateToResourceNames resources.StateToNames) bool {
-	statesToDeploy := []resources.State{resources.State(resources.CREATED), resources.State(resources.DELETED), resources.State(resources.UPDATED)}
+	statesToDeploy := []resources.State{
+		resources.State(resources.CREATED),
+		resources.State(resources.DELETED),
+		resources.State(resources.UPDATED),
+	}
 	for _, state := range statesToDeploy {
 		if _, exists := stateToResourceNames[state]; exists {
 			return true
@@ -610,12 +464,21 @@ func hasResourceNamesToDeploy(stateToResourceNames resources.StateToNames) bool 
 	return false
 }
 
-func logResourceNamePreDeployStates(groupToDepthToResourceName resources.GroupToDepthToNames, resourceNameToState resources.NameToState) {
+func logResourceNamePreDeployStates(
+	groupToDepthToResourceName resources.GroupToDepthToNames,
+	resourceNameToState resources.NameToState,
+) {
 	fmt.Println("# Pre-Deploy States:")
 	for group, depthToResourceName := range groupToDepthToResourceName {
 		for depth, resourceNames := range depthToResourceName {
 			for _, resourceName := range resourceNames {
-				fmt.Printf("Group %d -> Depth %d -> %s -> %s\n", group, depth, resourceName, resourceNameToState[resourceName])
+				fmt.Printf(
+					"Group %d -> Depth %d -> %s -> %s\n",
+					group,
+					depth,
+					resourceName,
+					resourceNameToState[resourceName],
+				)
 			}
 		}
 	}
@@ -647,7 +510,7 @@ func setInitialGroupResourceNamesToDeploy(
 	highestDepthContainingAResourceToDeploy int,
 	group int,
 	groupToDepthToResourceNames resources.GroupToDepthToNames,
-	resourceDeployState *resourceNameToDeployStateContainer,
+	resourceNameToDeployState *resources.NameToDeployStateContainer,
 	resourceNameToDependencies resources.NameToDependencies,
 ) initialResourceNamesToDeploy {
 	var result initialResourceNamesToDeploy
@@ -667,7 +530,7 @@ func setInitialGroupResourceNamesToDeploy(
 				// If resource at depth to check is PENDING and is not
 				// dependent on any resource in the ongoing result, then
 				// append it to the result.
-				if resourceDeployState.m[resourceNameAtDepthToCheck] == deployState("PENDING") && !helpers.IsInSlice(result, dependencyName) {
+				if resourceNameToDeployState.M[resourceNameAtDepthToCheck] == resources.DeployState(resources.PENDING) && !helpers.IsInSlice(result, dependencyName) {
 					result = append(result, resourceNameAtDepthToCheck)
 				}
 			}
@@ -680,7 +543,11 @@ func setInitialGroupResourceNamesToDeploy(
 
 type numOfResourcesInGroupToDeploy int
 
-func setNumOfResourcesInGroupToDeploy(groupToResourceNames resources.GroupToNames, resourceNameToState resources.NameToState, group int) numOfResourcesInGroupToDeploy {
+func setNumOfResourcesInGroupToDeploy(
+	groupToResourceNames resources.GroupToNames,
+	resourceNameToState resources.NameToState,
+	group int,
+) numOfResourcesInGroupToDeploy {
 	result := numOfResourcesInGroupToDeploy(0)
 	for _, resourceName := range groupToResourceNames[group] {
 		if resourceNameToState[resourceName] != resources.State(resources.UNCHANGED) {

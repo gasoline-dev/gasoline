@@ -2,6 +2,7 @@ package resources
 
 import (
 	"bytes"
+	"context"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,11 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
+	"time"
+
+	"github.com/cloudflare/cloudflare-go"
+	"github.com/spf13/viper"
 )
 
 //go:embed embed/get-index-build-file-configs.js
@@ -68,6 +74,34 @@ func GetIndexFilePaths(containerSubdirPaths ContainerSubdirPaths) (IndexFilePath
 	return result, nil
 }
 
+type IndexBuildFilePaths = []string
+
+/*
+["gas/core-base-api/build/core-base-api._index.js"]
+*/
+func GetIndexBuildFilePaths(containerSubdirPaths ContainerSubdirPaths) (IndexBuildFilePaths, error) {
+	var result IndexBuildFilePaths
+
+	pattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.js$`)
+
+	for _, subdirPath := range containerSubdirPaths {
+		buildPath := filepath.Join(subdirPath, "build")
+
+		files, err := os.ReadDir(buildPath)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, file := range files {
+			if !file.IsDir() && pattern.MatchString(file.Name()) {
+				result = append(result, filepath.Join(buildPath, file.Name()))
+			}
+		}
+	}
+
+	return result, nil
+}
+
 /*
 TypeScript type equivalent:
 
@@ -85,7 +119,7 @@ type IndexBuildFileConfigs = []map[string]interface{}
 			}]
 		}]
 */
-func GetIndexBuildFileConfigs(containerSubdirPaths ContainerSubdirPaths, indexFilePaths IndexFilePaths, indexBuildFilePaths indexBuildFilePaths) (IndexBuildFileConfigs, error) {
+func GetIndexBuildFileConfigs(containerSubdirPaths ContainerSubdirPaths, indexFilePaths IndexFilePaths, indexBuildFilePaths IndexBuildFilePaths) (IndexBuildFileConfigs, error) {
 	var result IndexBuildFileConfigs
 
 	embedPath := "embed/get-index-build-file-configs.js"
@@ -127,32 +161,45 @@ func GetIndexBuildFileConfigs(containerSubdirPaths ContainerSubdirPaths, indexFi
 	return result, nil
 }
 
-type indexBuildFilePaths = []string
+type NameToConfig map[string]interface{}
 
-/*
-["gas/core-base-api/build/core-base-api._index.js"]
-*/
-func GetIndexBuildFilePaths(containerSubdirPaths ContainerSubdirPaths) (indexBuildFilePaths, error) {
-	var result indexBuildFilePaths
-
-	pattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.js$`)
-
-	for _, subdirPath := range containerSubdirPaths {
-		buildPath := filepath.Join(subdirPath, "build")
-
-		files, err := os.ReadDir(buildPath)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, file := range files {
-			if !file.IsDir() && pattern.MatchString(file.Name()) {
-				result = append(result, filepath.Join(buildPath, file.Name()))
-			}
-		}
+func SetNameToConfig(indexBuildFileConfigs IndexBuildFileConfigs) NameToConfig {
+	result := make(NameToConfig)
+	for _, config := range indexBuildFileConfigs {
+		resourceType := config["type"].(string)
+		name := config["name"].(string)
+		result[name] = configs[resourceType](config)
 	}
+	return result
+}
 
-	return result, nil
+var configs = map[string]func(config config) interface{}{
+	"cloudflare-kv": func(config config) interface{} {
+		return &CloudflareKVConfig{
+			ConfigCommon: ConfigCommon{
+				Type: config["type"].(string),
+				Name: config["name"].(string),
+			},
+		}
+	},
+}
+
+type config map[string]interface{}
+
+type ConfigCommon struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+type CloudflareKVConfig struct {
+	ConfigCommon
+}
+
+type CloudflareWorkerConfig struct {
+	ConfigCommon
+	KV []struct {
+		Binding string `json:"binding"`
+	} `json:"kv"`
 }
 
 type PackageJsons []PackageJson
@@ -201,26 +248,45 @@ func GetPackageJsons(containerSubdirPaths ContainerSubdirPaths) (PackageJsons, e
 	return result, nil
 }
 
-type UpJson map[string]struct {
-	Config       interface{} `json:"config"`
-	Dependencies []string    `json:"dependencies"`
-	Output       interface{} `json:"output"`
+type PackageJsonNameToTrue map[string]bool
+
+/*
+	{
+		"core-base-api": true,
+		"core-base-kv": true
+	}
+
+This map can be used to tell if a dependency is an internal
+resource or not when looping over a resource's package.json
+dependencies.
+
+For example, given a relationship of CORE_BASE_API -> CORE_BASE_KV,
+when looping over CORE_BASE_API's package.json dependencies, each
+dependency can be checked against this map. If a check returns true,
+then the dependency is another resource.
+*/
+func SetPackageJsonNameToTrue(packageJsons PackageJsons) PackageJsonNameToTrue {
+	result := make(PackageJsonNameToTrue)
+	for _, packageJson := range packageJsons {
+		result[packageJson.Name] = true
+	}
+	return result
 }
 
-func GetUpJson(filePath string) (UpJson, error) {
-	var result UpJson
+type PackageJsonNameToName map[string]string
 
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read up .json file %s\n%v", filePath, err)
+/*
+	{
+		"core-base-api": "CORE_BASE_API"
 	}
-
-	err = json.Unmarshal(data, &result)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse up .json file %s\n%v", filePath, err)
+*/
+func SetPackageJsonNameToName(packageJsons PackageJsons, indexBuildFileConfigs IndexBuildFileConfigs) PackageJsonNameToName {
+	result := make(PackageJsonNameToName)
+	for index, packageJson := range packageJsons {
+		resourceName := indexBuildFileConfigs[index]["name"].(string)
+		result[packageJson.Name] = resourceName
 	}
-
-	return result, nil
+	return result
 }
 
 type DependencyNames [][]string
@@ -246,42 +312,21 @@ func SetDependencyNames(packageJsons PackageJsons, packageJsonNameToNameMap Pack
 	return result
 }
 
-type DepthToName map[int][]string
+type NameToDependencies map[string][]string
 
 /*
-	{
-		0: ["CORE_BASE_API"],
-		1: ["CORE_BASE_KV"]
-	}
-
-Depth is an int that describes how far down the graph
-a resource is.
-
-For example, given a graph of A->B, B->C, A has a depth
-of 0, B has a depth of 1, and C has a depth of 2.
+TODO
 */
-func SetDepthToName(nameToDependencies NameToDependencies, namesWithInDegreesOfZero namesWithInDegreesOf) DepthToName {
-	result := make(DepthToName)
-
-	numOfNamesToProcess := len(nameToDependencies)
-
-	depth := 0
-
-	for _, nameWithInDegreesOfZero := range namesWithInDegreesOfZero {
-		result[depth] = append(result[depth], nameWithInDegreesOfZero)
-		numOfNamesToProcess--
-	}
-
-	for numOfNamesToProcess > 0 {
-		for _, nameAtDepth := range result[depth] {
-			for _, dependencyName := range nameToDependencies[nameAtDepth] {
-				result[depth+1] = append(result[depth+1], dependencyName)
-				numOfNamesToProcess--
-			}
+func SetNameToDependencies(indexBuildFileConfigs IndexBuildFileConfigs, dependencyNames DependencyNames) NameToDependencies {
+	result := make(NameToDependencies)
+	for index, config := range indexBuildFileConfigs {
+		name := config["name"].(string)
+		if dependencyNames[index] != nil {
+			result[name] = dependencyNames[index]
+		} else {
+			result[name] = make([]string, 0)
 		}
-		depth++
 	}
-
 	return result
 }
 
@@ -318,263 +363,16 @@ func SetNameToInDegrees(nameToDependencies NameToDependencies) NameToInDegrees {
 	return result
 }
 
-type NameToConfig map[string]interface{}
-
-func SetNameToConfig(indexBuildFileConfigs IndexBuildFileConfigs) NameToConfig {
-	result := make(NameToConfig)
-	for _, config := range indexBuildFileConfigs {
-		resourceType := config["type"].(string)
-		name := config["name"].(string)
-		result[name] = configs[resourceType](config)
-	}
-	return result
-}
-
-var configs = map[string]func(config config) interface{}{
-	"cloudflare-kv": func(config config) interface{} {
-		return &CloudflareKVConfig{
-			ConfigCommon: ConfigCommon{
-				Type: config["type"].(string),
-				Name: config["name"].(string),
-			},
-		}
-	},
-}
-
-type config map[string]interface{}
-
-type ConfigCommon struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
-}
-
-type CloudflareKVConfig struct {
-	ConfigCommon
-}
-
-type CloudflareWorkerConfig struct {
-	ConfigCommon
-	KV []struct {
-		Binding string `json:"binding"`
-	} `json:"kv"`
-}
-
-type NameToDependencies map[string][]string
+type NamesWithInDegreesOf []string
 
 /*
 TODO
 */
-func SetNameToDependencies(indexBuildFileConfigs IndexBuildFileConfigs, dependencyNames DependencyNames) NameToDependencies {
-	result := make(NameToDependencies)
-	for index, config := range indexBuildFileConfigs {
-		name := config["name"].(string)
-		if dependencyNames[index] != nil {
-			result[name] = dependencyNames[index]
-		} else {
-			result[name] = make([]string, 0)
-		}
-	}
-	return result
-}
-
-type GroupToHighestDeployDepth map[int]int
-
-/*
-TODO
-*/
-func SetGroupToHighestDeployDepth(nameToDepth NameToDepth, nameToState NameToState, groupsWithStateChanges GroupsWithStateChanges, groupToNames GroupToNames) GroupToHighestDeployDepth {
-	result := make(GroupToHighestDeployDepth)
-	for _, group := range groupsWithStateChanges {
-		deployDepth := 0
-		isFirstResourceToProcess := true
-		for _, name := range groupToNames[group] {
-			// UNCHANGED resources aren't deployed, so its depth
-			// can't be the deploy depth.
-			if nameToState[name] == State("UNCHANGED") {
-				continue
-			}
-
-			// If resource is first to make it this far set deploy
-			// depth so it can be used for comparison in future loops.
-			if isFirstResourceToProcess {
-				result[group] = nameToDepth[name]
-				deployDepth = nameToDepth[name]
-				isFirstResourceToProcess = false
-				continue
-			}
-
-			// Update deploy depth if resource's depth is greater than
-			// the comparative deploy depth.
-			if nameToDepth[name] > deployDepth {
-				result[group] = nameToDepth[name]
-				deployDepth = nameToDepth[name]
-			}
-		}
-	}
-	return result
-}
-
-type GroupToDepthToNames map[int]map[int][]string
-
-/*
-	{
-		0: {
-			0: ["CORE_BASE_API"],
-			1: ["CORE_BASE_KV"]
-		},
-		1: {
-			0: ["ADMIN_BASE_API"]
-		}
-	}
-*/
-func SetGroupToDepthToNames(nameToGroup NameToGroup, nameToDepth NameToDepth) GroupToDepthToNames {
-	result := make(GroupToDepthToNames)
-	for name, group := range nameToGroup {
-		if _, ok := result[group]; !ok {
-			result[group] = make(map[int][]string)
-		}
-		depth := nameToDepth[name]
-		if _, ok := result[group][depth]; !ok {
-			result[group][depth] = make([]string, 0)
-		}
-		result[group][depth] = append(result[group][depth], name)
-	}
-	return result
-}
-
-type GroupToNames map[int][]string
-
-/*
-	{
-		0: [
-			"CORE_BASE_API", "CORE_BASE_KV"
-		],
-		1: ["ADMIN_BASE_API"]
-	}
-*/
-func SetGroupToNames(nameToGroup NameToGroup) GroupToNames {
-	result := make(GroupToNames)
-	for name, group := range nameToGroup {
-		if _, ok := result[group]; !ok {
-			result[group] = make([]string, 0)
-		}
-		result[group] = append(result[group], name)
-	}
-	return result
-}
-
-type PackageJsonNameToName map[string]string
-
-/*
-	{
-		"core-base-api": "CORE_BASE_API"
-	}
-*/
-func SetPackageJsonNameToName(packageJsons PackageJsons, indexBuildFileConfigs IndexBuildFileConfigs) PackageJsonNameToName {
-	result := make(PackageJsonNameToName)
-	for index, packageJson := range packageJsons {
-		resourceName := indexBuildFileConfigs[index]["name"].(string)
-		result[packageJson.Name] = resourceName
-	}
-	return result
-}
-
-type PackageJsonNameToTrue map[string]bool
-
-/*
-	{
-		"core-base-api": true,
-		"core-base-kv": true
-	}
-
-This map can be used to tell if a dependency is an internal
-resource or not when looping over a resource's package.json
-dependencies.
-
-For example, given a relationship of CORE_BASE_API -> CORE_BASE_KV,
-when looping over CORE_BASE_API's package.json dependencies, each
-dependency can be checked against this map. If a check returns true,
-then the dependency is another resource.
-*/
-func SetPackageJsonNameToTrue(packageJsons PackageJsons) PackageJsonNameToTrue {
-	result := make(PackageJsonNameToTrue)
-	for _, packageJson := range packageJsons {
-		result[packageJson.Name] = true
-	}
-	return result
-}
-
-type NameToDepth map[string]int
-
-/*
-	{
-		"CORE_BASE_KV": 1,
-		"CORE_BASE_API": 0
-	}
-*/
-func SetNameToDepth(depthToName DepthToName) NameToDepth {
-	result := make(NameToDepth)
-	for depth, names := range depthToName {
-		for _, name := range names {
-			result[name] = depth
-		}
-	}
-	return result
-}
-
-type NameToGroup map[string]int
-
-/*
-	{
-		"ADMIN_BASE_API": 0,
-		"CORE_BASE_API": 1,
-		"CORE_BASE_KV": 1,
-	}
-
-A group is an int assigned to resource names that share
-at least one common relative.
-*/
-func SetNameToGroup(namesWithInDegreesOfZero namesWithInDegreesOf, nameToIntermediateNames NameToIntermediateNames) NameToGroup {
-	result := make(NameToGroup)
-	group := 0
-	for _, sourceName := range namesWithInDegreesOfZero {
-		if _, ok := result[sourceName]; !ok {
-			// Initialize source resource's group.
-			result[sourceName] = group
-
-			// Set group for source resource's intermediates.
-			for _, intermediateName := range nameToIntermediateNames[sourceName] {
-				if _, ok := result[intermediateName]; !ok {
-					result[intermediateName] = group
-				}
-			}
-
-			// Set group for distant relatives of source resource.
-			// For example, given a graph of A->B, B->C, & X->C,
-			// A & X both have an in degrees of 0. When walking the graph
-			// downward from their positions, neither will gain knowledge of the
-			// other's existence because they don't have incoming edges. To account
-			// for that, all resources with an in degrees of 0 need to be checked
-			// with one another to see if they have a common relative (common
-			// intermediate resources in each's direct path). In this case, A & X
-			// share a common relative in "C". Therefore, A & X should be assigned
-			// to the same group.
-			for _, possibleDistantRelativeName := range namesWithInDegreesOfZero {
-				// Skip source resource from the main for loop.
-				if possibleDistantRelativeName != sourceName {
-					// Loop over possible distant relative's intermediates.
-					for _, possibleDistantRelativeIntermediateName := range nameToIntermediateNames[possibleDistantRelativeName] {
-						// Check if possible distant relative's intermediate
-						// is also an intermediate of source resource.
-						if helpers.IncludesString(nameToIntermediateNames[sourceName], possibleDistantRelativeIntermediateName) {
-							// If so, possibl distant relative and source resource
-							// are distant relatives and belong to the same group.
-							result[possibleDistantRelativeName] = group
-						}
-					}
-				}
-			}
-			group++
+func SetNamesWithInDegreesOf(nameToInDegrees NameToInDegrees, degrees int) NamesWithInDegreesOf {
+	var result NamesWithInDegreesOf
+	for name, inDegree := range nameToInDegrees {
+		if inDegree == degrees {
+			result = append(result, name)
 		}
 	}
 	return result
@@ -631,6 +429,200 @@ func walkDependencies(name string, nameToDependencies NameToDependencies, memo m
 	return result
 }
 
+type NameToGroup map[string]int
+
+/*
+	{
+		"ADMIN_BASE_API": 0,
+		"CORE_BASE_API": 1,
+		"CORE_BASE_KV": 1,
+	}
+
+A group is an int assigned to resource names that share
+at least one common relative.
+*/
+func SetNameToGroup(namesWithInDegreesOfZero NamesWithInDegreesOf, nameToIntermediateNames NameToIntermediateNames) NameToGroup {
+	result := make(NameToGroup)
+	group := 0
+	for _, sourceName := range namesWithInDegreesOfZero {
+		if _, ok := result[sourceName]; !ok {
+			// Initialize source resource's group.
+			result[sourceName] = group
+
+			// Set group for source resource's intermediates.
+			for _, intermediateName := range nameToIntermediateNames[sourceName] {
+				if _, ok := result[intermediateName]; !ok {
+					result[intermediateName] = group
+				}
+			}
+
+			// Set group for distant relatives of source resource.
+			// For example, given a graph of A->B, B->C, & X->C,
+			// A & X both have an in degrees of 0. When walking the graph
+			// downward from their positions, neither will gain knowledge of the
+			// other's existence because they don't have incoming edges. To account
+			// for that, all resources with an in degrees of 0 need to be checked
+			// with one another to see if they have a common relative (common
+			// intermediate resources in each's direct path). In this case, A & X
+			// share a common relative in "C". Therefore, A & X should be assigned
+			// to the same group.
+			for _, possibleDistantRelativeName := range namesWithInDegreesOfZero {
+				// Skip source resource from the main for loop.
+				if possibleDistantRelativeName != sourceName {
+					// Loop over possible distant relative's intermediates.
+					for _, possibleDistantRelativeIntermediateName := range nameToIntermediateNames[possibleDistantRelativeName] {
+						// Check if possible distant relative's intermediate
+						// is also an intermediate of source resource.
+						if helpers.IncludesString(nameToIntermediateNames[sourceName], possibleDistantRelativeIntermediateName) {
+							// If so, possibl distant relative and source resource
+							// are distant relatives and belong to the same group.
+							result[possibleDistantRelativeName] = group
+						}
+					}
+				}
+			}
+			group++
+		}
+	}
+	return result
+}
+
+type DepthToName map[int][]string
+
+/*
+	{
+		0: ["CORE_BASE_API"],
+		1: ["CORE_BASE_KV"]
+	}
+
+Depth is an int that describes how far down the graph
+a resource is.
+
+For example, given a graph of A->B, B->C, A has a depth
+of 0, B has a depth of 1, and C has a depth of 2.
+*/
+func SetDepthToName(nameToDependencies NameToDependencies, namesWithInDegreesOfZero NamesWithInDegreesOf) DepthToName {
+	result := make(DepthToName)
+
+	numOfNamesToProcess := len(nameToDependencies)
+
+	depth := 0
+
+	for _, nameWithInDegreesOfZero := range namesWithInDegreesOfZero {
+		result[depth] = append(result[depth], nameWithInDegreesOfZero)
+		numOfNamesToProcess--
+	}
+
+	for numOfNamesToProcess > 0 {
+		for _, nameAtDepth := range result[depth] {
+			for _, dependencyName := range nameToDependencies[nameAtDepth] {
+				result[depth+1] = append(result[depth+1], dependencyName)
+				numOfNamesToProcess--
+			}
+		}
+		depth++
+	}
+
+	return result
+}
+
+type NameToDepth map[string]int
+
+/*
+	{
+		"CORE_BASE_KV": 1,
+		"CORE_BASE_API": 0
+	}
+*/
+func SetNameToDepth(depthToName DepthToName) NameToDepth {
+	result := make(NameToDepth)
+	for depth, names := range depthToName {
+		for _, name := range names {
+			result[name] = depth
+		}
+	}
+	return result
+}
+
+type GroupToDepthToNames map[int]map[int][]string
+
+/*
+	{
+		0: {
+			0: ["CORE_BASE_API"],
+			1: ["CORE_BASE_KV"]
+		},
+		1: {
+			0: ["ADMIN_BASE_API"]
+		}
+	}
+*/
+func SetGroupToDepthToNames(nameToGroup NameToGroup, nameToDepth NameToDepth) GroupToDepthToNames {
+	result := make(GroupToDepthToNames)
+	for name, group := range nameToGroup {
+		if _, ok := result[group]; !ok {
+			result[group] = make(map[int][]string)
+		}
+		depth := nameToDepth[name]
+		if _, ok := result[group][depth]; !ok {
+			result[group][depth] = make([]string, 0)
+		}
+		result[group][depth] = append(result[group][depth], name)
+	}
+	return result
+}
+
+type UpJson map[string]struct {
+	Config       interface{} `json:"config"`
+	Dependencies []string    `json:"dependencies"`
+	Output       interface{} `json:"output"`
+}
+
+func GetUpJson(filePath string) (UpJson, error) {
+	var result UpJson
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read up .json file %s\n%v", filePath, err)
+	}
+
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse up .json file %s\n%v", filePath, err)
+	}
+
+	return result, nil
+}
+
+type UpNameToDependencies map[string][]string
+
+func SetUpNameToDependencies(upJson UpJson) UpNameToDependencies {
+	result := make(UpNameToDependencies)
+	for name, data := range upJson {
+		dependencies := data.Dependencies
+		if len(dependencies) > 0 {
+			result[name] = dependencies
+		} else {
+			result[name] = make([]string, 0)
+		}
+	}
+	return result
+}
+
+type UpNameToConfig map[string]interface{}
+
+func SetUpNameToConfig(upJson UpJson) UpNameToConfig {
+	result := make(UpNameToConfig)
+	for name, data := range upJson {
+		config := data.Config.(map[string]interface{})
+		resourceType := config["type"].(string)
+		result[name] = configs[resourceType](config)
+	}
+	return result
+}
+
+type NameToState map[string]State
+
 type State string
 
 const (
@@ -640,9 +632,7 @@ const (
 	UPDATED   State = "UPDATED"
 )
 
-type NameToState map[string]State
-
-func SetNameToStateMap(upNameToConfig UpNameToConfig, nameToConfig NameToConfig, upNameToDependencies UpNameToDependencies, nameToDependencies NameToDependencies) NameToState {
+func SetNameToState(upNameToConfig UpNameToConfig, nameToConfig NameToConfig, upNameToDependencies UpNameToDependencies, nameToDependencies NameToDependencies) NameToState {
 	result := make(NameToState)
 
 	for name := range upNameToConfig {
@@ -669,6 +659,125 @@ func SetNameToStateMap(upNameToConfig UpNameToConfig, nameToConfig NameToConfig,
 		}
 	}
 
+	return result
+}
+
+type StateToNames = map[State][]string
+
+/*
+	{
+		CREATED: ["core:base:cloudflare-worker:12345"],
+		DELETED: ["..."],
+		UNCHANGED: ["..."],
+		UPDATED: ["..."]
+	}
+*/
+func SetStateToNames(nameToState NameToState) StateToNames {
+	result := make(StateToNames)
+	for name, state := range nameToState {
+		if _, ok := result[state]; !ok {
+			result[state] = make([]string, 0)
+		}
+		result[state] = append(result[state], name)
+	}
+	return result
+}
+
+type NameToDeployStateContainer struct {
+	M  map[string]DeployState
+	mu sync.Mutex
+}
+
+type DeployState string
+
+const (
+	CANCELED           DeployState = "CANCELED"
+	CREATE_COMPLETE    DeployState = "CREATE_COMPLETE"
+	CREATE_FAILED      DeployState = "CREATE_FAILED"
+	CREATE_IN_PROGRESS DeployState = "CREATE_IN_PROGRESS"
+	DELETE_COMPLETE    DeployState = "DELETE_COMPLETE"
+	DELETE_FAILED      DeployState = "DEPLOY_FAILED"
+	DELETE_IN_PROGRESS DeployState = "DELETE_IN_PROGRESS"
+	PENDING            DeployState = "PENDING"
+	UPDATE_COMPLETE    DeployState = "UPDATE_COMPLETE"
+	UPDATE_FAILED      DeployState = "UPDATE_FAILED"
+	UPDATE_IN_PROGRESS DeployState = "UPDATE_IN_PROGRESS"
+)
+
+func (c *NameToDeployStateContainer) Log(group int, depth int, name string, timestamp int64) {
+	date := time.Unix(0, timestamp*int64(time.Millisecond))
+	hours := fmt.Sprintf("%02d", date.Hour())
+	minutes := fmt.Sprintf("%02d", date.Minute())
+	seconds := fmt.Sprintf("%02d", date.Second())
+	formattedTime := fmt.Sprintf("%s:%s:%s", hours, minutes, seconds)
+
+	fmt.Printf("[%s] Group %d -> Depth %d -> %s -> %s\n",
+		formattedTime,
+		group,
+		depth,
+		name,
+		c.M[name],
+	)
+}
+
+func (c *NameToDeployStateContainer) SetComplete(name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch c.M[name] {
+	case DeployState(CREATE_IN_PROGRESS):
+		c.M[name] = DeployState(CREATE_COMPLETE)
+	case DeployState(DELETE_IN_PROGRESS):
+		c.M[name] = DeployState(DELETE_COMPLETE)
+	case DeployState(UPDATE_IN_PROGRESS):
+		c.M[name] = DeployState(UPDATE_COMPLETE)
+	}
+}
+
+func (c *NameToDeployStateContainer) SetFailed(name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch c.M[name] {
+	case DeployState(CREATE_IN_PROGRESS):
+		c.M[name] = DeployState(CREATE_FAILED)
+	case DeployState(DELETE_IN_PROGRESS):
+		c.M[name] = DeployState(DELETE_FAILED)
+	case DeployState(UPDATE_IN_PROGRESS):
+		c.M[name] = DeployState(UPDATE_FAILED)
+	}
+}
+
+func (c *NameToDeployStateContainer) SetInProgress(name string, resourceNameToState NameToState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	switch resourceNameToState[name] {
+	case State(CREATED):
+		c.M[name] = DeployState(CREATE_IN_PROGRESS)
+	case State(DELETED):
+		c.M[name] = DeployState(DELETE_IN_PROGRESS)
+	case State(UPDATED):
+		c.M[name] = DeployState(UPDATE_IN_PROGRESS)
+	}
+}
+
+func (c *NameToDeployStateContainer) SetPending(nameToState NameToState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for name, state := range nameToState {
+		if state != State(UNCHANGED) {
+			c.M[name] = DeployState(PENDING)
+		}
+	}
+}
+
+func (c *NameToDeployStateContainer) SetPendingToCanceled() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	result := 0
+	for name, state := range c.M {
+		if state == DeployState(PENDING) {
+			c.M[name] = DeployState(CANCELED)
+		}
+	}
 	return result
 }
 
@@ -699,65 +808,134 @@ func SetGroupsWithStateChanges(nameToGroup NameToGroup, nameToState NameToState)
 	return result
 }
 
-type namesWithInDegreesOf []string
+type GroupToNames map[int][]string
+
+/*
+	{
+		0: [
+			"CORE_BASE_API", "CORE_BASE_KV"
+		],
+		1: ["ADMIN_BASE_API"]
+	}
+*/
+func SetGroupToNames(nameToGroup NameToGroup) GroupToNames {
+	result := make(GroupToNames)
+	for name, group := range nameToGroup {
+		if _, ok := result[group]; !ok {
+			result[group] = make([]string, 0)
+		}
+		result[group] = append(result[group], name)
+	}
+	return result
+}
+
+type GroupToHighestDeployDepth map[int]int
 
 /*
 TODO
 */
-func SetNamesWithInDegreesOf(nameToInDegrees NameToInDegrees, degrees int) namesWithInDegreesOf {
-	var result namesWithInDegreesOf
-	for name, inDegree := range nameToInDegrees {
-		if inDegree == degrees {
-			result = append(result, name)
+func SetGroupToHighestDeployDepth(nameToDepth NameToDepth, nameToState NameToState, groupsWithStateChanges GroupsWithStateChanges, groupToNames GroupToNames) GroupToHighestDeployDepth {
+	result := make(GroupToHighestDeployDepth)
+	for _, group := range groupsWithStateChanges {
+		deployDepth := 0
+		isFirstResourceToProcess := true
+		for _, name := range groupToNames[group] {
+			// UNCHANGED resources aren't deployed, so its depth
+			// can't be the deploy depth.
+			if nameToState[name] == State("UNCHANGED") {
+				continue
+			}
+
+			// If resource is first to make it this far set deploy
+			// depth so it can be used for comparison in future loops.
+			if isFirstResourceToProcess {
+				result[group] = nameToDepth[name]
+				deployDepth = nameToDepth[name]
+				isFirstResourceToProcess = false
+				continue
+			}
+
+			// Update deploy depth if resource's depth is greater than
+			// the comparative deploy depth.
+			if nameToDepth[name] > deployDepth {
+				result[group] = nameToDepth[name]
+				deployDepth = nameToDepth[name]
+			}
 		}
 	}
 	return result
 }
 
-type StateToNames = map[State][]string
+type processors map[ProcessorKey]func(
+	config interface{},
+	processOkChan ProcessorOkChan,
+	deployOutput *NameToDeployOutputContainer,
+)
 
-/*
-	{
-		CREATED: ["core:base:cloudflare-worker:12345"],
-		DELETED: ["..."],
-		UNCHANGED: ["..."],
-		UPDATED: ["..."]
-	}
-*/
-func SetStateToNames(nameToState NameToState) StateToNames {
-	result := make(StateToNames)
-	for name, state := range nameToState {
-		if _, ok := result[state]; !ok {
-			result[state] = make([]string, 0)
+type ProcessorOkChan = chan bool
+
+type ProcessorKey string
+
+const (
+	CLOUDFLARE_KV_CREATED ProcessorKey = "cloudflare-kv:CREATED"
+)
+
+var Processors processors = processors{
+	CLOUDFLARE_KV_CREATED: func(
+		config interface{},
+		processOkChan ProcessorOkChan,
+		deployOutput *NameToDeployOutputContainer,
+	) {
+		c := config.(*CloudflareKVConfig)
+
+		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
+		if err != nil {
+			fmt.Println("Error:", err)
+			processOkChan <- false
+			return
 		}
-		result[state] = append(result[state], name)
-	}
-	return result
+
+		title := viper.GetString("project") + "-" + helpers.CapitalSnakeCaseToTrainCase(c.Name)
+
+		req := cloudflare.CreateWorkersKVNamespaceParams{Title: title}
+
+		res, err := api.CreateWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), req)
+
+		if err != nil {
+			fmt.Println("Error:", err)
+			processOkChan <- false
+			return
+		}
+
+		deployOutput.set(c.Name, CLOUDFLARE_KV_CREATED, res)
+
+		helpers.PrettyPrint(res)
+
+		processOkChan <- true
+	},
 }
 
-type UpNameToConfig map[string]interface{}
-
-func SetUpNameToConfig(upJson UpJson) UpNameToConfig {
-	result := make(UpNameToConfig)
-	for name, data := range upJson {
-		config := data.Config.(map[string]interface{})
-		resourceType := config["type"].(string)
-		result[name] = configs[resourceType](config)
-	}
-	return result
+type NameToDeployOutputContainer struct {
+	M  map[string]interface{}
+	mu sync.Mutex
 }
 
-type UpNameToDependencies map[string][]string
+func (c *NameToDeployOutputContainer) set(name string, key ProcessorKey, output interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.M[name] = resourceDeployOutputs[key](output)
+}
 
-func SetUpNameToDependencies(upJson UpJson) UpNameToDependencies {
-	result := make(UpNameToDependencies)
-	for name, data := range upJson {
-		dependencies := data.Dependencies
-		if len(dependencies) > 0 {
-			result[name] = dependencies
-		} else {
-			result[name] = make([]string, 0)
+var resourceDeployOutputs = map[ProcessorKey]func(output interface{}) interface{}{
+	CLOUDFLARE_KV_CREATED: func(res interface{}) interface{} {
+		r := res.(cloudflare.WorkersKVNamespaceResponse)
+
+		return &CloudflareKVOutput{
+			ID: r.Result.ID,
 		}
-	}
-	return result
+	},
+}
+
+type CloudflareKVOutput struct {
+	ID string `json:"id"`
 }

@@ -34,7 +34,8 @@ func init() {
 }
 
 func initConfig() {
-	viper.SetDefault("resourceContainerDir", "gas")
+	viper.SetDefault("resourceContainerDirPath", "gas")
+	viper.SetDefault("upJsonPath", "gas.up.json")
 
 	if configFile != "" {
 		viper.SetConfigFile(configFile)
