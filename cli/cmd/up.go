@@ -34,67 +34,60 @@ var upCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		currResourceIndexFilePaths, err := resources.GetIndexFilePaths(currResourceContainerSubdirPaths)
-		if err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
+		var currResourceNameToConfig resources.NameToConfig
+		var currResourceNameToDependencies resources.NameToDependencies
+
+		if len(currResourceContainerSubdirPaths) > 0 {
+			currResourceIndexFilePaths, err := resources.GetIndexFilePaths(currResourceContainerSubdirPaths)
+			if err != nil {
+				fmt.Println("Error:", err)
+				os.Exit(1)
+			}
+
+			currResourceIndexBuildFilePaths, err := resources.GetIndexBuildFilePaths(currResourceContainerSubdirPaths)
+			if err != nil {
+				fmt.Println("Error:", err)
+				os.Exit(1)
+			}
+
+			if len(currResourceIndexBuildFilePaths) > 0 {
+				currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(
+					currResourceContainerSubdirPaths,
+					currResourceIndexFilePaths,
+					currResourceIndexBuildFilePaths,
+				)
+				if err != nil {
+					fmt.Println("Error:", err)
+					os.Exit(1)
+				}
+
+				currResourceNameToConfig = resources.SetNameToConfig(currResourceIndexBuildFileConfigs)
+
+				currResourcePackageJsons, err := resources.GetPackageJsons(currResourceContainerSubdirPaths)
+				if err != nil {
+					fmt.Println("Error:", err)
+					os.Exit(1)
+				}
+
+				currResourcePackageJsonNameToTrue := resources.SetPackageJsonNameToTrue(currResourcePackageJsons)
+
+				currResourcePackageJsonNameToResourceName := resources.SetPackageJsonNameToName(
+					currResourcePackageJsons,
+					currResourceIndexBuildFileConfigs,
+				)
+
+				currResourceDependencyNames := resources.SetDependencyNames(
+					currResourcePackageJsons,
+					currResourcePackageJsonNameToResourceName,
+					currResourcePackageJsonNameToTrue,
+				)
+
+				currResourceNameToDependencies = resources.SetNameToDependencies(
+					currResourceIndexBuildFileConfigs,
+					currResourceDependencyNames,
+				)
+			}
 		}
-
-		currResourceIndexBuildFilePaths, err := resources.GetIndexBuildFilePaths(currResourceContainerSubdirPaths)
-		if err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
-
-		currResourceIndexBuildFileConfigs, err := resources.GetIndexBuildFileConfigs(
-			currResourceContainerSubdirPaths,
-			currResourceIndexFilePaths,
-			currResourceIndexBuildFilePaths,
-		)
-		if err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
-
-		currResourceNameToConfig := resources.SetNameToConfig(currResourceIndexBuildFileConfigs)
-
-		currResourcePackageJsons, err := resources.GetPackageJsons(currResourceContainerSubdirPaths)
-		if err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
-
-		currResourcePackageJsonNameToTrue := resources.SetPackageJsonNameToTrue(currResourcePackageJsons)
-
-		currResourcePackageJsonNameToResourceName := resources.SetPackageJsonNameToName(
-			currResourcePackageJsons,
-			currResourceIndexBuildFileConfigs,
-		)
-
-		currResourceDependencyNames := resources.SetDependencyNames(
-			currResourcePackageJsons,
-			currResourcePackageJsonNameToResourceName,
-			currResourcePackageJsonNameToTrue,
-		)
-
-		currResourceNameToDependencies := resources.SetNameToDependencies(
-			currResourceIndexBuildFileConfigs,
-			currResourceDependencyNames,
-		)
-
-		resourceNameToInDegrees := resources.SetNameToInDegrees(currResourceNameToDependencies)
-
-		resourceNamesWithInDegreesOfZero := resources.SetNamesWithInDegreesOf(resourceNameToInDegrees, 0)
-
-		resourceNameToIntermediateNames := resources.SetNameToIntermediateNames(currResourceNameToDependencies)
-
-		resourceNameToGroup := resources.SetNameToGroup(resourceNamesWithInDegreesOfZero, resourceNameToIntermediateNames)
-
-		depthToResourceName := resources.SetDepthToName(currResourceNameToDependencies, resourceNamesWithInDegreesOfZero)
-
-		resourceNameToDepth := resources.SetNameToDepth(depthToResourceName)
-
-		groupToDepthToResourceNames := resources.SetGroupToDepthToNames(resourceNameToGroup, resourceNameToDepth)
 
 		upJsonPath := viper.GetString("upJsonPath")
 
@@ -104,9 +97,23 @@ var upCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		upResourceNameToDependencies := resources.SetUpNameToDependencies(upJson)
+		var upResourceNameToConfig resources.UpNameToConfig
+		var upResourceNameToDependencies resources.UpNameToDependencies
 
-		upResourceNameToConfig := resources.SetUpNameToConfig(upJson)
+		if len(upJson) > 0 {
+			upResourceNameToConfig = resources.SetUpNameToConfig(upJson)
+
+			upResourceNameToDependencies = resources.SetUpNameToDependencies(upJson)
+		}
+
+		if len(upResourceNameToConfig) == 0 && len(currResourceNameToConfig) == 0 && len(upResourceNameToDependencies) == 0 && len(currResourceNameToDependencies) == 0 {
+			fmt.Printf(
+				"No resources found in %s or %s",
+				resourceContainerDir,
+				upJsonPath,
+			)
+			os.Exit(0)
+		}
 
 		resourceNameToState := resources.SetNameToState(
 			upResourceNameToConfig,
@@ -115,18 +122,52 @@ var upCmd = &cobra.Command{
 			currResourceNameToDependencies,
 		)
 
-		stateToResourceNames := resources.SetStateToNames(resourceNameToState)
-
-		hasResourceNamesToDeploy := hasResourceNamesToDeploy(stateToResourceNames)
+		hasResourceNamesToDeploy := checkIfResourceNamesToDeploy(resourceNameToState)
 
 		if !hasResourceNamesToDeploy {
 			fmt.Println("No resource changes to deploy")
 			os.Exit(0)
 		}
 
+		/*
+			up json may have resources that don't exist in
+			curr resource maps because the resources were deleted.
+			Those resources are accounted for by merging up and
+			curr maps. Only then are the graphs complete.
+		*/
+
+		var resourceNameToConfig resources.NameToConfig
+
+		if len(upResourceNameToConfig) > 0 || len(currResourceNameToConfig) > 0 {
+			resourceNameToConfig = resources.NameToConfig(helpers.MergeInterfaceMaps(upResourceNameToConfig, currResourceNameToConfig))
+		}
+
+		var resourceNameToDependencies resources.NameToDependencies
+
+		if len(upResourceNameToDependencies) > 0 || len(currResourceNameToDependencies) > 0 {
+			resourceNameToDependencies = resources.NameToDependencies(helpers.MergeStringSliceMaps(upResourceNameToDependencies, currResourceNameToDependencies))
+		}
+
+		resourceNameToInDegrees := resources.SetNameToInDegrees(resourceNameToDependencies)
+
+		resourceNamesWithInDegreesOfZero := resources.SetNamesWithInDegreesOf(resourceNameToInDegrees, 0)
+
+		resourceNameToIntermediateNames := resources.SetNameToIntermediateNames(resourceNameToDependencies)
+
+		resourceNameToGroup := resources.SetNameToGroup(resourceNamesWithInDegreesOfZero, resourceNameToIntermediateNames)
+
+		depthToResourceName := resources.SetDepthToName(resourceNameToDependencies, resourceNamesWithInDegreesOfZero)
+
+		resourceNameToDepth := resources.SetNameToDepth(depthToResourceName)
+
+		groupToDepthToResourceNames := resources.SetGroupToDepthToNames(resourceNameToGroup, resourceNameToDepth)
+
+		helpers.PrettyPrint(resourceNameToState)
+		os.Exit(0)
+
 		err = deploy(
-			currResourceNameToConfig,
-			currResourceNameToDependencies,
+			resourceNameToConfig,
+			resourceNameToDependencies,
 			groupToDepthToResourceNames,
 			resourceNameToDepth,
 			resourceNameToGroup,
@@ -450,14 +491,9 @@ func deployResource(
 	deployResourceOkChan <- false
 }
 
-func hasResourceNamesToDeploy(stateToResourceNames resources.StateToNames) bool {
-	statesToDeploy := []resources.State{
-		resources.State(resources.CREATED),
-		resources.State(resources.DELETED),
-		resources.State(resources.UPDATED),
-	}
-	for _, state := range statesToDeploy {
-		if _, exists := stateToResourceNames[state]; exists {
+func checkIfResourceNamesToDeploy(nameToState resources.NameToState) bool {
+	for name := range nameToState {
+		if nameToState[name] != resources.State(resources.UNCHANGED) {
 			return true
 		}
 	}

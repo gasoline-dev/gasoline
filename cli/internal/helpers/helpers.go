@@ -52,10 +52,21 @@ func IsInSlice(slice []string, item string) bool {
 	return false
 }
 
-type MergeMap map[string]any
+type mergeMap map[string]any
 
-func MergeMaps(map1, map2 MergeMap) MergeMap {
-	result := make(MergeMap)
+func MergeInterfaceMaps(map1, map2 map[string]interface{}) map[string]interface{} {
+	result := make(mergeMap)
+	for key, value := range map1 {
+		result[key] = value
+	}
+	for key, value := range map2 {
+		result[key] = value
+	}
+	return result
+}
+
+func MergeStringSliceMaps(map1, map2 map[string][]string) map[string][]string {
+	result := make(map[string][]string)
 	for key, value := range map1 {
 		result[key] = value
 	}
