@@ -111,7 +111,7 @@ var upCmd = &cobra.Command{
 
 		if len(upResourceNameToConfig) == 0 && len(currResourceNameToConfig) == 0 {
 			fmt.Printf(
-				"No resources found in %s or %s",
+				"No resources found in %s or %s\n",
 				resourceContainerDir,
 				upJsonPath,
 			)
