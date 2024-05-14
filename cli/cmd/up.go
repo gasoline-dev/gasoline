@@ -225,13 +225,13 @@ func deploy(
 
 	for resourceName, output := range resourceNameToDeployOutput.M {
 		newUpjson[resourceName] = struct {
-			Config       map[string]interface{} `json:"config"`
-			Dependencies []string               `json:"dependencies"`
-			Output       map[string]interface{} `json:"output"`
+			Config       interface{} `json:"config"`
+			Dependencies []string    `json:"dependencies"`
+			Output       interface{} `json:"output"`
 		}{
-			Config:       currResourceNameToConfig[resourceName].(map[string]interface{}),
+			Config:       currResourceNameToConfig[resourceName],
 			Dependencies: currResourceNameToDependencies[resourceName],
-			Output:       output.(map[string]interface{}),
+			Output:       output,
 		}
 	}
 

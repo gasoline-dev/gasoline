@@ -573,9 +573,9 @@ func SetGroupToDepthToNames(nameToGroup NameToGroup, nameToDepth NameToDepth) Gr
 }
 
 type UpJson map[string]struct {
-	Config       map[string]interface{} `json:"config"`
-	Dependencies []string               `json:"dependencies"`
-	Output       map[string]interface{} `json:"output"`
+	Config       interface{} `json:"config"`
+	Dependencies []string    `json:"dependencies"`
+	Output       interface{} `json:"output"`
 }
 
 func GetUpJson(filePath string) (UpJson, error) {
@@ -614,7 +614,7 @@ type UpNameToConfig map[string]interface{}
 func SetUpNameToConfig(upJson UpJson) UpNameToConfig {
 	result := make(UpNameToConfig)
 	for name, data := range upJson {
-		config := data.Config
+		config := data.Config.(map[string]interface{})
 		resourceType := config["type"].(string)
 		result[name] = configs[resourceType](config)
 	}
@@ -626,7 +626,8 @@ type UpNameToOutput map[string]interface{}
 func SetUpNameToOutput(upJson UpJson) UpNameToOutput {
 	result := make(UpNameToOutput)
 	for name, data := range upJson {
-		result[name] = upOutputs["cloudflare-kv"](data.Output)
+		output := data.Output.(map[string]interface{})
+		result[name] = upOutputs["cloudflare-kv"](output)
 	}
 	return result
 }
@@ -946,8 +947,6 @@ var Processors processors = processors{
 		deployOutput *NameToDeployOutputContainer,
 		upOutput interface{},
 	) {
-		c := config.(*CloudflareKVConfig)
-
 		uo := upOutput.(*CloudflareKvUpOutput)
 
 		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
@@ -966,8 +965,6 @@ var Processors processors = processors{
 			processOkChan <- false
 			return
 		}
-
-		deployOutput.set(c.Name, CLOUDFLARE_KV_DELETED, res)
 
 		processOkChan <- true
 	},
