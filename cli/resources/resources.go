@@ -573,9 +573,9 @@ func SetGroupToDepthToNames(nameToGroup NameToGroup, nameToDepth NameToDepth) Gr
 }
 
 type UpJson map[string]struct {
-	Config       interface{} `json:"config"`
-	Dependencies []string    `json:"dependencies"`
-	Output       interface{} `json:"output"`
+	Config       map[string]interface{} `json:"config"`
+	Dependencies []string               `json:"dependencies"`
+	Output       map[string]interface{} `json:"output"`
 }
 
 func GetUpJson(filePath string) (UpJson, error) {
@@ -614,11 +614,35 @@ type UpNameToConfig map[string]interface{}
 func SetUpNameToConfig(upJson UpJson) UpNameToConfig {
 	result := make(UpNameToConfig)
 	for name, data := range upJson {
-		config := data.Config.(map[string]interface{})
+		config := data.Config
 		resourceType := config["type"].(string)
 		result[name] = configs[resourceType](config)
 	}
 	return result
+}
+
+type UpNameToOutput map[string]interface{}
+
+func SetUpNameToOutput(upJson UpJson) UpNameToOutput {
+	result := make(UpNameToOutput)
+	for name, data := range upJson {
+		result[name] = upOutputs["cloudflare-kv"](data.Output)
+	}
+	return result
+}
+
+var upOutputs = map[string]func(output upOutput) interface{}{
+	"cloudflare-kv": func(output upOutput) interface{} {
+		return &CloudflareKvUpOutput{
+			ID: output["id"].(string),
+		}
+	},
+}
+
+type upOutput map[string]interface{}
+
+type CloudflareKvUpOutput struct {
+	ID string `json:"id"`
 }
 
 type NameToState map[string]State
@@ -870,6 +894,7 @@ type processors map[ProcessorKey]func(
 	config interface{},
 	processOkChan ProcessorOkChan,
 	deployOutput *NameToDeployOutputContainer,
+	upOutput interface{},
 )
 
 type ProcessorOkChan = chan bool
@@ -886,6 +911,7 @@ var Processors processors = processors{
 		config interface{},
 		processOkChan ProcessorOkChan,
 		deployOutput *NameToDeployOutputContainer,
+		upOutput interface{},
 	) {
 		c := config.(*CloudflareKVConfig)
 
@@ -918,8 +944,11 @@ var Processors processors = processors{
 		config interface{},
 		processOkChan ProcessorOkChan,
 		deployOutput *NameToDeployOutputContainer,
+		upOutput interface{},
 	) {
 		c := config.(*CloudflareKVConfig)
+
+		uo := upOutput.(*CloudflareKvUpOutput)
 
 		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
 		if err != nil {
@@ -928,9 +957,7 @@ var Processors processors = processors{
 			return
 		}
 
-		title := viper.GetString("project") + "-" + helpers.CapitalSnakeCaseToTrainCase(c.Name)
-
-		res, err := api.DeleteWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), title)
+		res, err := api.DeleteWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), uo.ID)
 
 		helpers.PrettyPrint(res)
 

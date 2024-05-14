@@ -99,14 +99,17 @@ var upCmd = &cobra.Command{
 
 		var upResourceNameToConfig resources.UpNameToConfig
 		var upResourceNameToDependencies resources.UpNameToDependencies
+		var upResourceNameToOutput resources.UpNameToOutput
 
 		if len(upJson) > 0 {
 			upResourceNameToConfig = resources.SetUpNameToConfig(upJson)
 
 			upResourceNameToDependencies = resources.SetUpNameToDependencies(upJson)
+
+			upResourceNameToOutput = resources.SetUpNameToOutput(upJson)
 		}
 
-		if len(upResourceNameToConfig) == 0 && len(currResourceNameToConfig) == 0 && len(upResourceNameToDependencies) == 0 && len(currResourceNameToDependencies) == 0 {
+		if len(upResourceNameToConfig) == 0 && len(currResourceNameToConfig) == 0 {
 			fmt.Printf(
 				"No resources found in %s or %s",
 				resourceContainerDir,
@@ -169,6 +172,7 @@ var upCmd = &cobra.Command{
 			resourceNameToDepth,
 			resourceNameToGroup,
 			resourceNameToState,
+			upResourceNameToOutput,
 		)
 
 		if err != nil {
@@ -187,6 +191,7 @@ func deploy(
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToGroup resources.NameToGroup,
 	resourceNameToState resources.NameToState,
+	upResourceNameToOutput resources.UpNameToOutput,
 ) error {
 	logResourceNamePreDeployStates(groupToDepthToResourceNames, resourceNameToState)
 
@@ -209,6 +214,7 @@ func deploy(
 		resourceNameToDepth,
 		resourceNameToGroup,
 		resourceNameToState,
+		upResourceNameToOutput,
 	)
 
 	if err != nil {
@@ -219,13 +225,13 @@ func deploy(
 
 	for resourceName, output := range resourceNameToDeployOutput.M {
 		newUpjson[resourceName] = struct {
-			Config       interface{} `json:"config"`
-			Dependencies []string    `json:"dependencies"`
-			Output       interface{} `json:"output"`
+			Config       map[string]interface{} `json:"config"`
+			Dependencies []string               `json:"dependencies"`
+			Output       map[string]interface{} `json:"output"`
 		}{
-			Config:       currResourceNameToConfig[resourceName],
+			Config:       currResourceNameToConfig[resourceName].(map[string]interface{}),
 			Dependencies: currResourceNameToDependencies[resourceName],
-			Output:       output,
+			Output:       output.(map[string]interface{}),
 		}
 	}
 
@@ -254,6 +260,7 @@ func deployGroups(
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToGroup resources.NameToGroup,
 	resourceNameToState resources.NameToState,
+	upResourceNameToOutput resources.UpNameToOutput,
 ) error {
 	groupsWithStateChanges := resources.SetGroupsWithStateChanges(resourceNameToGroup, resourceNameToState)
 
@@ -283,6 +290,7 @@ func deployGroups(
 			resourceNameToDeployState,
 			resourceNameToDepth,
 			resourceNameToState,
+			upResourceNameToOutput,
 		)
 	}
 
@@ -323,6 +331,7 @@ func deployGroup(
 	resourceNameToDeployState *resources.NameToDeployStateContainer,
 	resourceNameToDepth resources.NameToDepth,
 	resourceNameToState resources.NameToState,
+	upResourceNameToOutput resources.UpNameToOutput,
 ) {
 
 	deployResourceOkChan := make(DeployResourceOkChan)
@@ -348,6 +357,7 @@ func deployGroup(
 			resourceNameToDeployState,
 			resourceName,
 			resourceNameToState,
+			upResourceNameToOutput,
 		)
 	}
 
@@ -418,6 +428,7 @@ func deployGroup(
 							resourceNameToDeployState,
 							resourceName,
 							resourceNameToState,
+							upResourceNameToOutput,
 						)
 					}
 				}
@@ -437,6 +448,7 @@ func deployResource(
 	resourceNameToDeployState *resources.NameToDeployStateContainer,
 	resourceName string,
 	resourceNameToState resources.NameToState,
+	upResourceNameToOutput resources.UpNameToOutput,
 ) {
 	resourceNameToDeployState.SetInProgress(resourceName, resourceNameToState)
 
@@ -455,7 +467,7 @@ func deployResource(
 
 	resourceProcessorKey := resources.ProcessorKey(resourceType + ":" + string(resourceNameToState[resourceName]))
 
-	go resources.Processors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceNameToDeployOutput)
+	go resources.Processors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceNameToDeployOutput, upResourceNameToOutput[resourceName])
 
 	if <-resourceProcessorOkChan {
 		resourceNameToDeployState.SetComplete(resourceName)
