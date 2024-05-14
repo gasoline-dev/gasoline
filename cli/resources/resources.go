@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gas/internal/helpers"
+	"gas/helpers"
 	"os"
 	"os/exec"
 	"path/filepath"

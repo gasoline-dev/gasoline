@@ -3,9 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"gas/internal/helpers"
-	"gas/internal/resources"
-	"gas/internal/validators"
+	"gas/helpers"
+	"gas/resources"
+	"gas/validators"
 	"os"
 	"reflect"
 	"time"
