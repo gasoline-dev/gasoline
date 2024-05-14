@@ -162,9 +162,6 @@ var upCmd = &cobra.Command{
 
 		groupToDepthToResourceNames := resources.SetGroupToDepthToNames(resourceNameToGroup, resourceNameToDepth)
 
-		helpers.PrettyPrint(resourceNameToState)
-		os.Exit(0)
-
 		err = deploy(
 			resourceNameToConfig,
 			resourceNameToDependencies,
@@ -436,7 +433,7 @@ func deployResource(
 	depth int,
 	deployResourceOkChan DeployResourceOkChan,
 	group int,
-	resourceNameTODeployOutput *resources.NameToDeployOutputContainer,
+	resourceNameToDeployOutput *resources.NameToDeployOutputContainer,
 	resourceNameToDeployState *resources.NameToDeployStateContainer,
 	resourceName string,
 	resourceNameToState resources.NameToState,
@@ -458,7 +455,7 @@ func deployResource(
 
 	resourceProcessorKey := resources.ProcessorKey(resourceType + ":" + string(resourceNameToState[resourceName]))
 
-	go resources.Processors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceNameTODeployOutput)
+	go resources.Processors[resourceProcessorKey](currResourceNameToConfig[resourceName], resourceProcessorOkChan, resourceNameToDeployOutput)
 
 	if <-resourceProcessorOkChan {
 		resourceNameToDeployState.SetComplete(resourceName)

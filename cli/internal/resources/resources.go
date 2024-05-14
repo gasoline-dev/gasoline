@@ -696,7 +696,7 @@ const (
 	CREATE_FAILED      DeployState = "CREATE_FAILED"
 	CREATE_IN_PROGRESS DeployState = "CREATE_IN_PROGRESS"
 	DELETE_COMPLETE    DeployState = "DELETE_COMPLETE"
-	DELETE_FAILED      DeployState = "DEPLOY_FAILED"
+	DELETE_FAILED      DeployState = "DELETE_FAILED"
 	DELETE_IN_PROGRESS DeployState = "DELETE_IN_PROGRESS"
 	PENDING            DeployState = "PENDING"
 	UPDATE_COMPLETE    DeployState = "UPDATE_COMPLETE"
@@ -878,6 +878,7 @@ type ProcessorKey string
 
 const (
 	CLOUDFLARE_KV_CREATED ProcessorKey = "cloudflare-kv:CREATED"
+	CLOUDFLARE_KV_DELETED ProcessorKey = "cloudflare-kv:DELETED"
 )
 
 var Processors processors = processors{
@@ -910,6 +911,36 @@ var Processors processors = processors{
 		deployOutput.set(c.Name, CLOUDFLARE_KV_CREATED, res)
 
 		helpers.PrettyPrint(res)
+
+		processOkChan <- true
+	},
+	CLOUDFLARE_KV_DELETED: func(
+		config interface{},
+		processOkChan ProcessorOkChan,
+		deployOutput *NameToDeployOutputContainer,
+	) {
+		c := config.(*CloudflareKVConfig)
+
+		api, err := cloudflare.NewWithAPIToken(os.Getenv("CLOUDFLARE_API_TOKEN"))
+		if err != nil {
+			fmt.Println("Error:", err)
+			processOkChan <- false
+			return
+		}
+
+		title := viper.GetString("project") + "-" + helpers.CapitalSnakeCaseToTrainCase(c.Name)
+
+		res, err := api.DeleteWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), title)
+
+		helpers.PrettyPrint(res)
+
+		if err != nil {
+			fmt.Println("Error:", err)
+			processOkChan <- false
+			return
+		}
+
+		deployOutput.set(c.Name, CLOUDFLARE_KV_DELETED, res)
 
 		processOkChan <- true
 	},
