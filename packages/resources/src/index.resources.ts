@@ -14,11 +14,10 @@ export type ServiceBindings<
 };
 
 export type CloudflareKv = {
-	id: string;
 	name: string;
 };
 
-export function setCloudflareKv<T extends CloudflareKv>(resource: T): T {
+export function cloudflareKv<T extends CloudflareKv>(resource: T): T {
 	return resource;
 }
 
