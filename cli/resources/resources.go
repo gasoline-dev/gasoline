@@ -22,11 +22,12 @@ import (
 )
 
 type Resources struct {
-	containerDir             string
-	containerSubdirPaths     containerSubdirPaths
-	indexFilePaths           indexFilePaths
-	indexFileContents        indexFileContents
-	indexFileExportedConfigs indexFileExportedConfigs
+	containerDir           string
+	containerSubdirPaths   containerSubdirPaths
+	nameToIndexFilePath    nameToIndexFilePath
+	nameToIndexFileContent nameToIndexFileContent
+	nameToConfigData       nameToConfigData
+	nameToConfig           nameToConfig
 }
 
 func New() (*Resources, error) {
@@ -46,17 +47,22 @@ func (r *Resources) init() error {
 		return err
 	}
 
-	err = r.getIndexFilePaths()
+	err = r.setNameToIndexFilePath()
 	if err != nil {
 		return err
 	}
 
-	err = r.readIndexFiles()
+	err = r.setNameToIndexFileContent()
 	if err != nil {
 		return err
 	}
 
-	r.setIndexFileExportedConfigs()
+	r.setNameToConfigData()
+
+	err = r.setNameToConfig()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -79,14 +85,18 @@ func (r *Resources) getContainerSubdirPaths() error {
 	return nil
 }
 
-// TODO: change this to nameToIndexFilePath
-// if it doesn't have an indexfilepath set to nil
-type indexFilePaths = []string
+type nameToIndexFilePath map[string]string
 
-func (r *Resources) getIndexFilePaths() error {
-	pattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.ts$`)
+func (r *Resources) setNameToIndexFilePath() error {
+	r.nameToIndexFilePath = make(map[string]string)
+
+	indexFilePathPattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.ts$`)
 
 	for _, subdirPath := range r.containerSubdirPaths {
+		subdirName := filepath.Base(subdirPath)
+		snakeCaseResourceName := strings.ReplaceAll(subdirName, "-", "_")
+		screamingSnakeCaseResourceName := strings.ToUpper(snakeCaseResourceName)
+
 		srcPath := filepath.Join(subdirPath, "src")
 
 		files, err := os.ReadDir(srcPath)
@@ -94,75 +104,98 @@ func (r *Resources) getIndexFilePaths() error {
 			return err
 		}
 
+		matchingIndexFilePathFound := false
+
 		for _, file := range files {
-			if !file.IsDir() && pattern.MatchString(file.Name()) {
-				r.indexFilePaths = append(r.indexFilePaths, filepath.Join(srcPath, file.Name()))
+			if !file.IsDir() && indexFilePathPattern.MatchString(file.Name()) {
+				r.nameToIndexFilePath[screamingSnakeCaseResourceName] = filepath.Join(srcPath, file.Name())
+				matchingIndexFilePathFound = true
+				break
 			}
 		}
-	}
 
-	return nil
-}
-
-type indexFileContents []string
-
-// TODO: after making changes above, if no index file path
-// set to nil
-func (r *Resources) readIndexFiles() error {
-	for _, indexFilePath := range r.indexFilePaths {
-		data, err := os.ReadFile(indexFilePath)
-		if err != nil {
-			return fmt.Errorf("unable to read file %s\n%v", indexFilePath, err)
+		if !matchingIndexFilePathFound {
+			r.nameToIndexFilePath[screamingSnakeCaseResourceName] = ""
 		}
-		r.indexFileContents = append(r.indexFileContents, string(data))
+	}
+
+	return nil
+}
+
+type nameToIndexFileContent map[string]string
+
+func (r *Resources) setNameToIndexFileContent() error {
+	r.nameToIndexFileContent = make(nameToIndexFileContent)
+	for name, indexFilePath := range r.nameToIndexFilePath {
+		if indexFilePath == "" {
+			r.nameToIndexFileContent[name] = ""
+		} else {
+			data, err := os.ReadFile(indexFilePath)
+			if err != nil {
+				return fmt.Errorf("unable to read file %s\n%v", indexFilePath, err)
+			}
+			r.nameToIndexFileContent[name] = string(data)
+		}
 	}
 	return nil
 }
 
-type indexFileExportedConfigs []*exportedConfig
+type nameToConfigData map[string]*configData
 
-type exportedConfig struct {
+type configData struct {
 	// Name of config function used (e.g. cloudflareKv)
 	functionName string
 	// "export const coreBaseKv = cloudflareKv({\n\tname: \"CORE_BASE_KV\",\n} as const);"
 	exportString string
 }
 
-// TODO: after making chagnes above, if no index file content
-// set to nil
-func (r *Resources) setIndexFileExportedConfigs() {
-	for _, indexFileConfig := range r.indexFileContents {
-		exportConfigPattern := `(?m)export\s+const\s+\w+\s*=\s*\w+\([\s\S]*?\)\s*(?:as\s*const\s*)?;?`
-		exportedConfigRe := regexp.MustCompile(exportConfigPattern)
+func (r *Resources) setNameToConfigData() {
+	r.nameToConfigData = make(nameToConfigData)
 
-		exportedConfigMatches := exportedConfigRe.FindAllString(indexFileConfig, -1)
-
-		functionNamePattern := `\s*=\s*(\w+)\(`
-		functionNameRe := regexp.MustCompile(functionNamePattern)
-
-		matchingConfigFound := false
-
-		for _, exportedConfigMatch := range exportedConfigMatches {
-			configFunctionMatches := functionNameRe.FindStringSubmatch(exportedConfigMatch)
-			if len(configFunctionMatches) > 1 && (configFunctionMatches[1] == "cloudflareKv" || configFunctionMatches[1] == "setCloudflareWorker") {
-				r.indexFileExportedConfigs = append(r.indexFileExportedConfigs, &exportedConfig{
-					functionName: configFunctionMatches[1],
-					exportString: exportedConfigMatch,
-				})
-				matchingConfigFound = true
-				break
+	for name, indexFileContent := range r.nameToIndexFileContent {
+		if indexFileContent == "" {
+			r.nameToConfigData[name] = &configData{
+				functionName: "",
+				exportString: "",
 			}
-		}
+		} else {
+			exportConfigPattern := `(?m)export\s+const\s+\w+\s*=\s*\w+\([\s\S]*?\)\s*(?:as\s*const\s*)?;?`
+			exportedConfigRe := regexp.MustCompile(exportConfigPattern)
 
-		if !matchingConfigFound {
-			r.indexFileExportedConfigs = append(r.indexFileExportedConfigs, nil)
+			exportedConfigMatches := exportedConfigRe.FindAllString(indexFileContent, -1)
+
+			functionNamePattern := `\s*=\s*(\w+)\(`
+			functionNameRe := regexp.MustCompile(functionNamePattern)
+
+			matchingConfigFound := false
+
+			for _, exportedConfigMatch := range exportedConfigMatches {
+				configFunctionMatches := functionNameRe.FindStringSubmatch(exportedConfigMatch)
+				if len(configFunctionMatches) > 1 && (configFunctionMatches[1] == "cloudflareKv" || configFunctionMatches[1] == "setCloudflareWorker") {
+					r.nameToConfigData[name] = &configData{
+						functionName: configFunctionMatches[1],
+						exportString: exportedConfigMatch,
+					}
+					matchingConfigFound = true
+					break
+				}
+			}
+
+			if !matchingConfigFound {
+				r.nameToConfigData[name] = &configData{
+					functionName: "",
+					exportString: "",
+				}
+			}
 		}
 	}
 }
 
-type indexFileConfigs = []map[string]interface{}
+type nameToConfig = map[string]interface{}
 
-func (r *Resources) getIndexFileConfigs() error {
+func (r *Resources) setNameToConfig() error {
+	r.nameToConfig = make(nameToConfig)
+
 	// start building out string to execute
 
 	// put function names in an array
@@ -171,16 +204,20 @@ func (r *Resources) getIndexFileConfigs() error {
 	// loop over export string, if not nil, build new string
 	// put function names in content body
 	// put export strings in content body
-	for _, config := range r.indexFileExportedConfigs {
-		if config.functionName == "" {
-			fmt.Println("No match found.")
-		} else {
-			fmt.Println("Function Name:", config.functionName)
-			fmt.Println("Export String:", config.exportString)
-		}
+
+	for name, configData := range r.nameToConfigData {
+		fmt.Println(name)
+		fmt.Println(configData)
+		/*
+			if configData.functionName == "" {
+				fmt.Println("No match found.")
+			} else {
+				fmt.Println("Function Name:", configData.functionName)
+				fmt.Println("Export String:", configData.exportString)
+			}
+		*/
 	}
 
-	return nil
 	/*
 		content := `console.log("Hello, World!")`
 
@@ -198,6 +235,8 @@ func (r *Resources) getIndexFileConfigs() error {
 
 				fmt.Println(strOutput)
 	*/
+
+	return nil
 }
 
 //go:embed embed/get-index-build-file-configs.js
