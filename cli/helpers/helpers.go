@@ -76,15 +76,6 @@ func MergeStringSliceMaps(map1, map2 map[string][]string) map[string][]string {
 	return result
 }
 
-func PrettyPrint(data any) error {
-	jsonData, err := json.MarshalIndent(data, "", "    ")
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(jsonData))
-	return nil
-}
-
 func ReadFile(filePath string) ([]byte, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {

@@ -21,6 +21,185 @@ import (
 	"github.com/spf13/viper"
 )
 
+type Resources struct {
+	containerDir             string
+	containerSubdirPaths     containerSubdirPaths
+	indexFilePaths           indexFilePaths
+	indexFileContents        indexFileContents
+	indexFileExportedConfigs indexFileExportedConfigs
+}
+
+func New() (*Resources, error) {
+	r := &Resources{}
+	err := r.init()
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+func (r *Resources) init() error {
+	r.containerDir = viper.GetString("resourceContainerDirPath")
+
+	err := r.getContainerSubdirPaths()
+	if err != nil {
+		return err
+	}
+
+	err = r.getIndexFilePaths()
+	if err != nil {
+		return err
+	}
+
+	err = r.readIndexFiles()
+	if err != nil {
+		return err
+	}
+
+	r.setIndexFileExportedConfigs()
+
+	return nil
+}
+
+type containerSubdirPaths []string
+
+func (r *Resources) getContainerSubdirPaths() error {
+	entries, err := os.ReadDir(r.containerDir)
+
+	if err != nil {
+		return fmt.Errorf("unable to read resource container dir %s", r.containerDir)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			r.containerSubdirPaths = append(r.containerSubdirPaths, filepath.Join(r.containerDir, entry.Name()))
+		}
+	}
+
+	return nil
+}
+
+// TODO: change this to nameToIndexFilePath
+// if it doesn't have an indexfilepath set to nil
+type indexFilePaths = []string
+
+func (r *Resources) getIndexFilePaths() error {
+	pattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.ts$`)
+
+	for _, subdirPath := range r.containerSubdirPaths {
+		srcPath := filepath.Join(subdirPath, "src")
+
+		files, err := os.ReadDir(srcPath)
+		if err != nil {
+			return err
+		}
+
+		for _, file := range files {
+			if !file.IsDir() && pattern.MatchString(file.Name()) {
+				r.indexFilePaths = append(r.indexFilePaths, filepath.Join(srcPath, file.Name()))
+			}
+		}
+	}
+
+	return nil
+}
+
+type indexFileContents []string
+
+// TODO: after making changes above, if no index file path
+// set to nil
+func (r *Resources) readIndexFiles() error {
+	for _, indexFilePath := range r.indexFilePaths {
+		data, err := os.ReadFile(indexFilePath)
+		if err != nil {
+			return fmt.Errorf("unable to read file %s\n%v", indexFilePath, err)
+		}
+		r.indexFileContents = append(r.indexFileContents, string(data))
+	}
+	return nil
+}
+
+type indexFileExportedConfigs []*exportedConfig
+
+type exportedConfig struct {
+	// Name of config function used (e.g. cloudflareKv)
+	functionName string
+	// "export const coreBaseKv = cloudflareKv({\n\tname: \"CORE_BASE_KV\",\n} as const);"
+	exportString string
+}
+
+// TODO: after making chagnes above, if no index file content
+// set to nil
+func (r *Resources) setIndexFileExportedConfigs() {
+	for _, indexFileConfig := range r.indexFileContents {
+		exportConfigPattern := `(?m)export\s+const\s+\w+\s*=\s*\w+\([\s\S]*?\)\s*(?:as\s*const\s*)?;?`
+		exportedConfigRe := regexp.MustCompile(exportConfigPattern)
+
+		exportedConfigMatches := exportedConfigRe.FindAllString(indexFileConfig, -1)
+
+		functionNamePattern := `\s*=\s*(\w+)\(`
+		functionNameRe := regexp.MustCompile(functionNamePattern)
+
+		matchingConfigFound := false
+
+		for _, exportedConfigMatch := range exportedConfigMatches {
+			configFunctionMatches := functionNameRe.FindStringSubmatch(exportedConfigMatch)
+			if len(configFunctionMatches) > 1 && (configFunctionMatches[1] == "cloudflareKv" || configFunctionMatches[1] == "setCloudflareWorker") {
+				r.indexFileExportedConfigs = append(r.indexFileExportedConfigs, &exportedConfig{
+					functionName: configFunctionMatches[1],
+					exportString: exportedConfigMatch,
+				})
+				matchingConfigFound = true
+				break
+			}
+		}
+
+		if !matchingConfigFound {
+			r.indexFileExportedConfigs = append(r.indexFileExportedConfigs, nil)
+		}
+	}
+}
+
+type indexFileConfigs = []map[string]interface{}
+
+func (r *Resources) getIndexFileConfigs() error {
+	// start building out string to execute
+
+	// put function names in an array
+	// put export string in array
+	// loop over function names,if not nil, build new string
+	// loop over export string, if not nil, build new string
+	// put function names in content body
+	// put export strings in content body
+	for _, config := range r.indexFileExportedConfigs {
+		if config.functionName == "" {
+			fmt.Println("No match found.")
+		} else {
+			fmt.Println("Function Name:", config.functionName)
+			fmt.Println("Export String:", config.exportString)
+		}
+	}
+
+	return nil
+	/*
+		content := `console.log("Hello, World!")`
+
+				nodeCmd := exec.Command("node", "--input-type=module")
+
+				nodeCmd.Stdin = bytes.NewReader([]byte(content))
+
+				output, err := nodeCmd.CombinedOutput()
+				if err != nil {
+					fmt.Printf("unable to execute\n%v\n", err)
+					return
+				}
+
+				strOutput := strings.TrimSpace((string(output)))
+
+				fmt.Println(strOutput)
+	*/
+}
+
 //go:embed embed/get-index-build-file-configs.js
 var getIndexBuildFileConfigsEmbed embed.FS
 
@@ -937,7 +1116,7 @@ var Processors processors = processors{
 
 		deployOutput.set(c.Name, CLOUDFLARE_KV_CREATED, res)
 
-		helpers.PrettyPrint(res)
+		fmt.Println(res)
 
 		processOkChan <- true
 	},
@@ -958,7 +1137,7 @@ var Processors processors = processors{
 
 		res, err := api.DeleteWorkersKVNamespace(context.Background(), cloudflare.AccountIdentifier(os.Getenv("CLOUDFLARE_ACCOUNT_ID")), uo.ID)
 
-		helpers.PrettyPrint(res)
+		fmt.Println(res)
 
 		if err != nil {
 			fmt.Println("Error:", err)
