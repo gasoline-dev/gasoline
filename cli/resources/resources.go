@@ -24,9 +24,11 @@ import (
 type Resources struct {
 	containerDir           string
 	containerSubdirPaths   containerSubdirPaths
+	nameToPackageJson      nameToPackageJson
 	nameToIndexFilePath    nameToIndexFilePath
 	nameToIndexFileContent nameToIndexFileContent
 	nameToConfigData       nameToConfigData
+	nodeJsConfigScript     nodeJsConfigScript
 	nameToConfig           nameToConfig
 }
 
@@ -59,10 +61,21 @@ func (r *Resources) init() error {
 
 	r.setNameToConfigData()
 
-	err = r.setNameToConfig()
+	r.setNodeJsConfigScript()
+
+	fmt.Println(r.nodeJsConfigScript)
+
+	err = r.runNodeJsConfigScript()
 	if err != nil {
 		return err
 	}
+
+	/*
+		err = r.setNameToConfig()
+			if err != nil {
+				return err
+			}
+	*/
 
 	return nil
 }
@@ -85,10 +98,27 @@ func (r *Resources) getContainerSubdirPaths() error {
 	return nil
 }
 
+type nameToPackageJson map[string]packageJson
+
+type packageJson struct {
+	Name            string            `json:"name"`
+	Main            string            `json:"main"`
+	Types           string            `json:"types"`
+	Scripts         map[string]string `json:"scripts"`
+	Dependencies    map[string]string `json:"dependencies,omitempty"`
+	DevDependencies map[string]string `json:"devDependencies,omitempty"`
+}
+
+func (r *Resources) setNameToPackageJson() error {
+	r.nameToPackageJson = make(nameToPackageJson)
+
+	return nil
+}
+
 type nameToIndexFilePath map[string]string
 
 func (r *Resources) setNameToIndexFilePath() error {
-	r.nameToIndexFilePath = make(map[string]string)
+	r.nameToIndexFilePath = make(nameToIndexFilePath)
 
 	indexFilePathPattern := regexp.MustCompile(`^_[^.]+\.[^.]+\.[^.]+\.index\.ts$`)
 
@@ -191,6 +221,51 @@ func (r *Resources) setNameToConfigData() {
 	}
 }
 
+type nodeJsConfigScript = string
+
+func (r *Resources) setNodeJsConfigScript() {
+	var functionNames []string
+
+	functionNameToTrue := make(map[string]bool)
+	for _, configData := range r.nameToConfigData {
+		if configData.functionName != "" && !functionNameToTrue[configData.functionName] {
+			functionNameToTrue[configData.functionName] = true
+			functionNames = append(functionNames, configData.functionName)
+		}
+	}
+
+	r.nodeJsConfigScript = "import {\n"
+	r.nodeJsConfigScript += strings.Join(functionNames, ",\n")
+	r.nodeJsConfigScript += "\n} "
+	r.nodeJsConfigScript += "from \"@gasoline-dev/resources\"\n"
+
+	for _, configData := range r.nameToConfigData {
+		if configData.exportString != "" {
+			r.nodeJsConfigScript += strings.Replace(configData.exportString, " as const", "", 1)
+			r.nodeJsConfigScript += "\n"
+		}
+	}
+
+	r.nodeJsConfigScript += "console.log('HELLO!')\n"
+}
+
+func (r *Resources) runNodeJsConfigScript() error {
+	cmd := exec.Command("node", "--input-type=module")
+
+	cmd.Stdin = bytes.NewReader([]byte(r.nodeJsConfigScript))
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("unable to execute Node.js config script: %s\n%v", string(output), err)
+	}
+
+	strOutput := strings.TrimSpace(string(output))
+
+	fmt.Println(strOutput)
+
+	return nil
+}
+
 type nameToConfig = map[string]interface{}
 
 func (r *Resources) setNameToConfig() error {
@@ -217,24 +292,6 @@ func (r *Resources) setNameToConfig() error {
 			}
 		*/
 	}
-
-	/*
-		content := `console.log("Hello, World!")`
-
-				nodeCmd := exec.Command("node", "--input-type=module")
-
-				nodeCmd.Stdin = bytes.NewReader([]byte(content))
-
-				output, err := nodeCmd.CombinedOutput()
-				if err != nil {
-					fmt.Printf("unable to execute\n%v\n", err)
-					return
-				}
-
-				strOutput := strings.TrimSpace((string(output)))
-
-				fmt.Println(strOutput)
-	*/
 
 	return nil
 }
