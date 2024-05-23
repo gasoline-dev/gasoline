@@ -25,6 +25,8 @@ type Resources struct {
 	containerDir           string
 	containerSubdirPaths   containerSubdirPaths
 	nameToPackageJson      nameToPackageJson
+	packageJsonNameToName  packageJsonNameToName
+	nameToInternalDepNames nameToInternalDepNames
 	nameToIndexFilePath    nameToIndexFilePath
 	nameToIndexFileContent nameToIndexFileContent
 	nameToConfigData       nameToConfigData
@@ -48,6 +50,17 @@ func (r *Resources) init() error {
 	if err != nil {
 		return err
 	}
+
+	err = r.setNameToPackageJson()
+	if err != nil {
+		return err
+	}
+
+	r.setPackageJsonNameToName()
+
+	r.setNameToInternalDepNames()
+
+	fmt.Println(r.nameToInternalDepNames)
 
 	err = r.setNameToIndexFilePath()
 	if err != nil {
@@ -98,7 +111,7 @@ func (r *Resources) getContainerSubdirPaths() error {
 	return nil
 }
 
-type nameToPackageJson map[string]packageJson
+type nameToPackageJson map[string]*packageJson
 
 type packageJson struct {
 	Name            string            `json:"name"`
@@ -112,7 +125,62 @@ type packageJson struct {
 func (r *Resources) setNameToPackageJson() error {
 	r.nameToPackageJson = make(nameToPackageJson)
 
+	for _, subdirPath := range r.containerSubdirPaths {
+		resourceName := convertContainerSubdirPathToName(subdirPath)
+
+		packageJsonPath := filepath.Join(subdirPath, "package.json")
+
+		if _, err := os.Stat(packageJsonPath); err == nil {
+			data, err := os.ReadFile(packageJsonPath)
+			if err != nil {
+				return fmt.Errorf("unable to read file %s\n%v", packageJsonPath, err)
+			}
+
+			var packageJson packageJson
+			err = json.Unmarshal(data, &packageJson)
+			if err != nil {
+				return fmt.Errorf("unable to parse %s\n%v", packageJsonPath, err)
+			}
+
+			r.nameToPackageJson[resourceName] = &packageJson
+		}
+	}
+
 	return nil
+}
+
+func convertContainerSubdirPathToName(subdirPath string) string {
+	subdirName := filepath.Base(subdirPath)
+	snakeCaseResourceName := strings.ReplaceAll(subdirName, "-", "_")
+	screamingSnakeCaseResourceName := strings.ToUpper(snakeCaseResourceName)
+	return screamingSnakeCaseResourceName
+}
+
+type packageJsonNameToName map[string]string
+
+func (r *Resources) setPackageJsonNameToName() {
+	r.packageJsonNameToName = make(packageJsonNameToName)
+	for resourceName, packageJson := range r.nameToPackageJson {
+		r.packageJsonNameToName[packageJson.Name] = resourceName
+	}
+}
+
+type nameToInternalDepNames map[string][]string
+
+func (r *Resources) setNameToInternalDepNames() {
+	r.nameToInternalDepNames = make(nameToInternalDepNames)
+	for resourceName, packageJson := range r.nameToPackageJson {
+		var internalDepNames []string
+		// Loop over source resource's package.json deps
+		for dep := range packageJson.Dependencies {
+			internalDepName, ok := r.packageJsonNameToName[dep]
+			// If package.json dep exists in map then it's an internal dep
+			if ok {
+				internalDepNames = append(internalDepNames, internalDepName)
+			}
+		}
+		r.nameToInternalDepNames[resourceName] = internalDepNames
+	}
 }
 
 type nameToIndexFilePath map[string]string
