@@ -10,7 +10,7 @@ type Graph struct {
 	nodeToGroup              nodeToGroup
 	depthToNode              depthToNode
 	nodeToDepth              nodeToDepth
-	groupToDepthToNodes      groupToDepthToNodes
+	GroupToDepthToNodes      GroupToDepthToNodes
 }
 
 type NodeToDeps map[string][]string
@@ -203,18 +203,18 @@ func (g *Graph) setNodeToDepth() {
 	}
 }
 
-type groupToDepthToNodes map[int]map[int][]string
+type GroupToDepthToNodes map[int]map[int][]string
 
 func (g *Graph) setGroupToDepthToNodes() {
-	g.groupToDepthToNodes = make(groupToDepthToNodes)
+	g.GroupToDepthToNodes = make(GroupToDepthToNodes)
 	for node, group := range g.nodeToGroup {
-		if _, ok := g.groupToDepthToNodes[group]; !ok {
-			g.groupToDepthToNodes[group] = make(map[int][]string)
+		if _, ok := g.GroupToDepthToNodes[group]; !ok {
+			g.GroupToDepthToNodes[group] = make(map[int][]string)
 		}
 		depth := g.nodeToDepth[node]
-		if _, ok := g.groupToDepthToNodes[group][depth]; !ok {
-			g.groupToDepthToNodes[group][depth] = make([]string, 0)
+		if _, ok := g.GroupToDepthToNodes[group][depth]; !ok {
+			g.GroupToDepthToNodes[group][depth] = make([]string, 0)
 		}
-		g.groupToDepthToNodes[group][depth] = append(g.groupToDepthToNodes[group][depth], node)
+		g.GroupToDepthToNodes[group][depth] = append(g.GroupToDepthToNodes[group][depth], node)
 	}
 }

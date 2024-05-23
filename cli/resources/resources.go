@@ -31,6 +31,7 @@ type Resources struct {
 	nameToIndexFilePath    nameToIndexFilePath
 	nameToIndexFileContent nameToIndexFileContent
 	nameToConfigData       nameToConfigData
+	groupToDepthToNames    graph.GroupToDepthToNodes
 	nodeJsConfigScript     nodeJsConfigScript
 	nameToConfig           nameToConfig
 }
@@ -61,9 +62,7 @@ func (r *Resources) init() error {
 
 	r.setNameToInternalDeps()
 
-	nodeToDeps := graph.NodeToDeps(r.nameToInternalDeps)
-
-	graph.New(nodeToDeps)
+	g := graph.New(graph.NodeToDeps(r.nameToInternalDeps))
 
 	err = r.setNameToIndexFilePath()
 	if err != nil {
@@ -76,6 +75,8 @@ func (r *Resources) init() error {
 	}
 
 	r.setNameToConfigData()
+
+	r.groupToDepthToNames = g.GroupToDepthToNodes
 
 	r.setNodeJsConfigScript()
 
@@ -310,10 +311,20 @@ func (r *Resources) setNodeJsConfigScript() {
 	r.nodeJsConfigScript += "\n} "
 	r.nodeJsConfigScript += "from \"@gasoline-dev/resources\"\n"
 
-	for _, configData := range r.nameToConfigData {
-		if configData.exportString != "" {
-			r.nodeJsConfigScript += strings.Replace(configData.exportString, " as const", "", 1)
-			r.nodeJsConfigScript += "\n"
+	// Configs have to be written in bottom-up dependency order to
+	// avoid Node.js "cannot access 'variable name' before
+	// initialization" errors. For example, given a graph of A->B,
+	// B's config has to be written before A's because A will
+	// reference B's config.
+	for group := range r.groupToDepthToNames {
+		numOfDepths := len(r.groupToDepthToNames[group])
+		for depth := numOfDepths; depth >= 0; depth-- {
+			for _, name := range r.groupToDepthToNames[group][depth] {
+				if r.nameToConfigData[name].exportString != "" {
+					r.nodeJsConfigScript += strings.Replace(r.nameToConfigData[name].exportString, " as const", "", 1)
+					r.nodeJsConfigScript += "\n"
+				}
+			}
 		}
 	}
 
