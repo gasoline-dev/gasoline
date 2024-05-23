@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gas/graph"
 	"gas/helpers"
 	"os"
 	"os/exec"
@@ -26,7 +27,7 @@ type Resources struct {
 	containerSubdirPaths   containerSubdirPaths
 	nameToPackageJson      nameToPackageJson
 	packageJsonNameToName  packageJsonNameToName
-	nameToInternalDepNames nameToInternalDepNames
+	nameToInternalDeps     nameToInternalDeps
 	nameToIndexFilePath    nameToIndexFilePath
 	nameToIndexFileContent nameToIndexFileContent
 	nameToConfigData       nameToConfigData
@@ -58,9 +59,13 @@ func (r *Resources) init() error {
 
 	r.setPackageJsonNameToName()
 
-	r.setNameToInternalDepNames()
+	r.setNameToInternalDeps()
 
-	fmt.Println(r.nameToInternalDepNames)
+	g := graph.New(r.nameToInternalDeps)
+
+	g.SetNodeToInDegrees()
+
+	fmt.Println(g.NodeToInDegrees)
 
 	err = r.setNameToIndexFilePath()
 	if err != nil {
@@ -165,21 +170,21 @@ func (r *Resources) setPackageJsonNameToName() {
 	}
 }
 
-type nameToInternalDepNames map[string][]string
+type nameToInternalDeps map[string][]string
 
-func (r *Resources) setNameToInternalDepNames() {
-	r.nameToInternalDepNames = make(nameToInternalDepNames)
+func (r *Resources) setNameToInternalDeps() {
+	r.nameToInternalDeps = make(nameToInternalDeps)
 	for resourceName, packageJson := range r.nameToPackageJson {
-		var internalDepNames []string
+		var internalDeps []string
 		// Loop over source resource's package.json deps
 		for dep := range packageJson.Dependencies {
-			internalDepName, ok := r.packageJsonNameToName[dep]
+			internalDep, ok := r.packageJsonNameToName[dep]
 			// If package.json dep exists in map then it's an internal dep
 			if ok {
-				internalDepNames = append(internalDepNames, internalDepName)
+				internalDeps = append(internalDeps, internalDep)
 			}
 		}
-		r.nameToInternalDepNames[resourceName] = internalDepNames
+		r.nameToInternalDeps[resourceName] = internalDeps
 	}
 }
 
