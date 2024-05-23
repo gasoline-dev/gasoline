@@ -61,11 +61,9 @@ func (r *Resources) init() error {
 
 	r.setNameToInternalDeps()
 
-	g := graph.New(r.nameToInternalDeps)
+	nodeToDeps := graph.NodeToDeps(r.nameToInternalDeps)
 
-	g.SetNodeToInDegrees()
-
-	fmt.Println(g.NodeToInDegrees)
+	graph.New(nodeToDeps)
 
 	err = r.setNameToIndexFilePath()
 	if err != nil {
