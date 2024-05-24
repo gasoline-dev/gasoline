@@ -54,8 +54,8 @@ TODO
 
 Because resource configs exist within TypeScript files, Gas.dev has two ways to interpret their values:
 
-1) Build the TypeScript files into JS, run the JS, then interpret the config values.
-2) Parse the files into JS using an internal parser, run the JS, then interpret the config values.
+1) Build the TypeScript files they exist in to JS, run the JS, then interpret the config values.
+2) Parse the configs to JS using a custom parser, run the JS, then interpret the config values.
 
 There are many issues with option 1.
 
