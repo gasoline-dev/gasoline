@@ -76,6 +76,11 @@ func (r *Resources) init() error {
 
 	r.setNameToConfigData()
 
+	fmt.Println(r.nameToConfigData["CORE_BASE_KV"].exportString)
+	fmt.Println(r.nameToConfigData["CORE_BASE_KV"].functionName)
+	fmt.Println(r.nameToConfigData["CORE_BASE_API"].exportString)
+	fmt.Println(r.nameToConfigData["CORE_BASE_API"].functionName)
+
 	r.groupToDepthToNames = g.GroupToDepthToNodes
 
 	r.setNodeJsConfigScript()
@@ -87,12 +92,10 @@ func (r *Resources) init() error {
 		return err
 	}
 
-	/*
-		err = r.setNameToConfig()
-			if err != nil {
-				return err
-			}
-	*/
+	err = r.setNameToConfig()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -232,9 +235,7 @@ func (r *Resources) setNameToIndexFileContent() error {
 type nameToConfigData map[string]*configData
 
 type configData struct {
-	// Name of config function used (e.g. cloudflareKv)
 	functionName string
-	// "export const coreBaseKv = cloudflareKv({\n\tname: \"CORE_BASE_KV\",\n} as const);"
 	exportString string
 }
 
@@ -242,20 +243,46 @@ func (r *Resources) setNameToConfigData() {
 	r.nameToConfigData = make(nameToConfigData)
 
 	for name, indexFileContent := range r.nameToIndexFileContent {
+		// Config setters are imported like this:
+		// import { cloudflareKv } from "@gasoline-dev/resources"
+		// They can be distinguished using a camelCase pattern.
+		configSetterFunctionNameRegex := regexp.MustCompile(`import\s+\{[^}]*\b([a-z]+[A-Z][a-zA-Z]*)\b[^}]*\}\s+from\s+['"]@gasoline-dev/resources['"]`)
+		// This can be limited to one match because there should only
+		// be one config setter per resource index file.
+		configSetterFunctionName := configSetterFunctionNameRegex.FindStringSubmatch(indexFileContent)[1]
+
+		// Configs are exported like this:
+		// export const coreBaseKv = cloudflareKv({
+		//   name: "CORE_BASE_KV",
+		// } as const)
 		exportConfigPattern := `(?m)export\s+const\s+\w+\s*=\s*\w+\([\s\S]*?\)\s*(?:as\s*const\s*)?;?`
 		exportedConfigRegex := regexp.MustCompile(exportConfigPattern)
 
-		exportedConfigMatches := exportedConfigRegex.FindAllString(indexFileContent, -1)
+		// It can't be assumed that text that matches the exported config
+		// pattern is an exported config. A user can export non-configs
+		// using the same pattern above. So we need to collect possible
+		// exported configs and evaluate them later.
+		possibleExportedConfigs := exportedConfigRegex.FindAllString(indexFileContent, -1)
 
-		functionNamePattern := `\s*=\s*(\w+)\(`
-		functionNameRegex := regexp.MustCompile(functionNamePattern)
+		// This pattern matches a function's name in the exported
+		// config pattern. For example, it'd match "coreBaseKv" in:
+		// export const coreBaseKv = cloudflareKv({
+		//   name: "CORE_BASE_KV",
+		// } as const)
+		possibleExportedConfigFunctionNamePattern := `\s*=\s*(\w+)\(`
+		functionNameRegex := regexp.MustCompile(possibleExportedConfigFunctionNamePattern)
 
-		for _, exportedConfigMatch := range exportedConfigMatches {
-			possibleConfigFunctionNameMatches := functionNameRegex.FindStringSubmatch(exportedConfigMatch)
-			if possibleConfigFunctionNameMatches[1] == "cloudflareKv" || possibleConfigFunctionNameMatches[1] == "setCloudflareWorker" {
+		for _, possibleExportedConfig := range possibleExportedConfigs {
+			possibleExportedConfigFunctionName := functionNameRegex.FindStringSubmatch(possibleExportedConfig)[1]
+
+			// If possible exported config function name is equal to the
+			// config setter function name, then the possible exported
+			// config function name and possible exported config are
+			// confirmed to represent actual configs.
+			if possibleExportedConfigFunctionName == configSetterFunctionName {
 				r.nameToConfigData[name] = &configData{
-					functionName: possibleConfigFunctionNameMatches[1],
-					exportString: exportedConfigMatch,
+					functionName: possibleExportedConfigFunctionName,
+					exportString: possibleExportedConfig,
 				}
 				break
 			}
