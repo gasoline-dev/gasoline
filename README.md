@@ -52,10 +52,10 @@ TODO
 
 ### Building vs parsing
 
-Because resource configs exist within TypeScript files, there are two ways to interpret their values:
+Because resource configs exist within TypeScript files, Gas.dev has two ways to interpret their values:
 
 1) Build the TypeScript files into JS, run the JS, then interpret the config values.
-2) Parse the files into JS, run the JS, then interpret the config values.
+2) Parse the files into JS using an internal parser, run the JS, then interpret the config values.
 
 There are many issues with option 1.
 
@@ -63,9 +63,12 @@ There are many issues with option 1.
 
 Option 2 is faster and offers a better overall experience. It provides the upside of TypeScript type checking and completion without the downside of running processes to build and watch TypeScript files.
 
-However, because the files are parsed and not built, configs have rules. When configs follow the rules Gas.dev can interpret their values.
+That said, because the TypeScript files are parsed and not built, configs must adhere to a tiny set of rules so Gas.dev can parse and interpret their values.
 
-### Rules
+### Rules 
+Configs must use only static values, references to other imported resource config values, references to process.env values, and/or inline logic.
+
+If your configs are simple, and they should be, it's how they're designed, these rules are followed naturally and don't need to be thought about. Consider it a red flag otherwise.
 
 - Must follow as const pattern.
 - Cannot reference non-config imports.
