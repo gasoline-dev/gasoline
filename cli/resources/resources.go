@@ -134,20 +134,18 @@ func (r *Resources) setNameToPackageJson() error {
 
 		packageJsonPath := filepath.Join(subdirPath, "package.json")
 
-		if _, err := os.Stat(packageJsonPath); err == nil {
-			data, err := os.ReadFile(packageJsonPath)
-			if err != nil {
-				return fmt.Errorf("unable to read file %s\n%v", packageJsonPath, err)
-			}
-
-			var packageJson packageJson
-			err = json.Unmarshal(data, &packageJson)
-			if err != nil {
-				return fmt.Errorf("unable to parse %s\n%v", packageJsonPath, err)
-			}
-
-			r.nameToPackageJson[resourceName] = &packageJson
+		data, err := os.ReadFile(packageJsonPath)
+		if err != nil {
+			return fmt.Errorf("unable to read file %s\n%v", packageJsonPath, err)
 		}
+
+		var packageJson packageJson
+		err = json.Unmarshal(data, &packageJson)
+		if err != nil {
+			return fmt.Errorf("unable to parse %s\n%v", packageJsonPath, err)
+		}
+
+		r.nameToPackageJson[resourceName] = &packageJson
 	}
 
 	return nil
@@ -206,18 +204,11 @@ func (r *Resources) setNameToIndexFilePath() error {
 			return err
 		}
 
-		matchingIndexFilePathFound := false
-
 		for _, file := range files {
 			if !file.IsDir() && indexFilePathPattern.MatchString(file.Name()) {
 				r.nameToIndexFilePath[screamingSnakeCaseResourceName] = filepath.Join(srcPath, file.Name())
-				matchingIndexFilePathFound = true
 				break
 			}
-		}
-
-		if !matchingIndexFilePathFound {
-			r.nameToIndexFilePath[screamingSnakeCaseResourceName] = ""
 		}
 	}
 
@@ -229,15 +220,11 @@ type nameToIndexFileContent map[string]string
 func (r *Resources) setNameToIndexFileContent() error {
 	r.nameToIndexFileContent = make(nameToIndexFileContent)
 	for name, indexFilePath := range r.nameToIndexFilePath {
-		if indexFilePath == "" {
-			r.nameToIndexFileContent[name] = ""
-		} else {
-			data, err := os.ReadFile(indexFilePath)
-			if err != nil {
-				return fmt.Errorf("unable to read file %s\n%v", indexFilePath, err)
-			}
-			r.nameToIndexFileContent[name] = string(data)
+		data, err := os.ReadFile(indexFilePath)
+		if err != nil {
+			return fmt.Errorf("unable to read file %s\n%v", indexFilePath, err)
 		}
+		r.nameToIndexFileContent[name] = string(data)
 	}
 	return nil
 }
@@ -255,39 +242,22 @@ func (r *Resources) setNameToConfigData() {
 	r.nameToConfigData = make(nameToConfigData)
 
 	for name, indexFileContent := range r.nameToIndexFileContent {
-		if indexFileContent == "" {
-			r.nameToConfigData[name] = &configData{
-				functionName: "",
-				exportString: "",
-			}
-		} else {
-			exportConfigPattern := `(?m)export\s+const\s+\w+\s*=\s*\w+\([\s\S]*?\)\s*(?:as\s*const\s*)?;?`
-			exportedConfigRe := regexp.MustCompile(exportConfigPattern)
+		exportConfigPattern := `(?m)export\s+const\s+\w+\s*=\s*\w+\([\s\S]*?\)\s*(?:as\s*const\s*)?;?`
+		exportedConfigRegex := regexp.MustCompile(exportConfigPattern)
 
-			exportedConfigMatches := exportedConfigRe.FindAllString(indexFileContent, -1)
+		exportedConfigMatches := exportedConfigRegex.FindAllString(indexFileContent, -1)
 
-			functionNamePattern := `\s*=\s*(\w+)\(`
-			functionNameRe := regexp.MustCompile(functionNamePattern)
+		functionNamePattern := `\s*=\s*(\w+)\(`
+		functionNameRegex := regexp.MustCompile(functionNamePattern)
 
-			matchingConfigFound := false
-
-			for _, exportedConfigMatch := range exportedConfigMatches {
-				configFunctionMatches := functionNameRe.FindStringSubmatch(exportedConfigMatch)
-				if len(configFunctionMatches) > 1 && (configFunctionMatches[1] == "cloudflareKv" || configFunctionMatches[1] == "setCloudflareWorker") {
-					r.nameToConfigData[name] = &configData{
-						functionName: configFunctionMatches[1],
-						exportString: exportedConfigMatch,
-					}
-					matchingConfigFound = true
-					break
-				}
-			}
-
-			if !matchingConfigFound {
+		for _, exportedConfigMatch := range exportedConfigMatches {
+			possibleConfigFunctionNameMatches := functionNameRegex.FindStringSubmatch(exportedConfigMatch)
+			if possibleConfigFunctionNameMatches[1] == "cloudflareKv" || possibleConfigFunctionNameMatches[1] == "setCloudflareWorker" {
 				r.nameToConfigData[name] = &configData{
-					functionName: "",
-					exportString: "",
+					functionName: possibleConfigFunctionNameMatches[1],
+					exportString: exportedConfigMatch,
 				}
+				break
 			}
 		}
 	}
@@ -300,10 +270,8 @@ func (r *Resources) setNodeJsConfigScript() {
 
 	functionNameToTrue := make(map[string]bool)
 	for _, configData := range r.nameToConfigData {
-		if configData.functionName != "" && !functionNameToTrue[configData.functionName] {
-			functionNameToTrue[configData.functionName] = true
-			functionNames = append(functionNames, configData.functionName)
-		}
+		functionNameToTrue[configData.functionName] = true
+		functionNames = append(functionNames, configData.functionName)
 	}
 
 	r.nodeJsConfigScript = "import {\n"
@@ -320,10 +288,8 @@ func (r *Resources) setNodeJsConfigScript() {
 		numOfDepths := len(r.groupToDepthToNames[group])
 		for depth := numOfDepths; depth >= 0; depth-- {
 			for _, name := range r.groupToDepthToNames[group][depth] {
-				if r.nameToConfigData[name].exportString != "" {
-					r.nodeJsConfigScript += strings.Replace(r.nameToConfigData[name].exportString, " as const", "", 1)
-					r.nodeJsConfigScript += "\n"
-				}
+				r.nodeJsConfigScript += strings.Replace(r.nameToConfigData[name].exportString, " as const", "", 1)
+				r.nodeJsConfigScript += "\n"
 			}
 		}
 	}
