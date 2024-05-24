@@ -52,7 +52,7 @@ TODO
 
 ### Building vs parsing
 
-Because resource configs exist within TypeScript files, Gas.dev has two ways to interpret config values:
+Because resource configs exist within TypeScript files, Gas.dev has two options for interpreting config values:
 
 1) Build and output config TypeScript files to JS, run the JS, then interpret the config values.
 2) Parse and output configs to JS using a custom parser, run the JS, then interpret the config values.
