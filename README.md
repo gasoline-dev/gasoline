@@ -28,13 +28,27 @@ TODO: Quick video introduction
 
 TODO
 
-# Project structure
+# Blueprint
+
+## Monorepo default
 
 TODO
 
-# Naming convention
+## Project structure
 
 TODO
+
+## Naming convention
+
+TODO
+
+## Resources
+
+TODO
+
+## Deployments
+
+TODO - the graph and how deployment works
 
 # @gas-dev/cli
 
