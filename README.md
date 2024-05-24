@@ -66,7 +66,7 @@ Option 2 is faster and offers a better overall experience. It provides the upsid
 That said, because the TypeScript files are parsed and not built, configs must adhere to a tiny set of rules so Gas.dev can parse and interpret their values.
 
 ### Rules 
-Configs must use only static values, references to other imported resource config values, references to process.env values, and/or inline logic.
+Configs must only use static values, references to other imported resource config values, references to process.env values, and/or inline logic.
 
 If your configs are simple, and they should be, it's how they're designed, these rules are followed naturally and don't need to be thought about. Consider it a red flag otherwise.
 
