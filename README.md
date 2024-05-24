@@ -6,9 +6,9 @@
 
 This is an experimental work-in-progress. Things can and will change.
 
-That said, the goal is to ship v1.0 ASAP. You can follow an active roadmap here: TODO link
+You can follow the road to v1.0 here: TODO link
 
-Also, please limit contributions to minor bug fixes, issues labeled "Help welcomed", and discussion.
+Please limit contributions to minor bug fixes, issues labeled "Help welcomed", and discussion.
 
 Your feedback is the most valuable contribution. I'd (@shaneuuid | TODO GitHub link | TODO X link) love to hear your critiques, ideas, feature requests, etc: TODO link to GitHub discussions.
 
