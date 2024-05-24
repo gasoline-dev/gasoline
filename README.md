@@ -46,6 +46,30 @@ TODO
 
 TODO
 
+### Configuration
+
+TODO
+
+### Building vs parsing
+
+Because resource configs exist within TypeScript files, there are two ways to interpret their values:
+
+1) Build the TypeScript files into JS, run the JS, then interpret the config values.
+2) Parse the files into JS, run the JS, then interpret the config values.
+
+There are many issues with option 1.
+
+1) ...
+
+Option 2 is faster and offers a better overall experience. It provides the upside of TypeScript type checking and completion without the downside of running processes to build and watch TypeScript files.
+
+However, because the files are parsed and not built, configs have rules. When configs follow the rules Gas.dev can interpret their values.
+
+### Rules
+
+- Must follow as const pattern.
+- Cannot reference non-config imports.
+
 ## Deployments
 
 TODO - the graph and how deployment works
