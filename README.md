@@ -2,6 +2,16 @@
 
 ![Red gasoline can](gas-can.png)
 
+# Warning
+
+This is an experimental work-in-progress. Things can and will change.
+
+That said, the goal is to ship v1.0 ASAP. You can follow an active roadmap here: TODO link
+
+Also, please limit contributions to minor bug fixes, issues labeled "Help welcomed", and discussion.
+
+Your feedback is the most valuable contribution. I'd (@shaneuuid | TODO GitHub link | TODO X link) love to hear your critiques, ideas, feature requests, etc: TODO link to GitHub discussions.
+
 # Introduction
 
 ## What is it
@@ -12,33 +22,45 @@ Gas.dev is an open source framework for building Cloudflare-based APIs, apps, bo
 
 TODO: Quick video introduction
 
-## Features
-
-### Monorepo by default
-
-TODO
-
-### CICD-ready
-
-TODO
-
-### Graph-based deployments
-
-TODO
-
-### Powerful CLI
-
-TODO
-
 # Quick start
 
 ## Creating a project
 
 TODO
 
-## Project structure
+# Project structure
 
 TODO
+
+# Naming convention
+
+TODO
+
+# @gas-dev/cli
+
+## Installation
+
+`npm install @gas-dev/cli`
+
+`pnpm add @gas-dev/cli`
+
+## Usage
+
+`gas [command]`
+
+## Commands
+
+### help, -h, --help
+
+TODO
+
+### new
+
+TODO
+
+### Up
+
+Deploy resources to the cloud.
 
 # @gas-dev/resources
 
@@ -53,10 +75,6 @@ TODO
 TODO
 
 ### Cloudflare Workers
-
-TODO
-
-# CLI
 
 TODO
 
