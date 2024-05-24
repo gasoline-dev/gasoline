@@ -76,16 +76,9 @@ func (r *Resources) init() error {
 
 	r.setNameToConfigData()
 
-	fmt.Println(r.nameToConfigData["CORE_BASE_KV"].exportString)
-	fmt.Println(r.nameToConfigData["CORE_BASE_KV"].functionName)
-	fmt.Println(r.nameToConfigData["CORE_BASE_API"].exportString)
-	fmt.Println(r.nameToConfigData["CORE_BASE_API"].functionName)
-
 	r.groupToDepthToNames = g.GroupToDepthToNodes
 
 	r.setNodeJsConfigScript()
-
-	fmt.Println(r.nodeJsConfigScript)
 
 	err = r.runNodeJsConfigScript()
 	if err != nil {
@@ -235,6 +228,7 @@ func (r *Resources) setNameToIndexFileContent() error {
 type nameToConfigData map[string]*configData
 
 type configData struct {
+	variableName string
 	functionName string
 	exportString string
 }
@@ -255,8 +249,7 @@ func (r *Resources) setNameToConfigData() {
 		// export const coreBaseKv = cloudflareKv({
 		//   name: "CORE_BASE_KV",
 		// } as const)
-		exportConfigPattern := `(?m)export\s+const\s+\w+\s*=\s*\w+\([\s\S]*?\)\s*(?:as\s*const\s*)?;?`
-		exportedConfigRegex := regexp.MustCompile(exportConfigPattern)
+		exportedConfigRegex := regexp.MustCompile(`(?m)export\s+const\s+\w+\s*=\s*\w+\([\s\S]*?\)\s*(?:as\s*const\s*)?;?`)
 
 		// It can't be assumed that text that matches the exported config
 		// pattern is an exported config. A user can export non-configs
@@ -264,13 +257,19 @@ func (r *Resources) setNameToConfigData() {
 		// exported configs and evaluate them later.
 		possibleExportedConfigs := exportedConfigRegex.FindAllString(indexFileContent, -1)
 
-		// This pattern matches a function's name in the exported
-		// config pattern. For example, it'd match "coreBaseKv" in:
+		// This regex matches the variable name of an exported
+		// config. For example, it'd match "coreBaseKv" in:
 		// export const coreBaseKv = cloudflareKv({
 		//   name: "CORE_BASE_KV",
 		// } as const)
-		possibleExportedConfigFunctionNamePattern := `\s*=\s*(\w+)\(`
-		functionNameRegex := regexp.MustCompile(possibleExportedConfigFunctionNamePattern)
+		possibleExportedConfigVariableNameRegex := regexp.MustCompile(`export\s+const\s+(\w+)\s*=\s*\w+\(`)
+
+		// This regex matches the function name of an exported
+		// config. For example, it'd match "cloudflareKv" in:
+		// export const coreBaseKv = cloudflareKv({
+		//   name: "CORE_BASE_KV",
+		// } as const)
+		functionNameRegex := regexp.MustCompile(`\s*=\s*(\w+)\(`)
 
 		for _, possibleExportedConfig := range possibleExportedConfigs {
 			possibleExportedConfigFunctionName := functionNameRegex.FindStringSubmatch(possibleExportedConfig)[1]
@@ -281,6 +280,7 @@ func (r *Resources) setNameToConfigData() {
 			// confirmed to represent actual configs.
 			if possibleExportedConfigFunctionName == configSetterFunctionName {
 				r.nameToConfigData[name] = &configData{
+					variableName: possibleExportedConfigVariableNameRegex.FindStringSubmatch(possibleExportedConfig)[1],
 					functionName: possibleExportedConfigFunctionName,
 					exportString: possibleExportedConfig,
 				}
@@ -321,7 +321,13 @@ func (r *Resources) setNodeJsConfigScript() {
 		}
 	}
 
-	r.nodeJsConfigScript += "console.log('HELLO!')\n"
+	r.nodeJsConfigScript += "const resourceNameToConfig = {}\n"
+
+	for name, configData := range r.nameToConfigData {
+		r.nodeJsConfigScript += fmt.Sprintf("resourceNameToConfig[\"%s\"] = %s\n", name, configData.variableName)
+	}
+
+	r.nodeJsConfigScript += "console.log(JSON.stringify(resourceNameToConfig))\n"
 }
 
 func (r *Resources) runNodeJsConfigScript() error {
@@ -355,18 +361,18 @@ func (r *Resources) setNameToConfig() error {
 	// put function names in content body
 	// put export strings in content body
 
-	for name, configData := range r.nameToConfigData {
-		fmt.Println(name)
-		fmt.Println(configData)
-		/*
-			if configData.functionName == "" {
-				fmt.Println("No match found.")
-			} else {
-				fmt.Println("Function Name:", configData.functionName)
-				fmt.Println("Export String:", configData.exportString)
-			}
-		*/
-	}
+	//for name, configData := range r.nameToConfigData {
+	//fmt.Println(name)
+	//fmt.Println(configData)
+	/*
+		if configData.functionName == "" {
+			fmt.Println("No match found.")
+		} else {
+			fmt.Println("Function Name:", configData.functionName)
+			fmt.Println("Export String:", configData.exportString)
+		}
+	*/
+	//}
 
 	return nil
 }
