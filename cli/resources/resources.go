@@ -23,17 +23,18 @@ import (
 )
 
 type Resources struct {
-	containerDir           string
-	containerSubdirPaths   containerSubdirPaths
-	nameToPackageJson      nameToPackageJson
-	packageJsonNameToName  packageJsonNameToName
-	nameToInternalDeps     nameToInternalDeps
-	nameToIndexFilePath    nameToIndexFilePath
-	nameToIndexFileContent nameToIndexFileContent
-	nameToConfigData       nameToConfigData
-	groupToDepthToNames    graph.GroupToDepthToNodes
-	nodeJsConfigScript     nodeJsConfigScript
-	nameToConfig           nameToConfig
+	containerDir                string
+	containerSubdirPaths        containerSubdirPaths
+	nameToPackageJson           nameToPackageJson
+	packageJsonNameToName       packageJsonNameToName
+	nameToInternalDeps          nameToInternalDeps
+	nameToIndexFilePath         nameToIndexFilePath
+	nameToIndexFileContent      nameToIndexFileContent
+	nameToConfigData            nameToConfigData
+	groupToDepthToNames         graph.GroupToDepthToNodes
+	nodeJsConfigScript          nodeJsConfigScript
+	runNodeJsConfigScriptResult runNodeJsConfigScriptResult
+	nameToConfig                nameToConfig
 }
 
 func New() (*Resources, error) {
@@ -85,10 +86,9 @@ func (r *Resources) init() error {
 		return err
 	}
 
-	err = r.setNameToConfig()
-	if err != nil {
-		return err
-	}
+	r.setNameToConfig()
+
+	fmt.Println(r.nameToConfig["CORE_BASE_KV"].(*CloudflareKVConfig).Name)
 
 	return nil
 }
@@ -330,6 +330,8 @@ func (r *Resources) setNodeJsConfigScript() {
 	r.nodeJsConfigScript += "console.log(JSON.stringify(resourceNameToConfig))\n"
 }
 
+type runNodeJsConfigScriptResult map[string]interface{}
+
 func (r *Resources) runNodeJsConfigScript() error {
 	cmd := exec.Command("node", "--input-type=module")
 
@@ -342,39 +344,23 @@ func (r *Resources) runNodeJsConfigScript() error {
 
 	strOutput := strings.TrimSpace(string(output))
 
-	fmt.Println(strOutput)
+	err = json.Unmarshal([]byte(strOutput), &r.runNodeJsConfigScriptResult)
+	if err != nil {
+		return fmt.Errorf("unable to marshall Node.js config script result\n%v", err)
+	}
 
 	return nil
 }
 
 type nameToConfig = map[string]interface{}
 
-func (r *Resources) setNameToConfig() error {
+func (r *Resources) setNameToConfig() {
 	r.nameToConfig = make(nameToConfig)
-
-	// start building out string to execute
-
-	// put function names in an array
-	// put export string in array
-	// loop over function names,if not nil, build new string
-	// loop over export string, if not nil, build new string
-	// put function names in content body
-	// put export strings in content body
-
-	//for name, configData := range r.nameToConfigData {
-	//fmt.Println(name)
-	//fmt.Println(configData)
-	/*
-		if configData.functionName == "" {
-			fmt.Println("No match found.")
-		} else {
-			fmt.Println("Function Name:", configData.functionName)
-			fmt.Println("Export String:", configData.exportString)
-		}
-	*/
-	//}
-
-	return nil
+	for name, config := range r.runNodeJsConfigScriptResult {
+		c := config.(map[string]interface{})
+		resourceType := c["type"].(string)
+		r.nameToConfig[name] = configs[resourceType](config.(map[string]interface{}))
+	}
 }
 
 //go:embed embed/get-index-build-file-configs.js
