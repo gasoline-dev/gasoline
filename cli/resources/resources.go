@@ -40,6 +40,9 @@ type Resources struct {
 	upNameToDeps                upNameToDeps
 	upNameToConfig              upNameToConfig
 	upNameToOutput              upNameToOutput
+	nameToState                 nameToState
+	stateToNames                stateToNames
+	nameToDeployStateContainer  *nameToDeployStateContainer
 }
 
 func New() (*Resources, error) {
@@ -105,6 +108,8 @@ func (r *Resources) init() error {
 	r.setUpNameToConfig()
 
 	r.setUpNameToOutput()
+
+	r.setNameToState()
 
 	return nil
 }
@@ -449,6 +454,188 @@ type upOutput map[string]interface{}
 
 type CloudflareKvUpOutput struct {
 	ID string `json:"id"`
+}
+
+func (r *Resources) HasNamesToDeploy() bool {
+	for name := range r.nameToState {
+		if r.nameToState[name] != stateType(UNCHANGED) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Resources) Deploy() {
+	r.nameToDeployStateContainer = &nameToDeployStateContainer{
+		m: make(map[string]deployState),
+	}
+}
+
+type nameToState map[string]stateType
+
+type stateType string
+
+const (
+	CREATED   stateType = "CREATED"
+	DELETED   stateType = "DELETED"
+	UNCHANGED stateType = "UNCHANGED"
+	UPDATED   stateType = "UPDATED"
+)
+
+func (r *Resources) setNameToState() {
+	r.nameToState = make(nameToState)
+
+	for name := range r.upNameToConfig {
+		if _, ok := r.nameToConfig[name]; !ok {
+			r.nameToState[name] = stateType(DELETED)
+		}
+	}
+
+	for name := range r.nameToConfig {
+		if _, ok := r.upNameToConfig[name]; !ok {
+			r.nameToState[name] = stateType(CREATED)
+		} else {
+			if !reflect.DeepEqual(r.upNameToConfig[name], r.nameToConfig[name]) {
+				r.nameToState[name] = stateType(UPDATED)
+				continue
+			}
+
+			if !reflect.DeepEqual(r.upNameToDeps[name], r.nameToInternalDeps[name]) {
+				r.nameToState[name] = stateType(UPDATED)
+				continue
+			}
+
+			r.nameToState[name] = stateType(UNCHANGED)
+		}
+	}
+}
+
+type stateToNames = map[stateType][]string
+
+func (r *Resources) setStateToNames() {
+	r.stateToNames = make(stateToNames)
+	for name, state := range r.nameToState {
+		if _, ok := r.stateToNames[state]; !ok {
+			r.stateToNames[state] = make([]string, 0)
+		}
+		r.stateToNames[state] = append(r.stateToNames[state], name)
+	}
+}
+
+func (r *Resources) logNamePreDeployStates() {
+	fmt.Println("# Pre-Deploy States:")
+	for group, depthToNames := range r.groupToDepthToNames {
+		for depth, names := range depthToNames {
+			for _, name := range names {
+				fmt.Printf(
+					"Group %d -> Depth %d -> %s -> %s\n",
+					group,
+					depth,
+					name,
+					r.nameToState[name],
+				)
+			}
+		}
+	}
+}
+
+type nameToDeployStateContainer struct {
+	m  map[string]deployState
+	mu sync.Mutex
+}
+
+type deployState string
+
+const (
+	CANCELED           deployState = "CANCELED"
+	CREATE_COMPLETE    deployState = "CREATE_COMPLETE"
+	CREATE_FAILED      deployState = "CREATE_FAILED"
+	CREATE_IN_PROGRESS deployState = "CREATE_IN_PROGRESS"
+	DELETE_COMPLETE    deployState = "DELETE_COMPLETE"
+	DELETE_FAILED      deployState = "DELETE_FAILED"
+	DELETE_IN_PROGRESS deployState = "DELETE_IN_PROGRESS"
+	PENDING            deployState = "PENDING"
+	UPDATE_COMPLETE    deployState = "UPDATE_COMPLETE"
+	UPDATE_FAILED      deployState = "UPDATE_FAILED"
+	UPDATE_IN_PROGRESS deployState = "UPDATE_IN_PROGRESS"
+)
+
+// TODO: change to logNameDeployState
+func (r *Resources) logDeployState(group int, depth int, name string, timestamp int64) {
+	date := time.Unix(0, timestamp*int64(time.Millisecond))
+	hours := fmt.Sprintf("%02d", date.Hour())
+	minutes := fmt.Sprintf("%02d", date.Minute())
+	seconds := fmt.Sprintf("%02d", date.Second())
+	formattedTime := fmt.Sprintf("%s:%s:%s", hours, minutes, seconds)
+
+	fmt.Printf("[%s] Group %d -> Depth %d -> %s -> %s\n",
+		formattedTime,
+		group,
+		depth,
+		name,
+		r.nameToDeployStateContainer.m[name],
+	)
+}
+
+func (r *Resources) setNameToDeployStateAsComplete(name string) {
+	r.nameToDeployStateContainer.mu.Lock()
+	defer r.nameToDeployStateContainer.mu.Unlock()
+	switch r.nameToDeployStateContainer.m[name] {
+	case deployState(CREATE_IN_PROGRESS):
+		r.nameToDeployStateContainer.m[name] = deployState(CREATE_COMPLETE)
+	case deployState(DELETE_IN_PROGRESS):
+		r.nameToDeployStateContainer.m[name] = deployState(DELETE_COMPLETE)
+	case deployState(UPDATE_IN_PROGRESS):
+		r.nameToDeployStateContainer.m[name] = deployState(UPDATE_COMPLETE)
+	}
+}
+
+func (r *Resources) setNameToDeployStateAsFailed(name string) {
+	r.nameToDeployStateContainer.mu.Lock()
+	defer r.nameToDeployStateContainer.mu.Unlock()
+	switch r.nameToDeployStateContainer.m[name] {
+	case deployState(CREATE_IN_PROGRESS):
+		r.nameToDeployStateContainer.m[name] = deployState(CREATE_FAILED)
+	case deployState(DELETE_IN_PROGRESS):
+		r.nameToDeployStateContainer.m[name] = deployState(DELETE_FAILED)
+	case deployState(UPDATE_IN_PROGRESS):
+		r.nameToDeployStateContainer.m[name] = deployState(UPDATE_FAILED)
+	}
+}
+
+func (r *Resources) setNameToDeployStateAsInProgress(name string) {
+	r.nameToDeployStateContainer.mu.Lock()
+	defer r.nameToDeployStateContainer.mu.Unlock()
+	switch r.nameToState[name] {
+	case stateType(CREATED):
+		r.nameToDeployStateContainer.m[name] = deployState(CREATE_IN_PROGRESS)
+	case stateType(DELETED):
+		r.nameToDeployStateContainer.m[name] = deployState(DELETE_IN_PROGRESS)
+	case stateType(UPDATED):
+		r.nameToDeployStateContainer.m[name] = deployState(UPDATE_IN_PROGRESS)
+	}
+}
+
+func (r *Resources) setNameToDeployStateAsPending(name string) {
+	r.nameToDeployStateContainer.mu.Lock()
+	defer r.nameToDeployStateContainer.mu.Unlock()
+	for name, state := range r.nameToState {
+		if state != stateType(UNCHANGED) {
+			r.nameToDeployStateContainer.m[name] = deployState(PENDING)
+		}
+	}
+}
+
+func (r *Resources) setNameToDeployStatePendingAsCanceled() int {
+	r.nameToDeployStateContainer.mu.Lock()
+	defer r.nameToDeployStateContainer.mu.Unlock()
+	result := 0
+	for name, state := range r.nameToDeployStateContainer.m {
+		if state == deployState(PENDING) {
+			r.nameToDeployStateContainer.m[name] = deployState(CANCELED)
+		}
+	}
+	return result
 }
 
 //go:embed embed/get-index-build-file-configs.js
@@ -1066,13 +1253,6 @@ type NameToState map[string]State
 
 type State string
 
-const (
-	CREATED   State = "CREATED"
-	DELETED   State = "DELETED"
-	UNCHANGED State = "UNCHANGED"
-	UPDATED   State = "UPDATED"
-)
-
 func SetNameToState(upNameToConfig UpNameToConfig, nameToConfig NameToConfig, upNameToDependencies UpNameToDependencies, nameToDependencies NameToDependencies) NameToState {
 	result := make(NameToState)
 
@@ -1130,20 +1310,6 @@ type NameToDeployStateContainer struct {
 }
 
 type DeployState string
-
-const (
-	CANCELED           DeployState = "CANCELED"
-	CREATE_COMPLETE    DeployState = "CREATE_COMPLETE"
-	CREATE_FAILED      DeployState = "CREATE_FAILED"
-	CREATE_IN_PROGRESS DeployState = "CREATE_IN_PROGRESS"
-	DELETE_COMPLETE    DeployState = "DELETE_COMPLETE"
-	DELETE_FAILED      DeployState = "DELETE_FAILED"
-	DELETE_IN_PROGRESS DeployState = "DELETE_IN_PROGRESS"
-	PENDING            DeployState = "PENDING"
-	UPDATE_COMPLETE    DeployState = "UPDATE_COMPLETE"
-	UPDATE_FAILED      DeployState = "UPDATE_FAILED"
-	UPDATE_IN_PROGRESS DeployState = "UPDATE_IN_PROGRESS"
-)
 
 func (c *NameToDeployStateContainer) Log(group int, depth int, name string, timestamp int64) {
 	date := time.Unix(0, timestamp*int64(time.Millisecond))
