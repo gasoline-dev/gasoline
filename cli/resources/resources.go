@@ -35,6 +35,11 @@ type Resources struct {
 	nodeJsConfigScript          nodeJsConfigScript
 	runNodeJsConfigScriptResult runNodeJsConfigScriptResult
 	nameToConfig                nameToConfig
+	upJsonPath                  string
+	upJson                      upJson
+	upNameToDeps                upNameToDeps
+	upNameToConfig              upNameToConfig
+	upNameToOutput              upNameToOutput
 }
 
 func New() (*Resources, error) {
@@ -49,7 +54,7 @@ func New() (*Resources, error) {
 func (r *Resources) init() error {
 	r.containerDir = viper.GetString("resourceContainerDirPath")
 
-	err := r.getContainerSubdirPaths()
+	err := r.setContainerSubdirPaths()
 	if err != nil {
 		return err
 	}
@@ -88,14 +93,25 @@ func (r *Resources) init() error {
 
 	r.setNameToConfig()
 
-	fmt.Println(r.nameToConfig["CORE_BASE_KV"].(*CloudflareKVConfig).Name)
+	r.upJsonPath = viper.GetString("upJsonPath")
+
+	err = r.setUpJson()
+	if err != nil {
+		return err
+	}
+
+	r.setUpNameToDeps()
+
+	r.setUpNameToConfig()
+
+	r.setUpNameToOutput()
 
 	return nil
 }
 
 type containerSubdirPaths []string
 
-func (r *Resources) getContainerSubdirPaths() error {
+func (r *Resources) setContainerSubdirPaths() error {
 	entries, err := os.ReadDir(r.containerDir)
 
 	if err != nil {
@@ -361,6 +377,78 @@ func (r *Resources) setNameToConfig() {
 		resourceType := c["type"].(string)
 		r.nameToConfig[name] = configs[resourceType](config.(map[string]interface{}))
 	}
+}
+
+type upJson map[string]struct {
+	Config       interface{} `json:"config"`
+	Dependencies []string    `json:"dependencies"`
+	Output       interface{} `json:"output"`
+}
+
+func (r *Resources) setUpJson() error {
+	r.upJson = make(upJson)
+
+	data, err := os.ReadFile(r.upJsonPath)
+	if err != nil {
+		return fmt.Errorf("unable to read up .json file %s\n%v", r.upJsonPath, err)
+	}
+
+	err = json.Unmarshal(data, &r.upJson)
+	if err != nil {
+		return fmt.Errorf("unable to marshall up .json file %s\n%v", r.upJsonPath, err)
+	}
+
+	return nil
+}
+
+type upNameToDeps map[string][]string
+
+func (r *Resources) setUpNameToDeps() {
+	r.upNameToDeps = make(upNameToDeps)
+	for name, data := range r.upJson {
+		dependencies := data.Dependencies
+		if len(dependencies) > 0 {
+			r.upNameToDeps[name] = dependencies
+		} else {
+			r.upNameToDeps[name] = make([]string, 0)
+		}
+	}
+}
+
+type upNameToConfig map[string]interface{}
+
+func (r *Resources) setUpNameToConfig() upNameToConfig {
+	r.upNameToConfig = make(upNameToConfig)
+	for name, data := range r.upJson {
+		config := data.Config.(map[string]interface{})
+		resourceType := config["type"].(string)
+		r.upNameToConfig[name] = configs[resourceType](config)
+	}
+	return r.upNameToConfig
+}
+
+type upNameToOutput map[string]interface{}
+
+func (r *Resources) setUpNameToOutput() {
+	r.upNameToOutput = make(upNameToOutput)
+	for name, data := range r.upJson {
+		output := data.Output.(map[string]interface{})
+		r.upNameToOutput[name] = upOutputs["cloudflare-kv"](output)
+	}
+}
+
+var upOutputs = map[string]func(output upOutput) interface{}{
+	"cloudflare-kv": func(output upOutput) interface{} {
+		return &CloudflareKvUpOutput{
+			ID: output["id"].(string),
+		}
+	},
+}
+
+type upOutput map[string]interface{}
+
+type CloudflareKvUpOutput struct {
+	ID string `json:"id"`
 }
 
 //go:embed embed/get-index-build-file-configs.js
@@ -972,20 +1060,6 @@ func SetUpNameToOutput(upJson UpJson) UpNameToOutput {
 		result[name] = upOutputs["cloudflare-kv"](output)
 	}
 	return result
-}
-
-var upOutputs = map[string]func(output upOutput) interface{}{
-	"cloudflare-kv": func(output upOutput) interface{} {
-		return &CloudflareKvUpOutput{
-			ID: output["id"].(string),
-		}
-	},
-}
-
-type upOutput map[string]interface{}
-
-type CloudflareKvUpOutput struct {
-	ID string `json:"id"`
 }
 
 type NameToState map[string]State
