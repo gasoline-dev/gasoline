@@ -6,11 +6,11 @@
 
 This is an experimental work-in-progress. Things can and will change.
 
-You can follow the road to v1.0 here: TODO link
+Follow the road v1.0 roadmap here: TODO link
 
 Please limit contributions to minor bug fixes, issues labeled "Help welcomed", and discussion.
 
-Your feedback is the most valuable contribution. I'd (@shaneuuid | TODO GitHub link | TODO X link) love to hear your critiques, ideas, feature requests, etc: TODO link to GitHub discussions.
+Feedback is the most valuable contribution. I'd (@shaneuuid | TODO GitHub link | TODO X link) love to hear your critiques, ideas, feature requests, etc: TODO link to GitHub discussions.
 
 # Introduction
 
@@ -50,7 +50,9 @@ TODO
 
 TODO
 
-### Building vs parsing
+### Parsing
+
+Resource configs are parsed into JavaScript and executed with Node.js. The result of that execution contains the interpreted config values.
 
 Because resource configs exist within TypeScript files, Gas.dev has two options for interpreting config values:
 
@@ -66,7 +68,7 @@ Option 2 is faster and offers a better overall experience. It provides the upsid
 That said, because the TypeScript files are parsed and not built, configs must adhere to a tiny set of rules so Gas.dev can parse and interpret their values.
 
 ### Rules 
-Configs must only use static values, references to other imported resource config values, references to process.env values, and/or inline logic.
+Configs can have static values, references to other imported resource config values, references to process.env values, and/or inline logic.
 
 If your configs are simple, and they should be, it's how they're designed, these rules are followed naturally and don't need to be thought about. Consider it a red flag otherwise.
 
