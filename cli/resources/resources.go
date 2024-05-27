@@ -27,7 +27,7 @@ type Resources struct {
 	containerSubdirPaths        containerSubdirPaths
 	nameToPackageJson           nameToPackageJson
 	packageJsonNameToName       packageJsonNameToName
-	nameToInternalDeps          nameToInternalDeps
+	nameToDeps                  nameToDeps
 	nameToIndexFilePath         nameToIndexFilePath
 	nameToIndexFileContent      nameToIndexFileContent
 	nameToConfigData            nameToConfigData
@@ -45,16 +45,73 @@ type Resources struct {
 	nameToDeployStateContainer  *nameToDeployStateContainer
 }
 
-func New() (*Resources, error) {
+func New() *Resources {
 	r := &Resources{}
-	err := r.init()
-	if err != nil {
-		return nil, err
-	}
-	return r, nil
+	return r
 }
 
-func (r *Resources) init() error {
+/*
+Resources can be derived from the resource container
+dir and up .json file.
+
+Resources derived from the resource container dir are
+considered as being current (curr) resources. They're a
+snapshot of the system's resources as they currently
+exist locally.
+
+Resources derived from the up .json file are a mixture of
+current and past resources -- depending on what changes have
+or haven't been made. They're a snapshot of the system's
+resources on last deploy to the cloud.
+
+The init of current resource values is split in parts because
+a merge of currrent resource deps and up resource deps has to
+happen before setting the resource graph (in the context of
+the "up" command)*.
+
+Additionally, the resource graph has to be set before setting
+the Node.js config script because the script has to write the
+configs in bottom-up dependency order (see setNodeJsConfigScript).
+
+Summary: unlike initUp(), init current funcs have to be split up
+because a merge between current and up .json file resource has to
+happen before setting the graph, and the graph has to be set before
+setting the Node.js config script. Therefore, there can't be one
+initCurr() func.
+
+* The merge has to happen because the up .json file may have
+resources that don't exist in the current resource maps
+because the resources were deleted. Those deleted resources
+are accounted for by merging current and up resource to deps
+maps. Only then is the resource graph complete.
+*/
+func (r *Resources) InitWithUp() error {
+	err := r.initUp()
+	if err != nil {
+		return err
+	}
+
+	err = r.initPreParseConfigCurr()
+	if err != nil {
+		return err
+	}
+
+	mergedNameToDeps := helpers.MergeStringSliceMaps(r.upNameToDeps, r.nameToDeps)
+
+	g := graph.New(graph.NodeToDeps(mergedNameToDeps))
+
+	r.groupToDepthToNames = g.GroupToDepthToNodes
+
+	r.initParseConfigCurr()
+
+	r.initPostConfigCurr()
+
+	r.setNameToState()
+
+	return nil
+}
+
+func (r *Resources) initPreParseConfigCurr() error {
 	r.containerDir = viper.GetString("resourceContainerDirPath")
 
 	err := r.setContainerSubdirPaths()
@@ -69,9 +126,7 @@ func (r *Resources) init() error {
 
 	r.setPackageJsonNameToName()
 
-	r.setNameToInternalDeps()
-
-	g := graph.New(graph.NodeToDeps(r.nameToInternalDeps))
+	r.setNameToDeps()
 
 	err = r.setNameToIndexFilePath()
 	if err != nil {
@@ -83,22 +138,30 @@ func (r *Resources) init() error {
 		return err
 	}
 
-	r.setNameToConfigData()
+	return nil
+}
 
-	r.groupToDepthToNames = g.GroupToDepthToNodes
+func (r *Resources) initParseConfigCurr() error {
+	r.setNameToConfigData()
 
 	r.setNodeJsConfigScript()
 
-	err = r.runNodeJsConfigScript()
+	err := r.runNodeJsConfigScript()
 	if err != nil {
 		return err
 	}
 
-	r.setNameToConfig()
+	return nil
+}
 
+func (r *Resources) initPostConfigCurr() {
+	r.setNameToConfig()
+}
+
+func (r *Resources) initUp() error {
 	r.upJsonPath = viper.GetString("upJsonPath")
 
-	err = r.setUpJson()
+	err := r.setUpJson()
 	if err != nil {
 		return err
 	}
@@ -184,21 +247,24 @@ func (r *Resources) setPackageJsonNameToName() {
 	}
 }
 
-type nameToInternalDeps map[string][]string
+type nameToDeps map[string][]string
 
-func (r *Resources) setNameToInternalDeps() {
-	r.nameToInternalDeps = make(nameToInternalDeps)
+/*
+A dependency is a resource the source resource depends on.
+*/
+func (r *Resources) setNameToDeps() {
+	r.nameToDeps = make(nameToDeps)
 	for resourceName, packageJson := range r.nameToPackageJson {
-		var internalDeps []string
+		var deps []string
 		// Loop over source resource's package.json deps
 		for dep := range packageJson.Dependencies {
 			internalDep, ok := r.packageJsonNameToName[dep]
 			// If package.json dep exists in map then it's an internal dep
 			if ok {
-				internalDeps = append(internalDeps, internalDep)
+				deps = append(deps, internalDep)
 			}
 		}
-		r.nameToInternalDeps[resourceName] = internalDeps
+		r.nameToDeps[resourceName] = deps
 	}
 }
 
@@ -500,7 +566,7 @@ func (r *Resources) setNameToState() {
 				continue
 			}
 
-			if !reflect.DeepEqual(r.upNameToDeps[name], r.nameToInternalDeps[name]) {
+			if !reflect.DeepEqual(r.upNameToDeps[name], r.nameToDeps[name]) {
 				r.nameToState[name] = stateType(UPDATED)
 				continue
 			}
@@ -1401,7 +1467,7 @@ func SetGroupsWithStateChanges(nameToGroup NameToGroup, nameToState NameToState)
 	seenGroups := make(map[int]struct{})
 
 	for name, state := range nameToState {
-		if state != UNCHANGED {
+		if state != State(UNCHANGED) {
 			group, ok := nameToGroup[name]
 			if ok {
 				if _, alreadyAdded := seenGroups[group]; !alreadyAdded {
