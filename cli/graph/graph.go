@@ -5,11 +5,11 @@ import "gas/helpers"
 type Graph struct {
 	nodeToDeps               NodeToDeps
 	nodeToInDegrees          nodeToInDegrees
-	nodesWithInDegreesOfZero nodesWithInDegreesOfZero
-	nodeToIntermediates      nodeToIntermediates
+	NodesWithInDegreesOfZero NodesWithInDegreesOfZero
+	NodeToIntermediates      NodeToIntermediates
 	nodeToGroup              nodeToGroup
-	depthToNode              depthToNode
-	nodeToDepth              nodeToDepth
+	DepthToNode              DepthToNode
+	NodeToDepth              NodeToDepth
 	GroupToDepthToNodes      GroupToDepthToNodes
 }
 
@@ -53,17 +53,17 @@ func (g *Graph) setNodeToInDegrees() {
 	}
 }
 
-type nodesWithInDegreesOfZero []string
+type NodesWithInDegreesOfZero []string
 
 func (g *Graph) setNodesWithInDegreesOfZero() {
 	for node, inDegree := range g.nodeToInDegrees {
 		if inDegree == 0 {
-			g.nodesWithInDegreesOfZero = append(g.nodesWithInDegreesOfZero, node)
+			g.NodesWithInDegreesOfZero = append(g.NodesWithInDegreesOfZero, node)
 		}
 	}
 }
 
-type nodeToIntermediates map[string][]string
+type NodeToIntermediates map[string][]string
 
 /*
 Intermediate nodes are nodes within the source resource's
@@ -78,10 +78,10 @@ It wouldn't be possible to know A and X are relatives in the above
 example without them.
 */
 func (g *Graph) setNodeToIntermediates() {
-	g.nodeToIntermediates = make(nodeToIntermediates)
+	g.NodeToIntermediates = make(NodeToIntermediates)
 	memo := make(map[string][]string)
 	for node := range g.nodeToDeps {
-		g.nodeToIntermediates[node] = walkDeps(node, g.nodeToDeps, memo)
+		g.NodeToIntermediates[node] = walkDeps(node, g.nodeToDeps, memo)
 	}
 }
 
@@ -118,13 +118,13 @@ func (g *Graph) setNodeToGroup() {
 	g.nodeToGroup = make(nodeToGroup)
 
 	group := 0
-	for _, sourceNode := range g.nodesWithInDegreesOfZero {
+	for _, sourceNode := range g.NodesWithInDegreesOfZero {
 		if _, ok := g.nodeToGroup[sourceNode]; !ok {
 			// Initialize source node's group.
 			g.nodeToGroup[sourceNode] = group
 
 			// Set group for source node's intermediates.
-			for _, intermediateNode := range g.nodeToIntermediates[sourceNode] {
+			for _, intermediateNode := range g.NodeToIntermediates[sourceNode] {
 				if _, ok := g.nodeToGroup[intermediateNode]; !ok {
 					g.nodeToGroup[intermediateNode] = group
 				}
@@ -140,14 +140,14 @@ func (g *Graph) setNodeToGroup() {
 			// intermediate nodes in each's direct path). In this case, A & X
 			// share a common relative in "C". Therefore, A & X should be assigned
 			// to the same group.
-			for _, possibleDistantRelativeNode := range g.nodesWithInDegreesOfZero {
+			for _, possibleDistantRelativeNode := range g.NodesWithInDegreesOfZero {
 				// Skip source node from the main for loop.
 				if possibleDistantRelativeNode != sourceNode {
 					// Loop over possible distant relative's intermediates.
-					for _, possibleDistantRelativeIntermediateNode := range g.nodeToIntermediates[possibleDistantRelativeNode] {
+					for _, possibleDistantRelativeIntermediateNode := range g.NodeToIntermediates[possibleDistantRelativeNode] {
 						// Check if possible distant relative's intermediate
 						// is also an intermediate of source node.
-						if helpers.IncludesString(g.nodeToIntermediates[sourceNode], possibleDistantRelativeIntermediateNode) {
+						if helpers.IncludesString(g.NodeToIntermediates[sourceNode], possibleDistantRelativeIntermediateNode) {
 							// If so, possibl distant relative and source node
 							// are distant relatives and belong to the same group.
 							g.nodeToGroup[possibleDistantRelativeNode] = group
@@ -160,7 +160,7 @@ func (g *Graph) setNodeToGroup() {
 	}
 }
 
-type depthToNode map[int][]string
+type DepthToNode map[int][]string
 
 /*
 Depth is an integer that describes how far down the graph
@@ -170,21 +170,21 @@ For example, given a graph of A->B, B->C, A has a depth
 of 0, B has a depth of 1, and C has a depth of 2.
 */
 func (g *Graph) setDepthToNode() {
-	g.depthToNode = make(depthToNode)
+	g.DepthToNode = make(DepthToNode)
 
 	numOfNodesToProcess := len(g.nodeToDeps)
 
 	depth := 0
 
-	for _, nodeWithInDegreesOfZero := range g.nodesWithInDegreesOfZero {
-		g.depthToNode[depth] = append(g.depthToNode[depth], nodeWithInDegreesOfZero)
+	for _, nodeWithInDegreesOfZero := range g.NodesWithInDegreesOfZero {
+		g.DepthToNode[depth] = append(g.DepthToNode[depth], nodeWithInDegreesOfZero)
 		numOfNodesToProcess--
 	}
 
 	for numOfNodesToProcess > 0 {
-		for _, nodeAtDepth := range g.depthToNode[depth] {
+		for _, nodeAtDepth := range g.DepthToNode[depth] {
 			for _, depNode := range g.nodeToDeps[nodeAtDepth] {
-				g.depthToNode[depth+1] = append(g.depthToNode[depth+1], depNode)
+				g.DepthToNode[depth+1] = append(g.DepthToNode[depth+1], depNode)
 				numOfNodesToProcess--
 			}
 		}
@@ -192,13 +192,13 @@ func (g *Graph) setDepthToNode() {
 	}
 }
 
-type nodeToDepth map[string]int
+type NodeToDepth map[string]int
 
 func (g *Graph) setNodeToDepth() {
-	g.nodeToDepth = make(nodeToDepth)
-	for depth, nodes := range g.depthToNode {
+	g.NodeToDepth = make(NodeToDepth)
+	for depth, nodes := range g.DepthToNode {
 		for _, node := range nodes {
-			g.nodeToDepth[node] = depth
+			g.NodeToDepth[node] = depth
 		}
 	}
 }
@@ -211,7 +211,7 @@ func (g *Graph) setGroupToDepthToNodes() {
 		if _, ok := g.GroupToDepthToNodes[group]; !ok {
 			g.GroupToDepthToNodes[group] = make(map[int][]string)
 		}
-		depth := g.nodeToDepth[node]
+		depth := g.NodeToDepth[node]
 		if _, ok := g.GroupToDepthToNodes[group][depth]; !ok {
 			g.GroupToDepthToNodes[group][depth] = make([]string, 0)
 		}
