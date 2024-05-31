@@ -8,7 +8,7 @@ import (
 
 var newCmd = &cobra.Command{
 	Use:   "new [resource]",
-	Short: "Add a new resource",
+	Short: "Add new resource",
 	//Args:  cobra.ExactArgs(1),
 	Args: func(cmd *cobra.Command, args []string) error {
 		// Optionally run one of the validators provided by cobra

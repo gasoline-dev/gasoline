@@ -10,7 +10,7 @@ import (
 
 var upCmd = &cobra.Command{
 	Use:   "up",
-	Short: "Deploy resources to the cloud",
+	Short: "Deploy resources",
 	Run: func(cmd *cobra.Command, args []string) {
 		r := resources.New()
 
