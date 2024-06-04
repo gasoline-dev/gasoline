@@ -22,6 +22,17 @@ func CapitalSnakeCaseToTrainCase(s string) string {
 	return strings.Join(words, "-")
 }
 
+func CheckIfDirExists(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return info.IsDir(), nil
+}
+
 // IncludesString checks if a string slice contains a given value.
 func IncludesString(slice []string, value string) bool {
 	for _, v := range slice {
