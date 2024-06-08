@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"gas/helpers"
+	"io"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -33,15 +35,18 @@ type model struct {
 	confirmEmptyDirPathInput  textinput.Model
 	emptyingDirPathViewLoaded bool
 	spinner                   spinner.Model
+	selectPackageManagerList  list.Model
+	packageManager            string
 }
 
 type state string
 
 const (
-	_dirPathInput             state = "_dirPathInput"
-	_confirmEmptyDirPathInput state = "_confirmEmptyDirPathInput"
-	_emptyingDirPath          state = "_emptyingDirPath"
-	_selectPackageManager     state = "_selectPackageManager"
+	_dirPathInput              state = "_dirPathInput"
+	_confirmEmptyDirPathInput  state = "_confirmEmptyDirPathInput"
+	_emptyingDirPath           state = "_emptyingDirPath"
+	_selectPackageManager      state = "_selectPackageManager"
+	_downloadingCreateTemplate state = "_downloadingCreateTemplate"
 )
 
 func initialModel() model {
@@ -56,12 +61,29 @@ func initialModel() model {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("202"))
 
+	selectPackageManagerListItems := []list.Item{
+		item("npm"),
+		item("pnpm"),
+	}
+
+	const defaultWidth = 20
+	const listHeight = 14
+
+	selectPackageManagerList := list.New(selectPackageManagerListItems, itemDelegate{}, defaultWidth, listHeight)
+	selectPackageManagerList.SetFilteringEnabled(false)
+	selectPackageManagerList.SetShowPagination(false)
+	selectPackageManagerList.SetShowHelp(false)
+	selectPackageManagerList.SetShowTitle(false)
+	selectPackageManagerList.SetShowStatusBar(false)
+
 	return model{
 		state:                     _dirPathInput,
 		dirPathInput:              dirPathInput,
 		confirmEmptyDirPathInput:  confirmEmptyDirPathInput,
 		emptyingDirPathViewLoaded: false,
 		spinner:                   s,
+		selectPackageManagerList:  selectPackageManagerList,
+		packageManager:            "",
 	}
 }
 
@@ -79,6 +101,8 @@ func (m model) View() string {
 		return emptyingDirView(m)
 	case _selectPackageManager:
 		return selectPackageManagerView(m)
+	case _downloadingCreateTemplate:
+		return downloadingCreateTemplateView(m)
 	default:
 		return ""
 	}
@@ -101,6 +125,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return emptyingDirUpdate(m, msg)
 	case _selectPackageManager:
 		return selectPackageManagerUpdate(m, msg)
+	case _downloadingCreateTemplate:
+		return downloadingCreateTemplateUpdate(m, msg)
 	default:
 		return m, nil
 	}
@@ -233,11 +259,26 @@ func emptyingDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func selectPackageManagerView(m model) string {
-	return "Select package manager"
+	return fmt.Sprintf("Select package manager:\n\n%s", m.selectPackageManagerList.View())
 }
 
 func selectPackageManagerUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	return m, nil
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch keypress := msg.String(); keypress {
+		case "enter":
+			i, ok := m.selectPackageManagerList.SelectedItem().(item)
+			if ok {
+				m.packageManager = string(i)
+				m.state = _downloadingCreateTemplate
+			}
+			return m, nil
+		}
+	}
+
+	var cmd tea.Cmd
+	m.selectPackageManagerList, cmd = m.selectPackageManagerList.Update(msg)
+	return m, cmd
 }
 
 type InputErr struct {
@@ -246,4 +287,48 @@ type InputErr struct {
 
 func (e *InputErr) Error() string {
 	return e.Msg
+}
+
+var (
+	titleStyle        = lipgloss.NewStyle().MarginLeft(2)
+	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
+	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
+	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
+	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
+	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4)
+)
+
+type item string
+
+func (i item) FilterValue() string { return "" }
+
+type itemDelegate struct{}
+
+func (d itemDelegate) Height() int                             { return 1 }
+func (d itemDelegate) Spacing() int                            { return 0 }
+func (d itemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	i, ok := listItem.(item)
+	if !ok {
+		return
+	}
+
+	str := fmt.Sprintf("%d. %s", index+1, i)
+
+	fn := itemStyle.Render
+	if index == m.Index() {
+		fn = func(s ...string) string {
+			return selectedItemStyle.Render("> " + strings.Join(s, " "))
+		}
+	}
+
+	fmt.Fprint(w, fn(str))
+}
+
+func downloadingCreateTemplateView(m model) string {
+	return fmt.Sprintf("Downloading %s template to %s", m.packageManager, m.dirPathInput.Value())
+}
+
+func downloadingCreateTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m, nil
 }
