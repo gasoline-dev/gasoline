@@ -1,0 +1,15 @@
+{
+	"name": "@template/create-npm",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {},
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.0.0",
+		"turbo": "^1.13.0",
+		"typescript": "^5.0.0"
+	},
+	"workspaces": [
+		"gas/*"
+	]
+}

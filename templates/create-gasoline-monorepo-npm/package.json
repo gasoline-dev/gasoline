@@ -1,5 +1,5 @@
 {
-	"name": "@template/create-gasoline-monorepo-npm",
+	"name": "@template/create-npm",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
