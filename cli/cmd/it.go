@@ -17,8 +17,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var createCmd = &cobra.Command{
-	Use:   "create",
+var itCmd = &cobra.Command{
+	Use:   "it",
 	Short: "Create project",
 	Run: func(cmd *cobra.Command, args []string) {
 		p := tea.NewProgram(initialModel(), tea.WithAltScreen())
@@ -42,11 +42,11 @@ type model struct {
 type state string
 
 const (
-	_dirPathInput              state = "_dirPathInput"
-	_confirmEmptyDirPathInput  state = "_confirmEmptyDirPathInput"
-	_emptyingDirPath           state = "_emptyingDirPath"
-	_selectPackageManager      state = "_selectPackageManager"
-	_downloadingCreateTemplate state = "_downloadingCreateTemplate"
+	_dirPathInput                  state = "_dirPathInput"
+	_confirmEmptyDirPathInput      state = "_confirmEmptyDirPathInput"
+	_emptyingDirPath               state = "_emptyingDirPath"
+	_selectPackageManager          state = "_selectPackageManager"
+	_downloadingNewProjectTemplate state = "_downloadingNewTemplate"
 )
 
 func initialModel() model {
@@ -101,8 +101,8 @@ func (m model) View() string {
 		return emptyingDirView(m)
 	case _selectPackageManager:
 		return selectPackageManagerView(m)
-	case _downloadingCreateTemplate:
-		return downloadingCreateTemplateView(m)
+	case _downloadingNewProjectTemplate:
+		return downloadingNewProjectTemplateView(m)
 	default:
 		return ""
 	}
@@ -125,8 +125,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return emptyingDirUpdate(m, msg)
 	case _selectPackageManager:
 		return selectPackageManagerUpdate(m, msg)
-	case _downloadingCreateTemplate:
-		return downloadingCreateTemplateUpdate(m, msg)
+	case _downloadingNewProjectTemplate:
+		return downloadingNewProjectTemplateUpdate(m, msg)
 	default:
 		return m, nil
 	}
@@ -270,7 +270,7 @@ func selectPackageManagerUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			i, ok := m.selectPackageManagerList.SelectedItem().(item)
 			if ok {
 				m.packageManager = string(i)
-				m.state = _downloadingCreateTemplate
+				m.state = _downloadingNewProjectTemplate
 			}
 			return m, nil
 		}
@@ -325,10 +325,10 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	fmt.Fprint(w, fn(str))
 }
 
-func downloadingCreateTemplateView(m model) string {
+func downloadingNewProjectTemplateView(m model) string {
 	return fmt.Sprintf("Downloading %s template to %s", m.packageManager, m.dirPathInput.Value())
 }
 
-func downloadingCreateTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
