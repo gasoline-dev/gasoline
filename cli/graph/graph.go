@@ -93,10 +93,10 @@ func walkDeps(node string, nodeToDeps NodeToDeps, memo map[string][]string) []st
 	result := make([]string, 0)
 	if deps, ok := nodeToDeps[node]; ok {
 		for _, dep := range deps {
-			if !helpers.IsInSlice(result, dep) {
+			if !helpers.IsStringInSlice(result, dep) {
 				result = append(result, dep)
 				for _, transitiveDep := range walkDeps(dep, nodeToDeps, memo) {
-					if !helpers.IsInSlice(result, transitiveDep) {
+					if !helpers.IsStringInSlice(result, transitiveDep) {
 						result = append(result, transitiveDep)
 					}
 				}
@@ -147,7 +147,7 @@ func (g *Graph) setNodeToGroup() {
 					for _, possibleDistantRelativeIntermediateNode := range g.NodeToIntermediates[possibleDistantRelativeNode] {
 						// Check if possible distant relative's intermediate
 						// is also an intermediate of source node.
-						if helpers.IncludesString(g.NodeToIntermediates[sourceNode], possibleDistantRelativeIntermediateNode) {
+						if helpers.IsStringInSlice(g.NodeToIntermediates[sourceNode], possibleDistantRelativeIntermediateNode) {
 							// If so, possibl distant relative and source node
 							// are distant relatives and belong to the same group.
 							g.nodeToGroup[possibleDistantRelativeNode] = group

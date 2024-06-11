@@ -574,8 +574,8 @@ func (r *Resources) setNameToGroup() {
 					for _, possibleDistantRelativeIntermediateName := range r.nameToIntermediates[possibleDistantRelativeName] {
 						// Check if possible distant relative's intermediate
 						// is also an intermediate of source resource.
-						if helpers.IncludesString(r.nameToIntermediates[sourceName], possibleDistantRelativeIntermediateName) {
-							// If so, possibl distant relative and source resource
+						if helpers.IsStringInSlice(r.nameToIntermediates[sourceName], possibleDistantRelativeIntermediateName) {
+							// If so, possible distant relative and source resource
 							// are distant relatives and belong to the same group.
 							r.nameToGroup[possibleDistantRelativeName] = group
 						}
@@ -1017,7 +1017,7 @@ func (r *Resources) setInitGroupNamesToDeploy(
 				// If resource at depth to check is PENDING and is not
 				// dependent on any resource in the ongoing result, then
 				// append it to the result.
-				if r.nameToDeployStateContainer.m[resourceNameAtDepthToCheck] == deployState(PENDING) && !helpers.IsInSlice(result, dependencyName) {
+				if r.nameToDeployStateContainer.m[resourceNameAtDepthToCheck] == deployState(PENDING) && !helpers.IsStringInSlice(result, dependencyName) {
 					result = append(result, resourceNameAtDepthToCheck)
 				}
 			}

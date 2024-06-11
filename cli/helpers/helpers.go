@@ -57,18 +57,6 @@ func ConvertToOrderedMap(i interface{}) interface{} {
 	return i
 }
 
-/*
-Checks if a string slice contains a given value.
-*/
-func IncludesString(slice []string, value string) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-	return false
-}
-
 func IsFilePresent(filePath string) bool {
 	_, err := os.Stat(filePath)
 	if err == nil {
@@ -80,7 +68,7 @@ func IsFilePresent(filePath string) bool {
 	return false
 }
 
-func IsInSlice(slice []string, item string) bool {
+func IsStringInSlice(slice []string, item string) bool {
 	for _, s := range slice {
 		if s == item {
 			return true
