@@ -30,13 +30,14 @@ var itCmd = &cobra.Command{
 }
 
 type model struct {
-	state                     state
-	dirPathInput              textinput.Model
-	confirmEmptyDirPathInput  textinput.Model
-	emptyingDirPathViewLoaded bool
-	spinner                   spinner.Model
-	selectPackageManagerList  list.Model
-	packageManager            string
+	state                                   state
+	dirPathInput                            textinput.Model
+	confirmEmptyDirPathInput                textinput.Model
+	emptyingDirPathViewLoaded               bool
+	spinner                                 spinner.Model
+	selectPackageManagerList                list.Model
+	packageManager                          string
+	downloadingNewProjectTemplateViewLoaded bool
 }
 
 type state string
@@ -46,7 +47,7 @@ const (
 	_confirmEmptyDirPathInput      state = "_confirmEmptyDirPathInput"
 	_emptyingDirPath               state = "_emptyingDirPath"
 	_selectPackageManager          state = "_selectPackageManager"
-	_downloadingNewProjectTemplate state = "_downloadingNewTemplate"
+	_downloadingNewProjectTemplate state = "_downloadingNewProjectTemplate"
 )
 
 func initialModel() model {
@@ -77,13 +78,14 @@ func initialModel() model {
 	selectPackageManagerList.SetShowStatusBar(false)
 
 	return model{
-		state:                     _dirPathInput,
-		dirPathInput:              dirPathInput,
-		confirmEmptyDirPathInput:  confirmEmptyDirPathInput,
-		emptyingDirPathViewLoaded: false,
-		spinner:                   s,
-		selectPackageManagerList:  selectPackageManagerList,
-		packageManager:            "",
+		state:                                   _dirPathInput,
+		dirPathInput:                            dirPathInput,
+		confirmEmptyDirPathInput:                confirmEmptyDirPathInput,
+		emptyingDirPathViewLoaded:               false,
+		spinner:                                 s,
+		selectPackageManagerList:                selectPackageManagerList,
+		packageManager:                          "",
+		downloadingNewProjectTemplateViewLoaded: false,
 	}
 }
 
@@ -126,6 +128,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case _selectPackageManager:
 		return selectPackageManagerUpdate(m, msg)
 	case _downloadingNewProjectTemplate:
+		fmt.Println("hi")
 		return downloadingNewProjectTemplateUpdate(m, msg)
 	default:
 		return m, nil
@@ -330,5 +333,33 @@ func downloadingNewProjectTemplateView(m model) string {
 }
 
 func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	return m, nil
+	panic("IT WORKED")
+	if !m.downloadingNewProjectTemplateViewLoaded {
+		m.downloadingNewProjectTemplateViewLoaded = true
+		return m, downloadNewProjectTemplate
+	}
+
+	switch msg := msg.(type) {
+	case downloadingNewProjectTemplateDone:
+		return m, tea.Quit
+
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q", "esc", "ctrl+c":
+			return m, tea.Quit
+		}
+	}
+
+	return m, tea.Quit
+
+	//var cmd tea.Cmd
+	//m.spinner, cmd = m.spinner.Update(msg)
+	//return m, cmd
+}
+
+type downloadingNewProjectTemplateDone bool
+
+func downloadNewProjectTemplate() tea.Msg {
+	//time.Sleep(250 * time.Millisecond)
+	return downloadingNewProjectTemplateDone(true)
 }
