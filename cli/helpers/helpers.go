@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/iancoleman/orderedmap"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
@@ -33,7 +34,32 @@ func CheckIfDirExists(path string) (bool, error) {
 	return info.IsDir(), nil
 }
 
-// IncludesString checks if a string slice contains a given value.
+/*
+Recursively converts maps in an interface to orderedmap.OrderedMap.
+
+This is used for preserving the order of unmarshalled JSON keys
+because Go doesn't do it:
+https://github.com/golang/go/issues/27179
+*/
+func ConvertToOrderedMap(i interface{}) interface{} {
+	switch x := i.(type) {
+	case map[string]interface{}:
+		om := orderedmap.New()
+		for k, v := range x {
+			om.Set(k, ConvertToOrderedMap(v))
+		}
+		return om
+	case []interface{}:
+		for i, v := range x {
+			x[i] = ConvertToOrderedMap(v)
+		}
+	}
+	return i
+}
+
+/*
+Checks if a string slice contains a given value.
+*/
 func IncludesString(slice []string, value string) bool {
 	for _, v := range slice {
 		if v == value {
