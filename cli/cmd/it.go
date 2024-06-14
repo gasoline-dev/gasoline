@@ -250,13 +250,22 @@ func selectingPackageManagerView(m model) string {
 	return m.selectingPackageManager.View()
 }
 
+type testEventDone bool
+
+func testEvent() tea.Msg {
+	//time.Sleep(250 * time.Millisecond)
+	return testEventDone(true)
+}
+
 func selectingPackageManagerUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
 			m.state = _downloadingNewProjectTemplate
-			return m, nil
+
+			return m, testEvent
 		}
 	}
 
@@ -304,20 +313,22 @@ func (m selectModel) Update(msg tea.Msg) (selectModel, tea.Cmd) {
 		case "ctrl+c", "q", "esc":
 			return m, tea.Quit
 
-		// case "enter":
-		// 	m.choice = m.choices[m.cursor]
-		// 	return m, nil
+		//case "enter":
+		//m.choice = m.choices[m.cursor]
+		//return m, nil
 
 		case "down", "j":
 			m.cursor++
 			if m.cursor >= len(m.choices) {
 				m.cursor = 0
+				m.choice = m.choices[m.cursor]
 			}
 
 		case "up", "k":
 			m.cursor--
 			if m.cursor < 0 {
 				m.cursor = len(m.choices) - 1
+				m.choice = m.choices[m.cursor]
 			}
 		}
 	}
@@ -338,11 +349,9 @@ func downloadingNewProjectTemplateView(m model) string {
 }
 
 func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	panic("it worked")
-
 	if !m.downloadingNewProjectTemplateViewLoaded {
 		m.downloadingNewProjectTemplateViewLoaded = true
-		return m, downloadNewProjectTemplate
+		return m, tea.Batch(m.spinner.Tick, downloadNewProjectTemplate)
 	}
 
 	switch msg := msg.(type) {
@@ -364,6 +373,6 @@ func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.C
 type downloadingNewProjectTemplateDone bool
 
 func downloadNewProjectTemplate() tea.Msg {
-	//time.Sleep(250 * time.Millisecond)
+	time.Sleep(1500 * time.Millisecond)
 	return downloadingNewProjectTemplateDone(true)
 }
