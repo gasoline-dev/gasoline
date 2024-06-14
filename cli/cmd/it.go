@@ -4,12 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"gas/helpers"
-	"io"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,7 +33,7 @@ type model struct {
 	confirmEmptyDirPathInput                textinput.Model
 	emptyingDirPathViewLoaded               bool
 	spinner                                 spinner.Model
-	selectPackageManagerList                list.Model
+	selectingPackageManager                 selectModel
 	packageManager                          string
 	downloadingNewProjectTemplateViewLoaded bool
 }
@@ -46,7 +44,7 @@ const (
 	_dirPathInput                  state = "_dirPathInput"
 	_confirmEmptyDirPathInput      state = "_confirmEmptyDirPathInput"
 	_emptyingDirPath               state = "_emptyingDirPath"
-	_selectPackageManager          state = "_selectPackageManager"
+	_selectingPackageManager       state = "_selectingPackageManager"
 	_downloadingNewProjectTemplate state = "_downloadingNewProjectTemplate"
 )
 
@@ -62,20 +60,8 @@ func initialModel() model {
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("202"))
 
-	selectPackageManagerListItems := []list.Item{
-		item("npm"),
-		item("pnpm"),
-	}
-
-	const defaultWidth = 20
-	const listHeight = 14
-
-	selectPackageManagerList := list.New(selectPackageManagerListItems, itemDelegate{}, defaultWidth, listHeight)
-	selectPackageManagerList.SetFilteringEnabled(false)
-	selectPackageManagerList.SetShowPagination(false)
-	selectPackageManagerList.SetShowHelp(false)
-	selectPackageManagerList.SetShowTitle(false)
-	selectPackageManagerList.SetShowStatusBar(false)
+	selectPackageManager := NewSelect()
+	selectPackageManager.choices = []string{"npm", "pnpm"}
 
 	return model{
 		state:                                   _dirPathInput,
@@ -83,7 +69,7 @@ func initialModel() model {
 		confirmEmptyDirPathInput:                confirmEmptyDirPathInput,
 		emptyingDirPathViewLoaded:               false,
 		spinner:                                 s,
-		selectPackageManagerList:                selectPackageManagerList,
+		selectingPackageManager:                 selectPackageManager,
 		packageManager:                          "",
 		downloadingNewProjectTemplateViewLoaded: false,
 	}
@@ -101,8 +87,8 @@ func (m model) View() string {
 		return confirmEmptyDirPathInputView(m)
 	case _emptyingDirPath:
 		return emptyingDirView(m)
-	case _selectPackageManager:
-		return selectPackageManagerView(m)
+	case _selectingPackageManager:
+		return selectingPackageManagerView(m)
 	case _downloadingNewProjectTemplate:
 		return downloadingNewProjectTemplateView(m)
 	default:
@@ -125,10 +111,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return confirmEmptyDirPathUpdate(m, msg)
 	case _emptyingDirPath:
 		return emptyingDirUpdate(m, msg)
-	case _selectPackageManager:
-		return selectPackageManagerUpdate(m, msg)
+	case _selectingPackageManager:
+		return selectingPackageManagerUpdate(m, msg)
 	case _downloadingNewProjectTemplate:
-		fmt.Println("hi")
 		return downloadingNewProjectTemplateUpdate(m, msg)
 	default:
 		return m, nil
@@ -246,7 +231,7 @@ func emptyingDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case emptyingDirPathDone:
-		m.state = _selectPackageManager
+		m.state = _selectingPackageManager
 		return m, nil
 
 	case tea.KeyMsg:
@@ -261,27 +246,83 @@ func emptyingDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func selectPackageManagerView(m model) string {
-	return fmt.Sprintf("Select package manager:\n\n%s", m.selectPackageManagerList.View())
+func selectingPackageManagerView(m model) string {
+	return m.selectingPackageManager.View()
 }
 
-func selectPackageManagerUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func selectingPackageManagerUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch keypress := msg.String(); keypress {
+		switch msg.String() {
 		case "enter":
-			i, ok := m.selectPackageManagerList.SelectedItem().(item)
-			if ok {
-				m.packageManager = string(i)
-				m.state = _downloadingNewProjectTemplate
-			}
+			m.state = _downloadingNewProjectTemplate
 			return m, nil
 		}
 	}
 
 	var cmd tea.Cmd
-	m.selectPackageManagerList, cmd = m.selectPackageManagerList.Update(msg)
+	m.selectingPackageManager, cmd = m.selectingPackageManager.Update(msg)
 	return m, cmd
+}
+
+type selectModel struct {
+	cursor  int
+	choice  string
+	choices []string
+}
+
+func NewSelect() selectModel {
+	return selectModel{}
+}
+
+func (m selectModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m selectModel) View() string {
+	s := strings.Builder{}
+	s.WriteString("What kind of Bubble Tea would you like to order?\n\n")
+
+	for i := 0; i < len(m.choices); i++ {
+		if m.cursor == i {
+			s.WriteString("(•) ")
+		} else {
+			s.WriteString("( ) ")
+		}
+		s.WriteString(m.choices[i])
+		s.WriteString("\n")
+	}
+	s.WriteString("\n(press q to quit)\n")
+
+	return s.String()
+}
+
+func (m selectModel) Update(msg tea.Msg) (selectModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q", "esc":
+			return m, tea.Quit
+
+		// case "enter":
+		// 	m.choice = m.choices[m.cursor]
+		// 	return m, nil
+
+		case "down", "j":
+			m.cursor++
+			if m.cursor >= len(m.choices) {
+				m.cursor = 0
+			}
+
+		case "up", "k":
+			m.cursor--
+			if m.cursor < 0 {
+				m.cursor = len(m.choices) - 1
+			}
+		}
+	}
+
+	return m, nil
 }
 
 type InputErr struct {
@@ -292,48 +333,13 @@ func (e *InputErr) Error() string {
 	return e.Msg
 }
 
-var (
-	titleStyle        = lipgloss.NewStyle().MarginLeft(2)
-	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
-	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
-	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
-	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
-	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4)
-)
-
-type item string
-
-func (i item) FilterValue() string { return "" }
-
-type itemDelegate struct{}
-
-func (d itemDelegate) Height() int                             { return 1 }
-func (d itemDelegate) Spacing() int                            { return 0 }
-func (d itemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	i, ok := listItem.(item)
-	if !ok {
-		return
-	}
-
-	str := fmt.Sprintf("%d. %s", index+1, i)
-
-	fn := itemStyle.Render
-	if index == m.Index() {
-		fn = func(s ...string) string {
-			return selectedItemStyle.Render("> " + strings.Join(s, " "))
-		}
-	}
-
-	fmt.Fprint(w, fn(str))
-}
-
 func downloadingNewProjectTemplateView(m model) string {
-	return fmt.Sprintf("Downloading %s template to %s", m.packageManager, m.dirPathInput.Value())
+	return fmt.Sprintf("Downloading %s template to %s %s", m.packageManager, m.dirPathInput.Value(), m.spinner.View())
 }
 
 func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	panic("IT WORKED")
+	panic("it worked")
+
 	if !m.downloadingNewProjectTemplateViewLoaded {
 		m.downloadingNewProjectTemplateViewLoaded = true
 		return m, downloadNewProjectTemplate
@@ -350,11 +356,9 @@ func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.C
 		}
 	}
 
-	return m, tea.Quit
-
-	//var cmd tea.Cmd
-	//m.spinner, cmd = m.spinner.Update(msg)
-	//return m, cmd
+	var cmd tea.Cmd
+	m.spinner, cmd = m.spinner.Update(msg)
+	return m, cmd
 }
 
 type downloadingNewProjectTemplateDone bool
