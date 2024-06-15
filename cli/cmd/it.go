@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"gas/degit"
 	"gas/helpers"
 	"os"
 	"path/filepath"
@@ -378,6 +379,10 @@ func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.C
 type downloadingNewProjectTemplateDone bool
 
 func downloadNewProjectTemplate() tea.Msg {
-	time.Sleep(1500 * time.Millisecond)
+	err := degit.Run("https://github.com/gasoline-dev/gasoline", "main", "it", "templates")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 	return downloadingNewProjectTemplateDone(true)
 }

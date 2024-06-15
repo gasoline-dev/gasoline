@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-func run(repoUrl string, branch string, extractPath string) error {
+func Run(repoUrl string, branch string, extractPath string, subPath string) error {
 	tarballUrl := repoUrl + "/tarball/" + branch
 
 	data, err := downloadTarballIntoMemory(tarballUrl)
@@ -19,8 +20,12 @@ func run(repoUrl string, branch string, extractPath string) error {
 		return fmt.Errorf("unable to download tarball into memory\n%v", err)
 	}
 
-	if err := extractTarGzFromMemory(data, extractPath); err != nil {
-		return fmt.Errorf("unable to  extract tar gz from memory\n%v", err)
+	if len(data) == 0 {
+		return fmt.Errorf("downloaded data is empty")
+	}
+
+	if err := extractTarGzFromMemory(data, extractPath, subPath); err != nil {
+		return fmt.Errorf("unable to extract tar gz from memory\n%v", err)
 	}
 
 	return nil
@@ -33,6 +38,10 @@ func downloadTarballIntoMemory(url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned non-OK status: %d", resp.StatusCode)
+	}
+
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -41,7 +50,7 @@ func downloadTarballIntoMemory(url string) ([]byte, error) {
 	return data, nil
 }
 
-func extractTarGzFromMemory(data []byte, dest string) error {
+func extractTarGzFromMemory(data []byte, dest string, subPath string) error {
 	gzipStream, err := gzip.NewReader(io.NopCloser(bytes.NewReader(data)))
 	if err != nil {
 		return err
@@ -49,6 +58,9 @@ func extractTarGzFromMemory(data []byte, dest string) error {
 	defer gzipStream.Close()
 
 	tarReader := tar.NewReader(gzipStream)
+	subPath = strings.TrimPrefix(subPath, "/")
+	var basePath string
+	foundSubPath := false
 
 	for {
 		header, err := tarReader.Next()
@@ -59,22 +71,41 @@ func extractTarGzFromMemory(data []byte, dest string) error {
 			return err
 		}
 
-		switch header.Typeflag {
-		case tar.TypeDir:
-			if err := os.MkdirAll(filepath.Join(dest, header.Name), 0755); err != nil {
-				return err
-			}
-		case tar.TypeReg:
-			outFile, err := os.Create(filepath.Join(dest, header.Name))
-			if err != nil {
-				return err
-			}
-			if _, err := io.Copy(outFile, tarReader); err != nil {
-				outFile.Close()
-				return err
-			}
-			outFile.Close()
+		// Initialize basePath with the first directory which is usually the one with the commit hash
+		if basePath == "" && header.Typeflag == tar.TypeDir {
+			basePath = header.Name
 		}
+
+		// Ensure we only process files that are within the basePath and subPath
+		if basePath != "" && strings.HasPrefix(header.Name, basePath) {
+			relativePath := strings.TrimPrefix(header.Name, basePath)
+			if !strings.HasPrefix(relativePath, subPath) {
+				continue
+			}
+
+			foundSubPath = true
+			targetPath := filepath.Join(dest, strings.TrimPrefix(relativePath, subPath))
+
+			switch header.Typeflag {
+			case tar.TypeDir:
+				if err := os.MkdirAll(targetPath, 0755); err != nil {
+					return err
+				}
+			case tar.TypeReg:
+				outFile, err := os.Create(targetPath)
+				if err != nil {
+					return err
+				}
+				defer outFile.Close()
+				if _, err := io.Copy(outFile, tarReader); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	if !foundSubPath {
+		return fmt.Errorf("subPath '%s' does not exist within the tarball", subPath)
 	}
 
 	return nil
