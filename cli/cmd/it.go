@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"gas/helpers"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ type model struct {
 	confirmEmptyDirPathInput                textinput.Model
 	emptyingDirPathViewLoaded               bool
 	spinner                                 spinner.Model
-	selectingPackageManager                 selectModel
+	selectPackageManager                    selectModel
 	packageManager                          string
 	downloadingNewProjectTemplateViewLoaded bool
 }
@@ -62,6 +63,7 @@ func initialModel() model {
 
 	selectPackageManager := NewSelect()
 	selectPackageManager.choices = []string{"npm", "pnpm"}
+	selectPackageManager.choice = selectPackageManager.choices[selectPackageManager.cursor]
 
 	return model{
 		state:                                   _dirPathInput,
@@ -69,7 +71,7 @@ func initialModel() model {
 		confirmEmptyDirPathInput:                confirmEmptyDirPathInput,
 		emptyingDirPathViewLoaded:               false,
 		spinner:                                 s,
-		selectingPackageManager:                 selectPackageManager,
+		selectPackageManager:                    selectPackageManager,
 		packageManager:                          "",
 		downloadingNewProjectTemplateViewLoaded: false,
 	}
@@ -182,11 +184,12 @@ func dirPathInputUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func helpView() string {
-	return "Press esc or q to exit\n"
+	return "Press esc to exit\n"
 }
 
 func confirmEmptyDirPathInputView(m model) string {
-	s := fmt.Sprintf("%s is not empty. Empty it? (y/n)\n\n%s\n\n", m.dirPathInput.Value(), m.confirmEmptyDirPathInput.View())
+	resolvedPath, _ := filepath.Abs(m.dirPathInput.Value())
+	s := fmt.Sprintf("%s is not empty.\n\nEmpty it? (y/n)\n\n%s\n\n", resolvedPath, m.confirmEmptyDirPathInput.View())
 	s += helpView()
 	return s
 }
@@ -220,7 +223,7 @@ func emptyDir() tea.Msg {
 }
 
 func emptyingDirView(m model) string {
-	return fmt.Sprintf("emptying dir view %s", m.spinner.View())
+	return fmt.Sprintf("%s Emptying dir view", m.spinner.View())
 }
 
 func emptyingDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -246,31 +249,33 @@ func emptyingDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func selectingPackageManagerView(m model) string {
-	return m.selectingPackageManager.View()
+type updateNextStateEvent bool
+
+func updateNextState() tea.Msg {
+	return updateNextStateEvent(true)
 }
 
-type testEventDone bool
-
-func testEvent() tea.Msg {
-	//time.Sleep(250 * time.Millisecond)
-	return testEventDone(true)
+func selectingPackageManagerView(m model) string {
+	s := "Select package manager:\n\n"
+	s += m.selectPackageManager.View()
+	s += "\n\n"
+	s += helpView()
+	return s
 }
 
 func selectingPackageManagerUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
 			m.state = _downloadingNewProjectTemplate
-
-			return m, testEvent
+			m.packageManager = m.selectPackageManager.choice
+			return m, updateNextState
 		}
 	}
 
 	var cmd tea.Cmd
-	m.selectingPackageManager, cmd = m.selectingPackageManager.Update(msg)
+	m.selectPackageManager, cmd = m.selectPackageManager.Update(msg)
 	return m, cmd
 }
 
@@ -290,7 +295,6 @@ func (m selectModel) Init() tea.Cmd {
 
 func (m selectModel) View() string {
 	s := strings.Builder{}
-	s.WriteString("What kind of Bubble Tea would you like to order?\n\n")
 
 	for i := 0; i < len(m.choices); i++ {
 		if m.cursor == i {
@@ -301,7 +305,6 @@ func (m selectModel) View() string {
 		s.WriteString(m.choices[i])
 		s.WriteString("\n")
 	}
-	s.WriteString("\n(press q to quit)\n")
 
 	return s.String()
 }
@@ -310,26 +313,27 @@ func (m selectModel) Update(msg tea.Msg) (selectModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "q", "esc":
-			return m, tea.Quit
-
-		//case "enter":
-		//m.choice = m.choices[m.cursor]
-		//return m, nil
-
 		case "down", "j":
 			m.cursor++
 			if m.cursor >= len(m.choices) {
 				m.cursor = 0
-				m.choice = m.choices[m.cursor]
 			}
+			m.choice = m.choices[m.cursor]
 
 		case "up", "k":
 			m.cursor--
 			if m.cursor < 0 {
 				m.cursor = len(m.choices) - 1
-				m.choice = m.choices[m.cursor]
 			}
+			m.choice = m.choices[m.cursor]
+
+		case "tab":
+			if m.cursor == len(m.choices)-1 {
+				m.cursor = 0
+			} else {
+				m.cursor++
+			}
+			m.choice = m.choices[m.cursor]
 		}
 	}
 
@@ -345,7 +349,8 @@ func (e *InputErr) Error() string {
 }
 
 func downloadingNewProjectTemplateView(m model) string {
-	return fmt.Sprintf("Downloading %s template to %s %s", m.packageManager, m.dirPathInput.Value(), m.spinner.View())
+	resolvedPath, _ := filepath.Abs(m.dirPathInput.Value())
+	return fmt.Sprintf("%s Downloading %s template to %s", m.spinner.View(), m.packageManager, resolvedPath)
 }
 
 func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
