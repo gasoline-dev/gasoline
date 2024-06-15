@@ -27,7 +27,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is ./gas.config.json)")
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is ./gas.json)")
 
 	rootCmd.AddCommand(itCmd)
 	rootCmd.AddCommand(newCmd)
@@ -41,7 +41,7 @@ func initConfig() {
 	if configFile != "" {
 		viper.SetConfigFile(configFile)
 	} else {
-		viper.SetConfigName("gas.config.json")
+		viper.SetConfigName("gas.json")
 		viper.SetConfigType("json")
 		viper.AddConfigPath(".")
 	}
