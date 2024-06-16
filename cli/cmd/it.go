@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"gas/degit"
@@ -14,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/iancoleman/orderedmap"
 	"github.com/spf13/cobra"
 )
 
@@ -30,51 +32,69 @@ var itCmd = &cobra.Command{
 }
 
 type model struct {
-	state                                   state
-	dirPathInput                            textinput.Model
-	confirmEmptyDirPathInput                textinput.Model
-	emptyingDirPathViewLoaded               bool
-	spinner                                 spinner.Model
-	selectPackageManager                    selectModel
-	packageManager                          string
-	downloadingNewProjectTemplateViewLoaded bool
+	state                         state
+	spinner                       spinner.Model
+	enterDirPath                  enterDirPath
+	selectEmptyDirOption          selectEmptyDirOption
+	emptyingDirPath               emptyingDirPath
+	selectPackageManager          selectPackageManager
+	downloadingNewProjectTemplate downloadingNewProjectTemplate
+}
+
+type enterDirPath struct {
+	input textinput.Model
+}
+
+type selectEmptyDirOption struct {
+	input textinput.Model
+}
+
+type emptyingDirPath struct {
+	viewLoaded bool
+}
+
+type selectPackageManager struct {
+	input selectModel
+}
+
+type downloadingNewProjectTemplate struct {
+	viewLoaded bool
 }
 
 type state string
 
 const (
-	_dirPathInput                  state = "_dirPathInput"
-	_confirmEmptyDirPathInput      state = "_confirmEmptyDirPathInput"
+	_enterDirPath                  state = "_enterDirPath"
+	_selectEmptyDirOption          state = "_selectEmptyDirOption"
 	_emptyingDirPath               state = "_emptyingDirPath"
 	_selectingPackageManager       state = "_selectingPackageManager"
 	_downloadingNewProjectTemplate state = "_downloadingNewProjectTemplate"
 )
 
 func initialModel() model {
-	dirPathInput := textinput.New()
-	dirPathInput.Placeholder = "./example"
-	dirPathInput.Focus()
+	enterDirPathInput := textinput.New()
+	enterDirPathInput.Placeholder = "./example"
+	enterDirPathInput.Focus()
 
-	confirmEmptyDirPathInput := textinput.New()
-	confirmEmptyDirPathInput.CharLimit = 1
+	selectEmptyDirOptionInput := textinput.New()
+	selectEmptyDirOptionInput.CharLimit = 1
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("202"))
 
-	selectPackageManager := NewSelect()
-	selectPackageManager.choices = []string{"npm", "pnpm"}
-	selectPackageManager.choice = selectPackageManager.choices[selectPackageManager.cursor]
+	selectPackageManagerInput := NewSelect()
+	selectPackageManagerInput.values = []string{"npm", "pnpm"}
+	selectPackageManagerInput.value = selectPackageManagerInput.values[selectPackageManagerInput.cursor]
 
 	return model{
-		state:                                   _dirPathInput,
-		dirPathInput:                            dirPathInput,
-		confirmEmptyDirPathInput:                confirmEmptyDirPathInput,
-		emptyingDirPathViewLoaded:               false,
-		spinner:                                 s,
-		selectPackageManager:                    selectPackageManager,
-		packageManager:                          "",
-		downloadingNewProjectTemplateViewLoaded: false,
+		state:                         _enterDirPath,
+		enterDirPath:                  enterDirPath{input: enterDirPathInput},
+		selectEmptyDirOption:          selectEmptyDirOption{input: selectEmptyDirOptionInput},
+		emptyingDirPath:               emptyingDirPath{viewLoaded: false},
+		spinner:                       s,
+		selectPackageManager:          selectPackageManager{input: selectPackageManagerInput},
+		downloadingNewProjectTemplate: downloadingNewProjectTemplate{viewLoaded: false},
 	}
 }
 
@@ -84,10 +104,10 @@ func (m model) Init() tea.Cmd {
 
 func (m model) View() string {
 	switch m.state {
-	case _dirPathInput:
-		return dirPathInputView(m)
-	case _confirmEmptyDirPathInput:
-		return confirmEmptyDirPathInputView(m)
+	case _enterDirPath:
+		return enterDirPathView(m)
+	case _selectEmptyDirOption:
+		return selectEmptyDirOptionView(m)
 	case _emptyingDirPath:
 		return emptyingDirView(m)
 	case _selectingPackageManager:
@@ -108,10 +128,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.state {
-	case _dirPathInput:
-		return dirPathInputUpdate(m, msg)
-	case _confirmEmptyDirPathInput:
-		return confirmEmptyDirPathUpdate(m, msg)
+	case _enterDirPath:
+		return enterDirPathUpdate(m, msg)
+	case _selectEmptyDirOption:
+		return selectEmptyDirOptionUpdate(m, msg)
 	case _emptyingDirPath:
 		return emptyingDirUpdate(m, msg)
 	case _selectingPackageManager:
@@ -123,18 +143,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func dirPathInputView(m model) string {
+func enterDirPathView(m model) string {
 	s := fmt.Sprintf(
 		"Directory path:\n\n%s\n\n",
-		m.dirPathInput.View())
+		m.enterDirPath.input.View())
 
-	if m.dirPathInput.Err != nil {
+	if m.enterDirPath.input.Err != nil {
 		var inputErr *InputErr
 		switch {
-		case errors.As(m.dirPathInput.Err, &inputErr):
-			s += fmt.Sprintf("%v\n\n", m.dirPathInput.Err)
+		case errors.As(m.enterDirPath.input.Err, &inputErr):
+			s += fmt.Sprintf("%v\n\n", m.enterDirPath.input.Err)
 		default:
-			s += fmt.Sprintf("Error: %v\n\n", m.dirPathInput.Err)
+			s += fmt.Sprintf("Error: %v\n\n", m.enterDirPath.input.Err)
 		}
 	}
 
@@ -143,44 +163,45 @@ func dirPathInputView(m model) string {
 	return s
 }
 
-func dirPathInputUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func enterDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter:
-			if m.dirPathInput.Value() == "" {
-				m.dirPathInput.Err = &InputErr{
+			if m.enterDirPath.input.Value() == "" {
+				m.enterDirPath.input.Err = &InputErr{
 					Msg: "Directory path is required",
 				}
 				return m, nil
 			}
 
-			dirPathInputExists, err := helpers.CheckIfDirExists(m.dirPathInput.Value())
+			dirPathInputExists, err := helpers.CheckIfDirExists(m.enterDirPath.input.Value())
 			if err != nil {
-				m.dirPathInput.Err = err
+				m.enterDirPath.input.Err = err
 				return m, nil
 			}
 
 			if dirPathInputExists {
-				dirPathEntries, err := os.ReadDir("./")
+				dirPathEntries, err := os.ReadDir(m.enterDirPath.input.Value())
 				if err != nil {
-					m.dirPathInput.Err = err
+					m.enterDirPath.input.Err = err
 					return m, nil
 				}
 
 				if len(dirPathEntries) > 0 {
-					m.state = _confirmEmptyDirPathInput
-					m.dirPathInput.Blur()
-					return m, m.confirmEmptyDirPathInput.Focus()
+					m.state = _selectEmptyDirOption
+					m.enterDirPath.input.Blur()
+					return m, m.selectEmptyDirOption.input.Focus()
 				}
 			}
 
-			return m, tea.Quit
+			m.state = _selectingPackageManager
+			return m, nil
 		}
 	}
 
 	var cmd tea.Cmd
-	m.dirPathInput, cmd = m.dirPathInput.Update(msg)
+	m.enterDirPath.input, cmd = m.enterDirPath.input.Update(msg)
 	return m, cmd
 }
 
@@ -188,19 +209,19 @@ func helpView() string {
 	return "Press esc to exit\n"
 }
 
-func confirmEmptyDirPathInputView(m model) string {
-	resolvedPath, _ := filepath.Abs(m.dirPathInput.Value())
-	s := fmt.Sprintf("%s is not empty.\n\nEmpty it? (y/n)\n\n%s\n\n", resolvedPath, m.confirmEmptyDirPathInput.View())
+func selectEmptyDirOptionView(m model) string {
+	resolvedPath, _ := filepath.Abs(m.enterDirPath.input.Value())
+	s := fmt.Sprintf("%s is not empty.\n\nEmpty it? (y/n)\n\n%s\n\n", resolvedPath, m.selectEmptyDirOption.input.View())
 	s += helpView()
 	return s
 }
 
-func confirmEmptyDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func selectEmptyDirOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch keypress := msg.String(); keypress {
 		case "enter":
-			lowercaseValue := strings.ToLower(m.confirmEmptyDirPathInput.Value())
+			lowercaseValue := strings.ToLower(m.selectEmptyDirOption.input.Value())
 			if lowercaseValue == "y" {
 				m.state = _emptyingDirPath
 				return m, nil
@@ -211,7 +232,7 @@ func confirmEmptyDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 
-	m.confirmEmptyDirPathInput, cmd = m.confirmEmptyDirPathInput.Update(msg)
+	m.selectEmptyDirOption.input, cmd = m.selectEmptyDirOption.input.Update(msg)
 
 	return m, cmd
 }
@@ -228,8 +249,8 @@ func emptyingDirView(m model) string {
 }
 
 func emptyingDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	if !m.emptyingDirPathViewLoaded {
-		m.emptyingDirPathViewLoaded = true
+	if !m.emptyingDirPath.viewLoaded {
+		m.emptyingDirPath.viewLoaded = true
 		return m, tea.Batch(m.spinner.Tick, emptyDir)
 	}
 
@@ -258,7 +279,7 @@ func updateNextState() tea.Msg {
 
 func selectingPackageManagerView(m model) string {
 	s := "Select package manager:\n\n"
-	s += m.selectPackageManager.View()
+	s += m.selectPackageManager.input.View()
 	s += "\n\n"
 	s += helpView()
 	return s
@@ -270,20 +291,19 @@ func selectingPackageManagerUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "enter":
 			m.state = _downloadingNewProjectTemplate
-			m.packageManager = m.selectPackageManager.choice
 			return m, updateNextState
 		}
 	}
 
 	var cmd tea.Cmd
-	m.selectPackageManager, cmd = m.selectPackageManager.Update(msg)
+	m.selectPackageManager.input, cmd = m.selectPackageManager.input.Update(msg)
 	return m, cmd
 }
 
 type selectModel struct {
-	cursor  int
-	choice  string
-	choices []string
+	cursor int
+	value  string
+	values []string
 }
 
 func NewSelect() selectModel {
@@ -297,13 +317,13 @@ func (m selectModel) Init() tea.Cmd {
 func (m selectModel) View() string {
 	s := strings.Builder{}
 
-	for i := 0; i < len(m.choices); i++ {
+	for i := 0; i < len(m.values); i++ {
 		if m.cursor == i {
 			s.WriteString("(•) ")
 		} else {
 			s.WriteString("( ) ")
 		}
-		s.WriteString(m.choices[i])
+		s.WriteString(m.values[i])
 		s.WriteString("\n")
 	}
 
@@ -316,25 +336,25 @@ func (m selectModel) Update(msg tea.Msg) (selectModel, tea.Cmd) {
 		switch msg.String() {
 		case "down", "j":
 			m.cursor++
-			if m.cursor >= len(m.choices) {
+			if m.cursor >= len(m.values) {
 				m.cursor = 0
 			}
-			m.choice = m.choices[m.cursor]
+			m.value = m.values[m.cursor]
 
 		case "up", "k":
 			m.cursor--
 			if m.cursor < 0 {
-				m.cursor = len(m.choices) - 1
+				m.cursor = len(m.values) - 1
 			}
-			m.choice = m.choices[m.cursor]
+			m.value = m.values[m.cursor]
 
 		case "tab":
-			if m.cursor == len(m.choices)-1 {
+			if m.cursor == len(m.values)-1 {
 				m.cursor = 0
 			} else {
 				m.cursor++
 			}
-			m.choice = m.choices[m.cursor]
+			m.value = m.values[m.cursor]
 		}
 	}
 
@@ -350,13 +370,13 @@ func (e *InputErr) Error() string {
 }
 
 func downloadingNewProjectTemplateView(m model) string {
-	resolvedPath, _ := filepath.Abs(m.dirPathInput.Value())
-	return fmt.Sprintf("%s Downloading %s template to %s", m.spinner.View(), m.packageManager, resolvedPath)
+	resolvedPath, _ := filepath.Abs(m.enterDirPath.input.Value())
+	return fmt.Sprintf("%s Downloading %s template to %s", m.spinner.View(), m.selectPackageManager.input.value, resolvedPath)
 }
 
 func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	if !m.downloadingNewProjectTemplateViewLoaded {
-		m.downloadingNewProjectTemplateViewLoaded = true
+	if !m.downloadingNewProjectTemplate.viewLoaded {
+		m.downloadingNewProjectTemplate.viewLoaded = true
 		return m, tea.Batch(m.spinner.Tick, downloadNewProjectTemplate)
 	}
 
@@ -376,13 +396,41 @@ func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.C
 	return m, cmd
 }
 
-type downloadingNewProjectTemplateDone bool
-
 func downloadNewProjectTemplate() tea.Msg {
-	err := degit.Run("https://github.com/gasoline-dev/gasoline", "main", "it", "templates")
+	err := degit.Run("https://github.com/gasoline-dev/gasoline", "main", "it", "templates/new-project-npm")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
+	packageJsonPath := filepath.Join("it", "package.json")
+
+	packageJsonFile, err := os.ReadFile(packageJsonPath)
+	if err != nil {
+		fmt.Println("Error reading package.json:", err)
+		os.Exit(1)
+	}
+
+	var packageJson orderedmap.OrderedMap
+	if err := json.Unmarshal(packageJsonFile, &packageJson); err != nil {
+		fmt.Println("Error unmarshalling package.json:", err)
+		os.Exit(1)
+	}
+
+	packageJson.Set("name", "Test")
+
+	updatedPackageJson, err := json.MarshalIndent(packageJson, "", "  ")
+	if err != nil {
+		fmt.Println("Error marshalling updated package.json:", err)
+		os.Exit(1)
+	}
+
+	if err := os.WriteFile(packageJsonPath, updatedPackageJson, 0644); err != nil {
+		fmt.Println("Error writing updated package.json:", err)
+		os.Exit(1)
+	}
+
 	return downloadingNewProjectTemplateDone(true)
 }
+
+type downloadingNewProjectTemplateDone bool
