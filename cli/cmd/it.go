@@ -7,6 +7,7 @@ import (
 	"gas/degit"
 	"gas/helpers"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -73,7 +74,7 @@ const (
 
 func initialModel() model {
 	enterDirPathInput := textinput.New()
-	enterDirPathInput.Placeholder = "./example"
+	enterDirPathInput.Placeholder = "example"
 	enterDirPathInput.Focus()
 
 	selectEmptyDirOptionInput := textinput.New()
@@ -417,7 +418,17 @@ func downloadNewProjectTemplate() tea.Msg {
 		os.Exit(1)
 	}
 
-	packageJson.Set("name", "Test")
+	packageJson.Set("name", "root")
+
+	cmd := exec.Command("npm", "--version")
+	output, err := cmd.Output()
+	if err != nil {
+		fmt.Println("Error getting npm version:", err)
+		os.Exit(1)
+	}
+	packageManagerVersion := strings.TrimSpace(string(output))
+	majorVersion := strings.Split(packageManagerVersion, ".")[0]
+	packageJson.Set("packageManager", fmt.Sprintf("^npm@%s.0.0", majorVersion))
 
 	updatedPackageJson, err := json.MarshalIndent(packageJson, "", "  ")
 	if err != nil {
@@ -427,6 +438,12 @@ func downloadNewProjectTemplate() tea.Msg {
 
 	if err := os.WriteFile(packageJsonPath, updatedPackageJson, 0644); err != nil {
 		fmt.Println("Error writing updated package.json:", err)
+		os.Exit(1)
+	}
+
+	gitkeepPath := filepath.Join("./it/gas", ".gitkeep")
+	if err := os.Remove(gitkeepPath); err != nil {
+		fmt.Println("Error removing .gitkeep:", err)
 		os.Exit(1)
 	}
 
