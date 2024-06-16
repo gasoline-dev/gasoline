@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -238,19 +237,31 @@ func selectEmptyDirOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 type emptyingDirPathDone bool
 
-func emptyDir() tea.Msg {
-	time.Sleep(250 * time.Millisecond)
-	return emptyingDirPathDone(true)
+func emptyDir(dirPath string) tea.Cmd {
+	return func() tea.Msg {
+		entries, err := os.ReadDir(dirPath)
+		if err != nil {
+			return emptyingDirPathDone(false)
+		}
+
+		for _, entry := range entries {
+			err := os.RemoveAll(filepath.Join(dirPath, entry.Name()))
+			if err != nil {
+				return emptyingDirPathDone(false)
+			}
+		}
+		return emptyingDirPathDone(true)
+	}
 }
 
 func emptyingDirView(m model) string {
-	return fmt.Sprintf("%s Emptying dir view", m.spinner.View())
+	return fmt.Sprintf("%s Emptying %s", m.spinner.View(), m.enterDirPath.input.Value())
 }
 
 func emptyingDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !m.emptyingDirPath.viewLoaded {
 		m.emptyingDirPath.viewLoaded = true
-		return m, tea.Batch(m.spinner.Tick, emptyDir)
+		return m, tea.Batch(m.spinner.Tick, emptyDir(m.enterDirPath.input.Value()))
 	}
 
 	switch msg := msg.(type) {
