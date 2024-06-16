@@ -47,7 +47,7 @@ type enterDirPath struct {
 }
 
 type selectEmptyDirOption struct {
-	input textinput.Model
+	input selectModel
 }
 
 type emptyingDirPath struct {
@@ -77,8 +77,9 @@ func initialModel() model {
 	enterDirPathInput.Placeholder = "example"
 	enterDirPathInput.Focus()
 
-	selectEmptyDirOptionInput := textinput.New()
-	selectEmptyDirOptionInput.CharLimit = 1
+	selectEmptyDirOptionInput := NewSelect()
+	selectEmptyDirOptionInput.values = []string{"No", "Yes"}
+	selectEmptyDirOptionInput.value = selectEmptyDirOptionInput.values[selectEmptyDirOptionInput.cursor]
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -192,7 +193,7 @@ func enterDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(dirPathEntries) > 0 {
 					m.state = _selectEmptyDirOption
 					m.enterDirPath.input.Blur()
-					return m, m.selectEmptyDirOption.input.Focus()
+					return m, nil
 				}
 			}
 
@@ -212,7 +213,7 @@ func helpView() string {
 
 func selectEmptyDirOptionView(m model) string {
 	resolvedPath, _ := filepath.Abs(m.enterDirPath.input.Value())
-	s := fmt.Sprintf("%s is not empty.\n\nEmpty it? (y/n)\n\n%s\n\n", resolvedPath, m.selectEmptyDirOption.input.View())
+	s := fmt.Sprintf("%s is not empty.\n\nEmpty it and continue?\n\n%s\n\n", resolvedPath, m.selectEmptyDirOption.input.View())
 	s += helpView()
 	return s
 }
@@ -220,21 +221,18 @@ func selectEmptyDirOptionView(m model) string {
 func selectEmptyDirOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch keypress := msg.String(); keypress {
+		switch msg.String() {
 		case "enter":
-			lowercaseValue := strings.ToLower(m.selectEmptyDirOption.input.Value())
-			if lowercaseValue == "y" {
+			if m.selectEmptyDirOption.input.value == "Yes" {
 				m.state = _emptyingDirPath
-				return m, nil
+				return m, updateNextState
 			}
 			return m, nil
 		}
 	}
 
 	var cmd tea.Cmd
-
 	m.selectEmptyDirOption.input, cmd = m.selectEmptyDirOption.input.Update(msg)
-
 	return m, cmd
 }
 
@@ -325,7 +323,9 @@ func (m selectModel) View() string {
 			s.WriteString("( ) ")
 		}
 		s.WriteString(m.values[i])
-		s.WriteString("\n")
+		if i < len(m.values)-1 {
+			s.WriteString("\n")
+		}
 	}
 
 	return s.String()
