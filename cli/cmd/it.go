@@ -39,6 +39,8 @@ type model struct {
 	emptyingDirPath               emptyingDirPath
 	selectPackageManager          selectPackageManager
 	downloadingNewProjectTemplate downloadingNewProjectTemplate
+	selectInstallPackagesOption   selectInstallPackagesOption
+	installingPackages            installingPackages
 }
 
 type enterDirPath struct {
@@ -61,6 +63,14 @@ type downloadingNewProjectTemplate struct {
 	viewLoaded bool
 }
 
+type selectInstallPackagesOption struct {
+	input selectModel
+}
+
+type installingPackages struct {
+	viewLoaded bool
+}
+
 type state string
 
 const (
@@ -69,6 +79,8 @@ const (
 	_emptyingDirPath               state = "_emptyingDirPath"
 	_selectingPackageManager       state = "_selectingPackageManager"
 	_downloadingNewProjectTemplate state = "_downloadingNewProjectTemplate"
+	_selectInstallPackagesOption   state = "_selectInstallPackagesOption"
+	_installingPackages            state = "_installingPackages"
 )
 
 func initialModel() model {
@@ -88,6 +100,10 @@ func initialModel() model {
 	selectPackageManagerInput.values = []string{"npm", "pnpm"}
 	selectPackageManagerInput.value = selectPackageManagerInput.values[selectPackageManagerInput.cursor]
 
+	selectInstallPackagesOptionInput := NewSelect()
+	selectInstallPackagesOptionInput.values = []string{"Yes", "No"}
+	selectInstallPackagesOptionInput.value = selectInstallPackagesOptionInput.values[selectInstallPackagesOptionInput.cursor]
+
 	return model{
 		state:                         _enterDirPath,
 		enterDirPath:                  enterDirPath{input: enterDirPathInput},
@@ -96,6 +112,8 @@ func initialModel() model {
 		spinner:                       s,
 		selectPackageManager:          selectPackageManager{input: selectPackageManagerInput},
 		downloadingNewProjectTemplate: downloadingNewProjectTemplate{viewLoaded: false},
+		selectInstallPackagesOption:   selectInstallPackagesOption{input: selectInstallPackagesOptionInput},
+		installingPackages:            installingPackages{viewLoaded: false},
 	}
 }
 
@@ -115,6 +133,10 @@ func (m model) View() string {
 		return selectingPackageManagerView(m)
 	case _downloadingNewProjectTemplate:
 		return downloadingNewProjectTemplateView(m)
+	case _selectInstallPackagesOption:
+		return selectInstallPackagesOptionView(m)
+	case _installingPackages:
+		return installingPackagesView(m)
 	default:
 		return ""
 	}
@@ -139,6 +161,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return selectingPackageManagerUpdate(m, msg)
 	case _downloadingNewProjectTemplate:
 		return downloadingNewProjectTemplateUpdate(m, msg)
+	case _selectInstallPackagesOption:
+		return selectInstallPackagesOptionUpdate(m, msg)
+	case _installingPackages:
+		return installingPackagesUpdate(m, msg)
 	default:
 		return m, nil
 	}
@@ -394,7 +420,8 @@ func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.C
 
 	switch msg := msg.(type) {
 	case downloadingNewProjectTemplateDone:
-		return m, tea.Quit
+		m.state = _selectInstallPackagesOption
+		return m, nil
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -462,3 +489,58 @@ func downloadNewProjectTemplate() tea.Msg {
 }
 
 type downloadingNewProjectTemplateDone bool
+
+func selectInstallPackagesOptionView(m model) string {
+	s := fmt.Sprintf("Install packages?\n\n%s\n\n", m.selectInstallPackagesOption.input.View())
+	s += helpView()
+	return s
+}
+
+func selectInstallPackagesOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			if m.selectInstallPackagesOption.input.value == "Yes" {
+				m.state = _installingPackages
+				return m, updateNextState
+			}
+			return m, nil
+		}
+	}
+
+	var cmd tea.Cmd
+	m.selectInstallPackagesOption.input, cmd = m.selectInstallPackagesOption.input.Update(msg)
+	return m, cmd
+}
+
+func installingPackagesView(m model) string {
+	return fmt.Sprintf("%s Installing packages", m.spinner.View())
+}
+
+func installingPackagesUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	if !m.installingPackages.viewLoaded {
+		m.installingPackages.viewLoaded = true
+		return m, tea.Batch(m.spinner.Tick, installPackages)
+	}
+
+	switch msg.(type) {
+	case installingPackagesDone:
+		return m, tea.Quit
+	}
+
+	var cmd tea.Cmd
+	m.spinner, cmd = m.spinner.Update(msg)
+	return m, cmd
+}
+
+type installingPackagesDone bool
+
+func installPackages() tea.Msg {
+	cmd := exec.Command("npm", "install")
+	cmd.Dir = "./it"
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run npm install: %w", err)
+	}
+	return installingPackagesDone(true)
+}
