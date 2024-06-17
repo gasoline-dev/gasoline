@@ -43,6 +43,8 @@ type model struct {
 	installingPackages            installingPackages
 }
 
+type state string
+
 type enterDirPath struct {
 	input textinput.Model
 }
@@ -70,8 +72,6 @@ type selectInstallPackagesOption struct {
 type installingPackages struct {
 	viewLoaded bool
 }
-
-type state string
 
 const (
 	_enterDirPath                  state = "_enterDirPath"
@@ -106,10 +106,10 @@ func initialModel() model {
 
 	return model{
 		state:                         _enterDirPath,
+		spinner:                       s,
 		enterDirPath:                  enterDirPath{input: enterDirPathInput},
 		selectEmptyDirOption:          selectEmptyDirOption{input: selectEmptyDirOptionInput},
 		emptyingDirPath:               emptyingDirPath{viewLoaded: false},
-		spinner:                       s,
 		selectPackageManager:          selectPackageManager{input: selectPackageManagerInput},
 		downloadingNewProjectTemplate: downloadingNewProjectTemplate{viewLoaded: false},
 		selectInstallPackagesOption:   selectInstallPackagesOption{input: selectInstallPackagesOptionInput},
@@ -143,13 +143,6 @@ func (m model) View() string {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if msg, ok := msg.(tea.KeyMsg); ok {
-		k := msg.String()
-		if k == "esc" || k == "q" {
-			return m, tea.Quit
-		}
-	}
-
 	switch m.state {
 	case _enterDirPath:
 		return enterDirPathUpdate(m, msg)
@@ -170,10 +163,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
+type updateNextStateEvent bool
+
+func updateNextState() tea.Msg {
+	return updateNextStateEvent(true)
+}
+
 func enterDirPathView(m model) string {
-	s := fmt.Sprintf(
-		"Directory path:\n\n%s\n\n",
-		m.enterDirPath.input.View())
+	s := fmt.Sprintf("Directory path:\n\n%s\n\n", m.enterDirPath.input.View())
 
 	if m.enterDirPath.input.Err != nil {
 		var inputErr *InputErr
@@ -195,6 +192,7 @@ func enterDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEnter:
+			// Show error if empty
 			if m.enterDirPath.input.Value() == "" {
 				m.enterDirPath.input.Err = &InputErr{
 					Msg: "Directory path is required",
@@ -202,12 +200,14 @@ func enterDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+			// Check if directory exists
 			dirPathInputExists, err := helpers.CheckIfDirExists(m.enterDirPath.input.Value())
 			if err != nil {
 				m.enterDirPath.input.Err = err
 				return m, nil
 			}
 
+			// Check if directory is empty
 			if dirPathInputExists {
 				dirPathEntries, err := os.ReadDir(m.enterDirPath.input.Value())
 				if err != nil {
@@ -215,6 +215,7 @@ func enterDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
+				// If directory is not empty, show option to empty it
 				if len(dirPathEntries) > 0 {
 					m.state = _selectEmptyDirOption
 					m.enterDirPath.input.Blur()
@@ -238,7 +239,11 @@ func helpView() string {
 
 func selectEmptyDirOptionView(m model) string {
 	resolvedPath, _ := filepath.Abs(m.enterDirPath.input.Value())
-	s := fmt.Sprintf("%s is not empty.\n\nEmpty it and continue?\n\n%s\n\n", resolvedPath, m.selectEmptyDirOption.input.View())
+	s := fmt.Sprintf(
+		"%s is not empty.\n\nEmpty it and continue?\n\n%s\n\n",
+		resolvedPath,
+		m.selectEmptyDirOption.input.View(),
+	)
 	s += helpView()
 	return s
 }
@@ -290,16 +295,10 @@ func emptyingDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.spinner.Tick, emptyDir(m.enterDirPath.input.Value()))
 	}
 
-	switch msg := msg.(type) {
+	switch msg.(type) {
 	case emptyingDirPathDone:
 		m.state = _selectingPackageManager
 		return m, nil
-
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "esc", "ctrl+c":
-			return m, tea.Quit
-		}
 	}
 
 	var cmd tea.Cmd
@@ -307,14 +306,11 @@ func emptyingDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-type updateNextStateEvent bool
-
-func updateNextState() tea.Msg {
-	return updateNextStateEvent(true)
-}
-
 func selectingPackageManagerView(m model) string {
-	s := "Select package manager:\n\n"
+	s := "Emptied "
+	s += m.enterDirPath.input.Value()
+	s += "\n\n"
+	s += "Select package manager:\n\n"
 	s += m.selectPackageManager.input.View()
 	s += "\n\n"
 	s += helpView()
@@ -409,25 +405,30 @@ func (e *InputErr) Error() string {
 
 func downloadingNewProjectTemplateView(m model) string {
 	resolvedPath, _ := filepath.Abs(m.enterDirPath.input.Value())
-	return fmt.Sprintf("%s Downloading %s template to %s", m.spinner.View(), m.selectPackageManager.input.value, resolvedPath)
+	return fmt.Sprintf(
+		"%s Downloading %s template to %s",
+		m.spinner.View(),
+		m.selectPackageManager.input.value,
+		resolvedPath,
+	)
 }
 
 func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !m.downloadingNewProjectTemplate.viewLoaded {
 		m.downloadingNewProjectTemplate.viewLoaded = true
-		return m, tea.Batch(m.spinner.Tick, downloadNewProjectTemplate)
+		return m, tea.Batch(
+			m.spinner.Tick,
+			downloadNewProjectTemplate(
+				m.enterDirPath.input.Value(),
+				m.selectPackageManager.input.value,
+			),
+		)
 	}
 
-	switch msg := msg.(type) {
-	case downloadingNewProjectTemplateDone:
+	switch msg.(type) {
+	case downloadingNewProjectTemplateOk:
 		m.state = _selectInstallPackagesOption
 		return m, nil
-
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "q", "esc", "ctrl+c":
-			return m, tea.Quit
-		}
 	}
 
 	var cmd tea.Cmd
@@ -435,60 +436,68 @@ func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.C
 	return m, cmd
 }
 
-func downloadNewProjectTemplate() tea.Msg {
-	err := degit.Run("https://github.com/gasoline-dev/gasoline", "main", "it", "templates/new-project-npm")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+func downloadNewProjectTemplate(dirPath string, packageManager string) tea.Cmd {
+	return func() tea.Msg {
+		repoUrl := "https://github.com/gasoline-dev/gasoline"
+		repoBranch := "main"
+		extractPath := dirPath
+		repoTemplate := fmt.Sprintf("templates/new-project-%s", packageManager)
+
+		err := degit.Run(repoUrl, repoBranch, extractPath, repoTemplate)
+		if err != nil {
+			return downloadingNewProjectTemplateErr(err)
+		}
+
+		packageJsonPath := filepath.Join("it", "package.json")
+
+		packageJsonFile, err := os.ReadFile(packageJsonPath)
+		if err != nil {
+			errMsg := fmt.Errorf("error reading package.json: %w", err)
+			return downloadingNewProjectTemplateErr(errMsg)
+		}
+
+		var packageJson orderedmap.OrderedMap
+		if err := json.Unmarshal(packageJsonFile, &packageJson); err != nil {
+			fmt.Println("Error unmarshalling package.json:", err)
+			os.Exit(1)
+		}
+
+		packageJson.Set("name", "root")
+
+		cmd := exec.Command("npm", "--version")
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Println("Error getting npm version:", err)
+			os.Exit(1)
+		}
+		packageManagerVersion := strings.TrimSpace(string(output))
+		majorVersion := strings.Split(packageManagerVersion, ".")[0]
+		packageJson.Set("packageManager", fmt.Sprintf("^npm@%s.0.0", majorVersion))
+
+		updatedPackageJson, err := json.MarshalIndent(packageJson, "", "  ")
+		if err != nil {
+			fmt.Println("Error marshalling updated package.json:", err)
+			os.Exit(1)
+		}
+
+		if err := os.WriteFile(packageJsonPath, updatedPackageJson, 0644); err != nil {
+			fmt.Println("Error writing updated package.json:", err)
+			os.Exit(1)
+		}
+
+		gitkeepPath := filepath.Join("./it/gas", ".gitkeep")
+		if err := os.Remove(gitkeepPath); err != nil {
+			fmt.Println("Error removing .gitkeep:", err)
+			os.Exit(1)
+		}
+
+		return downloadingNewProjectTemplateOk(true)
 	}
-
-	packageJsonPath := filepath.Join("it", "package.json")
-
-	packageJsonFile, err := os.ReadFile(packageJsonPath)
-	if err != nil {
-		fmt.Println("Error reading package.json:", err)
-		os.Exit(1)
-	}
-
-	var packageJson orderedmap.OrderedMap
-	if err := json.Unmarshal(packageJsonFile, &packageJson); err != nil {
-		fmt.Println("Error unmarshalling package.json:", err)
-		os.Exit(1)
-	}
-
-	packageJson.Set("name", "root")
-
-	cmd := exec.Command("npm", "--version")
-	output, err := cmd.Output()
-	if err != nil {
-		fmt.Println("Error getting npm version:", err)
-		os.Exit(1)
-	}
-	packageManagerVersion := strings.TrimSpace(string(output))
-	majorVersion := strings.Split(packageManagerVersion, ".")[0]
-	packageJson.Set("packageManager", fmt.Sprintf("^npm@%s.0.0", majorVersion))
-
-	updatedPackageJson, err := json.MarshalIndent(packageJson, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshalling updated package.json:", err)
-		os.Exit(1)
-	}
-
-	if err := os.WriteFile(packageJsonPath, updatedPackageJson, 0644); err != nil {
-		fmt.Println("Error writing updated package.json:", err)
-		os.Exit(1)
-	}
-
-	gitkeepPath := filepath.Join("./it/gas", ".gitkeep")
-	if err := os.Remove(gitkeepPath); err != nil {
-		fmt.Println("Error removing .gitkeep:", err)
-		os.Exit(1)
-	}
-
-	return downloadingNewProjectTemplateDone(true)
 }
 
-type downloadingNewProjectTemplateDone bool
+type downloadingNewProjectTemplateOk bool
+
+type downloadingNewProjectTemplateErr error
 
 func selectInstallPackagesOptionView(m model) string {
 	s := fmt.Sprintf("Install packages?\n\n%s\n\n", m.selectInstallPackagesOption.input.View())
