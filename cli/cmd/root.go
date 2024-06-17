@@ -29,7 +29,7 @@ func init() {
 
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is ./gas.json)")
 
-	rootCmd.AddCommand(itCmd)
+	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(newCmd)
 	rootCmd.AddCommand(upCmd)
 }

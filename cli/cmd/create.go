@@ -19,8 +19,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var itCmd = &cobra.Command{
-	Use:   "it",
+var createCmd = &cobra.Command{
+	Use:   "create",
 	Short: "Create project",
 	Run: func(cmd *cobra.Command, args []string) {
 		p := tea.NewProgram(initialModel(), tea.WithAltScreen())
