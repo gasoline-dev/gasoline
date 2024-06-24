@@ -27,7 +27,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is ./gas.json)")
+	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is ./gas.config.json)")
 
 	rootCmd.AddCommand(createCmd)
 	rootCmd.AddCommand(newCmd)
@@ -41,32 +41,34 @@ func initConfig() {
 	if configFile != "" {
 		viper.SetConfigFile(configFile)
 	} else {
-		viper.SetConfigName("gas.json")
+		viper.SetConfigName("gas.config.json")
 		viper.SetConfigType("json")
 		viper.AddConfigPath(".")
 	}
 
-	err := viper.ReadInConfig()
-	if err != nil {
-		fmt.Printf("Error: unable to read config file %s\n", err)
-		os.Exit(1)
-	}
+	if os.Args[1] != "create" {
+		err := viper.ReadInConfig()
+		if err != nil {
+			fmt.Printf("Error: unable to read config file\n%s\n", err)
+			os.Exit(1)
+		}
 
-	godotenv.Load()
+		godotenv.Load()
 
-	viper.AutomaticEnv()
+		viper.AutomaticEnv()
 
-	project := viper.GetString("project")
-	if project == "" {
-		fmt.Printf("Error: 'project' property is required in config file '%s'\n", viper.ConfigFileUsed())
-		os.Exit(1)
-	}
+		project := viper.GetString("project")
+		if project == "" {
+			fmt.Printf("Error: 'project' property is required in config file '%s'\n", viper.ConfigFileUsed())
+			os.Exit(1)
+		}
 
-	requiredEnvVars := []string{"CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"}
-	err = ValidateRequiredEnvVars(requiredEnvVars)
-	if err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
+		requiredEnvVars := []string{"CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"}
+		err = ValidateRequiredEnvVars(requiredEnvVars)
+		if err != nil {
+			fmt.Println("Error:", err)
+			os.Exit(1)
+		}
 	}
 }
 
