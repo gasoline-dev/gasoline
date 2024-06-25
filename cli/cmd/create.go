@@ -126,11 +126,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
-			return m, tea.Quit
+			// User shouldn't be able to exit while state is processing
+			if !strings.Contains(string(m.state), "ING") {
+				return m, tea.Quit
+			}
 		}
 	case finalStateType:
 		m.state = FINAL_STATE
-		return m, tea.Sequence(tea.Quit)
+		if !strings.Contains(string(m.state), "ing") {
+			return m, tea.Sequence(tea.Quit)
+		}
 	}
 
 	switch m.state {
