@@ -571,6 +571,33 @@ func downloadNewProjectTemplate(dirPath string, packageManager string) tea.Cmd {
 			return downloadNewProjectTemplateErr(err)
 		}
 
+		gasConfigPath := filepath.Join(extractPath, "gas.config.json")
+
+		gasConfigFile, err := os.ReadFile(gasConfigPath)
+		if err != nil {
+			errMsg := fmt.Errorf("unable to read template gas.config.json: %w", err)
+			return downloadNewProjectTemplateErr(errMsg)
+		}
+
+		var gasConfig orderedmap.OrderedMap
+		if err := json.Unmarshal(gasConfigFile, &gasConfig); err != nil {
+			errMsg := fmt.Errorf("unable to unmarshal template gas.config.json: %w", err)
+			return downloadNewProjectTemplateErr(errMsg)
+		}
+
+		gasConfig.Set("project", helpers.StringToLowerCaseKebab(filepath.Base(dirPath)))
+
+		updatedGasConfig, err := json.MarshalIndent(gasConfig, "", "  ")
+		if err != nil {
+			errMsg := fmt.Errorf("unable to marshal updated gas.config.json: %w", err)
+			return downloadNewProjectTemplateErr(errMsg)
+		}
+
+		if err := os.WriteFile(gasConfigPath, updatedGasConfig, 0644); err != nil {
+			errMsg := fmt.Errorf("unable to write updated gas.config.json: %w", err)
+			return downloadNewProjectTemplateErr(errMsg)
+		}
+
 		packageJsonPath := filepath.Join(extractPath, "package.json")
 
 		packageJsonFile, err := os.ReadFile(packageJsonPath)

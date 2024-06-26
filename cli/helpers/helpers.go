@@ -85,6 +85,14 @@ func ReadFile(filePath string) ([]byte, error) {
 	return data, nil
 }
 
+/*
+Converts a string to lowercase kebab case.
+Example: "Hello World" -> "hello-world"
+*/
+func StringToLowerCaseKebab(s string) string {
+	return strings.ToLower(strings.ReplaceAll(s, " ", "-"))
+}
+
 func UnmarshallFile(filePath string, pointer any) error {
 	data, err := ReadFile(filePath)
 	if err != nil {
