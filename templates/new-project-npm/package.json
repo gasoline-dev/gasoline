@@ -6,6 +6,7 @@
 	"scripts": {},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.0.0",
+		"miniflare": "^3.0.0",
 		"turbo": "^2.0.0",
 		"typescript": "^5.0.0"
 	},
