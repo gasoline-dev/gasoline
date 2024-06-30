@@ -7,7 +7,7 @@ import (
 type NextStateType bool
 
 /*
-NextState() is a custom event that's used when transitioning
+NextState() is a custom tea.Msg that's used when transitioning
 to the next state.
 
 It's helpful for two reasons: 1) it makes the intended state
@@ -24,7 +24,7 @@ func NextState() tea.Msg {
 type FinalStateType bool
 
 /*
-FinalState() is a custom event that's used when transitioning
+FinalState() is a custom tea.Msg that's used when transitioning
 to the final state.
 
 It's helpful for two reasons: 1) it makes the intended state
