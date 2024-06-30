@@ -14,7 +14,7 @@ var addCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add resources",
 	Run: func(cmd *cobra.Command, args []string) {
-		p := tea.NewProgram(uiadd.InitialModel())
+		p := tea.NewProgram(uiadd.InitialModel(), tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
 			fmt.Printf("Error: %v", err)
 			os.Exit(1)
