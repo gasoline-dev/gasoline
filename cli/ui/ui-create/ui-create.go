@@ -129,7 +129,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			// User shouldn't be able to exit while state is processing
 			if !strings.Contains(string(m.state), "ING") {
-				m.Logs = append(m.Logs, "test")
 				return m, tea.Sequence(tea.ClearScreen, tea.Quit)
 			}
 		}
