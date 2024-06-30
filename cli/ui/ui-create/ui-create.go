@@ -18,10 +18,11 @@ import (
 )
 
 type Model struct {
-	state   state
-	spinner spinner.Model
-	ctx     ctx
-	Logs    []string
+	state    state
+	spinner  spinner.Model
+	ctx      ctx
+	Logs     []string
+	LogsTest LogsTestType
 }
 
 type state string
@@ -48,6 +49,12 @@ type ctx struct {
 	selectInstallPackagesInput    selectModel
 }
 
+var logsCollection []string
+
+func GetLogs() []string {
+	return logsCollection
+}
+
 type dirPathInitStatus string
 
 const (
@@ -56,10 +63,10 @@ const (
 	DIR_PATH_INIT_STATUS_NONE  dirPathInitStatus = "NONE"
 )
 
-type LogsTest []string
+type LogsTestType []string
 
-func InitialModel(logsTest *LogsTest) Model {
-	*logsTest = append(*logsTest, "test")
+func InitialModel() Model {
+	logsCollection = append(logsCollection, "idk")
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -105,6 +112,7 @@ func InitialModel(logsTest *LogsTest) Model {
 			selectEmptyDirPathOptionInput: selectEmptyDirPathOptionInput,
 			selectInstallPackagesInput:    selectInstallPackagesInput,
 		},
+		LogsTest: LogsTestType{"initial", "model", "created"},
 	}
 }
 
