@@ -21,9 +21,12 @@ var (
 	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4)
 )
 
-type item string
+type item struct {
+	id    string
+	value string
+}
 
-func (i item) FilterValue() string { return "" }
+func (i item) FilterValue() string { return i.value }
 
 type itemDelegate struct{}
 
@@ -36,7 +39,7 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 		return
 	}
 
-	str := fmt.Sprintf("%d. %s", index+1, i)
+	str := string(i.value)
 
 	fn := itemStyle.Render
 	if index == m.Index() {
@@ -56,22 +59,22 @@ type model struct {
 
 func InitialModel() model {
 	items := []list.Item{
-		item("Ramen"),
-		item("Tomato Soup"),
-		item("Hamburgers"),
-		item("Cheeseburgers"),
-		item("Currywurst"),
-		item("Okonomiyaki"),
-		item("Pasta"),
-		item("Fillet Mignon"),
-		item("Caviar"),
-		item("Just Wine"),
+		item{id: "cloudflare-pages-remix-empty", value: "Cloudflare Pages - Remix - Empty"},
+		item{id: "2", value: "Tomato Soup"},
+		item{id: "3", value: "Hamburgers"},
+		item{id: "4", value: "Cheeseburgers"},
+		item{id: "5", value: "Currywurst"},
+		item{id: "6", value: "Okonomiyaki"},
+		item{id: "7", value: "Pasta"},
+		item{id: "8", value: "Fillet Mignon"},
+		item{id: "9", value: "Caviar"},
+		item{id: "10", value: "Just Wine"},
 	}
 
 	const defaultWidth = 20
 
 	l := list.New(items, itemDelegate{}, defaultWidth, listHeight)
-	l.Title = "What do you want for dinner?"
+	l.Title = "Select resource template:"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.Styles.Title = titleStyle
@@ -100,7 +103,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			i, ok := m.list.SelectedItem().(item)
 			if ok {
-				m.choice = string(i)
+				m.choice = i.value
 			}
 			return m, tea.Quit
 		}
