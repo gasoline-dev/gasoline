@@ -133,10 +133,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Sequence(tea.ClearScreen, tea.Quit)
 			}
 		}
-	case finalStateType:
+	case uicommon.FinalStateType:
 		m.state = FINAL_STATE
 		if !strings.Contains(string(m.state), "ing") {
-			return m, tea.Sequence(tea.Quit)
+			return m, tea.Quit
 		}
 	}
 
@@ -194,12 +194,6 @@ func (m Model) View() string {
 
 func escView() string {
 	return "Press esc to exit\n\n"
-}
-
-type finalStateType bool
-
-func finalState() tea.Msg {
-	return finalStateType(true)
 }
 
 type inputErr struct {
@@ -315,7 +309,7 @@ func enterDirPathUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, uicommon.NextState
 	case getDirPathInitStatusErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
-		return m, finalState
+		return m, uicommon.FinalState
 	}
 
 	var cmd tea.Cmd
@@ -383,7 +377,7 @@ func createDirUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, uicommon.NextState
 	case createDirErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
-		return m, finalState
+		return m, uicommon.FinalState
 	}
 
 	var cmd tea.Cmd
@@ -459,7 +453,7 @@ func emptyingDirPathUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, uicommon.NextState
 	case emptyDirPathErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
-		return m, finalState
+		return m, uicommon.FinalState
 	}
 
 	var cmd tea.Cmd
@@ -535,7 +529,7 @@ func downloadingNewProjectTemplateUpdate(m Model, msg tea.Msg) (tea.Model, tea.C
 		return m, uicommon.NextState
 	case downloadNewProjectTemplateErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
-		return m, finalState
+		return m, uicommon.FinalState
 	}
 
 	var cmd tea.Cmd
@@ -686,10 +680,10 @@ func installingPackagesUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		)
 	case installPackagesOk:
 		m.state = FINAL_STATE
-		return m, finalState
+		return m, uicommon.FinalState
 	case installPackagesErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
-		return m, finalState
+		return m, uicommon.FinalState
 	}
 
 	var cmd tea.Cmd
