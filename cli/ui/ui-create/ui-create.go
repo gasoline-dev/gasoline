@@ -17,11 +17,11 @@ import (
 	"github.com/iancoleman/orderedmap"
 )
 
-type model struct {
+type Model struct {
 	state   state
 	spinner spinner.Model
 	ctx     ctx
-	logs    []string
+	Logs    []string
 }
 
 type state string
@@ -56,7 +56,11 @@ const (
 	DIR_PATH_INIT_STATUS_NONE  dirPathInitStatus = "NONE"
 )
 
-func InitialModel() model {
+type LogsTest []string
+
+func InitialModel(logsTest *LogsTest) Model {
+	*logsTest = append(*logsTest, "test")
+
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 
@@ -91,7 +95,7 @@ func InitialModel() model {
 	}
 	selectInstallPackagesInput.selectedId = selectInstallPackagesInput.options[selectInstallPackagesInput.cursor].id
 
-	return model{
+	return Model{
 		state:   ENTER_DIR_PATH_STATE,
 		spinner: s,
 		ctx: ctx{
@@ -104,18 +108,21 @@ func InitialModel() model {
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return textinput.Blink
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		return m, tea.ClearScreen
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
 			// User shouldn't be able to exit while state is processing
 			if !strings.Contains(string(m.state), "ING") {
-				return m, tea.Quit
+				m.Logs = append(m.Logs, "test")
+				return m, tea.Sequence(tea.ClearScreen, tea.Quit)
 			}
 		}
 	case finalStateType:
@@ -147,11 +154,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (m model) View() string {
+func (m Model) View() string {
 	switch m.state {
 	case FINAL_STATE:
 		s := "\n"
-		for _, log := range m.logs {
+		for _, log := range m.Logs {
 			s += fmt.Sprintf("  %s\n", log)
 		}
 		s += "\n  See you later!\n\n"
@@ -276,7 +283,7 @@ func (m *selectModel) reset() {
 	}
 }
 
-func enterDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func enterDirPathUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.Type {
@@ -305,7 +312,7 @@ func enterDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nextState
 	case getDirPathInitStatusErr:
-		m.logs = append(m.logs, fmt.Sprintf("Error: %v", msg))
+		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
 		return m, finalState
 	}
 
@@ -314,7 +321,7 @@ func enterDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func enterDirPathView(m model) string {
+func enterDirPathView(m Model) string {
 	s := "Enter directory path:\n\n"
 	s += fmt.Sprintf("%s\n\n", m.ctx.dirPathInput.View())
 	if m.ctx.dirPathInput.Err != nil {
@@ -355,7 +362,7 @@ func getDirPathInitStatus(dirPath string) tea.Cmd {
 	}
 }
 
-func createDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func createDirUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -373,7 +380,7 @@ func createDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = SELECT_PACKAGE_MANAGER_STATE
 		return m, nextState
 	case createDirErr:
-		m.logs = append(m.logs, fmt.Sprintf("Error: %v", msg))
+		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
 		return m, finalState
 	}
 
@@ -382,7 +389,7 @@ func createDirUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func createDirView(m model) string {
+func createDirView(m Model) string {
 	s := fmt.Sprintf("> %s does not exist.\n\n", m.ctx.dirPathResolved)
 	s += "Create it?\n\n"
 	s += m.ctx.createDirInput.view()
@@ -405,7 +412,7 @@ func createDir(dirPath string) tea.Cmd {
 	}
 }
 
-func selectEmptyDirPathOptionView(m model) string {
+func selectEmptyDirPathOptionView(m Model) string {
 	s := fmt.Sprintf("> %s is not empty.\n\n", m.ctx.dirPathResolved)
 	s += "Empty it?\n\n"
 	s += m.ctx.selectEmptyDirPathOptionInput.view()
@@ -414,7 +421,7 @@ func selectEmptyDirPathOptionView(m model) string {
 	return s
 }
 
-func selectEmptyDirPathOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func selectEmptyDirPathOptionUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -436,12 +443,12 @@ func selectEmptyDirPathOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func emptyingDirPathView(m model) string {
+func emptyingDirPathView(m Model) string {
 	s := fmt.Sprintf("%s Emptying %s...\n\n", m.spinner.View(), m.ctx.dirPathResolved)
 	return s
 }
 
-func emptyingDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func emptyingDirPathUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case nextStateType:
 		return m, tea.Batch(m.spinner.Tick, emptyDirPath(m.ctx.dirPathResolved))
@@ -449,7 +456,7 @@ func emptyingDirPathUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = SELECT_PACKAGE_MANAGER_STATE
 		return m, nextState
 	case emptyDirPathErr:
-		m.logs = append(m.logs, fmt.Sprintf("Error: %v", msg))
+		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
 		return m, finalState
 	}
 
@@ -479,7 +486,7 @@ func emptyDirPath(dirPath string) tea.Cmd {
 	}
 }
 
-func selectPackageManagerUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func selectPackageManagerUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -494,7 +501,7 @@ func selectPackageManagerUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func selectPackageManagerView(m model) string {
+func selectPackageManagerView(m Model) string {
 	s := ""
 	if m.ctx.dirPathInitStatus == DIR_PATH_INIT_STATUS_NONE {
 		s += fmt.Sprintf("> %s created.\n\n", m.ctx.dirPathResolved)
@@ -511,7 +518,7 @@ func selectPackageManagerView(m model) string {
 	return s
 }
 
-func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func downloadingNewProjectTemplateUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case nextStateType:
 		return m, tea.Batch(
@@ -525,7 +532,7 @@ func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.C
 		m.state = SELECT_INSTALL_PACKAGES_STATE
 		return m, nextState
 	case downloadNewProjectTemplateErr:
-		m.logs = append(m.logs, fmt.Sprintf("Error: %v", msg))
+		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
 		return m, finalState
 	}
 
@@ -534,7 +541,7 @@ func downloadingNewProjectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.C
 	return m, cmd
 }
 
-func downloadingNewProjectTemplateView(m model) string {
+func downloadingNewProjectTemplateView(m Model) string {
 	return fmt.Sprintf(
 		"%s Downloading %s starter template...\n\n",
 		m.spinner.View(),
@@ -632,7 +639,7 @@ func downloadNewProjectTemplate(dirPath string, packageManager string) tea.Cmd {
 	}
 }
 
-func selectInstallPackagesOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func selectInstallPackagesOptionUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -652,7 +659,7 @@ func selectInstallPackagesOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd
 	return m, cmd
 }
 
-func selectInstallPackagesOptionView(m model) string {
+func selectInstallPackagesOptionView(m Model) string {
 	s := fmt.Sprintf(
 		"> Installed %s starter template to %s.\n\n",
 		m.ctx.selectPackageManagerInput.selectedId,
@@ -665,7 +672,7 @@ func selectInstallPackagesOptionView(m model) string {
 	return s
 }
 
-func installingPackagesUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func installingPackagesUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case nextStateType:
 		return m, tea.Batch(
@@ -679,7 +686,7 @@ func installingPackagesUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = FINAL_STATE
 		return m, finalState
 	case installPackagesErr:
-		m.logs = append(m.logs, fmt.Sprintf("Error: %v", msg))
+		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
 		return m, finalState
 	}
 
@@ -688,7 +695,7 @@ func installingPackagesUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func installingPackagesView(m model) string {
+func installingPackagesView(m Model) string {
 	return fmt.Sprintf("%s Installing packages...\n\n", m.spinner.View())
 }
 
@@ -709,7 +716,7 @@ func installPackages(dirPath string, packageManager string) tea.Cmd {
 	}
 }
 
-func unknownStateUpdate(m model) (tea.Model, tea.Cmd) {
+func unknownStateUpdate(m Model) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
