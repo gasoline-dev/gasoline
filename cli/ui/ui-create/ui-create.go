@@ -196,14 +196,6 @@ func escView() string {
 	return "Press esc to exit\n\n"
 }
 
-type inputErr struct {
-	Msg string
-}
-
-func (e *inputErr) Error() string {
-	return e.Msg
-}
-
 type option struct {
 	id    string
 	Value string
@@ -285,7 +277,7 @@ func enterDirPathUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEnter:
 			if m.ctx.dirPathInput.Value() == "" {
-				m.ctx.dirPathInput.Err = &inputErr{
+				m.ctx.dirPathInput.Err = &uicommon.InputErr{
 					Msg: "Directory path is required",
 				}
 				return m, nil
@@ -321,7 +313,7 @@ func enterDirPathView(m Model) string {
 	s := "Enter directory path:\n\n"
 	s += fmt.Sprintf("%s\n\n", m.ctx.dirPathInput.View())
 	if m.ctx.dirPathInput.Err != nil {
-		var inputErr *inputErr
+		var inputErr *uicommon.InputErr
 		switch {
 		case errors.As(m.ctx.dirPathInput.Err, &inputErr):
 			s += fmt.Sprintf("%v\n\n", m.ctx.dirPathInput.Err)
