@@ -78,30 +78,30 @@ func InitialModel() Model {
 
 	createDirInput := newSelect()
 	createDirInput.options = []option{
-		{id: "yes", Value: "Yes"},
-		{id: "back", Value: "Go back (enter directory path)"},
+		{Id: "yes", Value: "Yes"},
+		{Id: "back", Value: "Go back (enter directory path)"},
 	}
-	createDirInput.selectedId = createDirInput.options[createDirInput.cursor].id
+	createDirInput.selectedId = createDirInput.options[createDirInput.cursor].Id
 
 	selectPackageManagerInput := newSelect()
 	selectPackageManagerInput.options = []option{
-		{id: "npm", Value: "npm"},
+		{Id: "npm", Value: "npm"},
 	}
-	selectPackageManagerInput.selectedId = selectPackageManagerInput.options[selectPackageManagerInput.cursor].id
+	selectPackageManagerInput.selectedId = selectPackageManagerInput.options[selectPackageManagerInput.cursor].Id
 
 	selectEmptyDirPathOptionInput := newSelect()
 	selectEmptyDirPathOptionInput.options = []option{
-		{id: "yes", Value: "Yes"},
-		{id: "back", Value: "Go back (enter directory path)"},
+		{Id: "yes", Value: "Yes"},
+		{Id: "back", Value: "Go back (enter directory path)"},
 	}
-	selectEmptyDirPathOptionInput.selectedId = selectEmptyDirPathOptionInput.options[selectEmptyDirPathOptionInput.cursor].id
+	selectEmptyDirPathOptionInput.selectedId = selectEmptyDirPathOptionInput.options[selectEmptyDirPathOptionInput.cursor].Id
 
 	selectInstallPackagesInput := newSelect()
 	selectInstallPackagesInput.options = []option{
-		{id: "yes", Value: "Yes"},
-		{id: "no", Value: "No"},
+		{Id: "yes", Value: "Yes"},
+		{Id: "no", Value: "No"},
 	}
-	selectInstallPackagesInput.selectedId = selectInstallPackagesInput.options[selectInstallPackagesInput.cursor].id
+	selectInstallPackagesInput.selectedId = selectInstallPackagesInput.options[selectInstallPackagesInput.cursor].Id
 
 	return Model{
 		state:   ENTER_DIR_PATH_STATE,
@@ -196,15 +196,15 @@ func escView() string {
 	return "Press esc to exit\n\n"
 }
 
-type option struct {
-	id    string
-	Value string
-}
-
 type selectModel struct {
 	cursor     int
 	selectedId string
 	options    []option
+}
+
+type option struct {
+	Id    string
+	Value string
 }
 
 func newSelect() selectModel {
@@ -242,14 +242,14 @@ func (m selectModel) update(msg tea.Msg) (selectModel, tea.Cmd) {
 			if m.cursor >= len(m.options) {
 				m.cursor = 0
 			}
-			m.selectedId = m.options[m.cursor].id
+			m.selectedId = m.options[m.cursor].Id
 
 		case "up", "k":
 			m.cursor--
 			if m.cursor < 0 {
 				m.cursor = len(m.options) - 1
 			}
-			m.selectedId = m.options[m.cursor].id
+			m.selectedId = m.options[m.cursor].Id
 
 		case "tab":
 			if m.cursor == len(m.options)-1 {
@@ -257,7 +257,7 @@ func (m selectModel) update(msg tea.Msg) (selectModel, tea.Cmd) {
 			} else {
 				m.cursor++
 			}
-			m.selectedId = m.options[m.cursor].id
+			m.selectedId = m.options[m.cursor].Id
 		}
 	}
 
@@ -267,7 +267,7 @@ func (m selectModel) update(msg tea.Msg) (selectModel, tea.Cmd) {
 func (m *selectModel) reset() {
 	m.cursor = 0
 	if len(m.options) > 0 {
-		m.selectedId = m.options[0].id
+		m.selectedId = m.options[0].Id
 	}
 }
 

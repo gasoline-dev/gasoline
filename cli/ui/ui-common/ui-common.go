@@ -1,6 +1,8 @@
 package uicommon
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -81,4 +83,83 @@ https://earthly.dev/blog/golang-errors/
 */
 func (e *InputErr) Error() string {
 	return e.Msg
+}
+
+type SelectModel struct {
+	cursor     int
+	selectedId string
+	options    []option
+}
+
+type option struct {
+	Id    string
+	Value string
+}
+
+/*
+NewSelect() is derived from:
+https://github.com/charmbracelet/bubbletea/tree/4a9620e7134978771059ff7b481b6c9a8c611ac3/examples/result
+*/
+func NewSelect() SelectModel {
+	return SelectModel{}
+}
+
+func (m SelectModel) init() tea.Cmd {
+	return nil
+}
+
+func (m SelectModel) View() string {
+	s := strings.Builder{}
+
+	for i := 0; i < len(m.options); i++ {
+		if m.cursor == i {
+			s.WriteString("(•) ")
+		} else {
+			s.WriteString("( ) ")
+		}
+		s.WriteString(m.options[i].Value)
+		if i < len(m.options)-1 {
+			s.WriteString("\n")
+		}
+	}
+
+	return s.String()
+}
+
+func (m SelectModel) Update(msg tea.Msg) (SelectModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "down", "j":
+			m.cursor++
+			if m.cursor >= len(m.options) {
+				m.cursor = 0
+			}
+			m.selectedId = m.options[m.cursor].Id
+
+		case "up", "k":
+			m.cursor--
+			if m.cursor < 0 {
+				m.cursor = len(m.options) - 1
+			}
+			m.selectedId = m.options[m.cursor].Id
+
+		case "tab":
+			if m.cursor == len(m.options)-1 {
+				m.cursor = 0
+			} else {
+				m.cursor++
+			}
+			m.selectedId = m.options[m.cursor].Id
+		}
+	}
+
+	return m, nil
+}
+
+func (m *SelectModel) Reset() {
+	m.cursor = 0
+	if len(m.options) > 0 {
+		m.selectedId = m.options[0].Id
+	}
 }
