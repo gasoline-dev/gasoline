@@ -31,11 +31,11 @@ type state string
 const (
 	ENTER_DIR_PATH_STATE                   state = "ENTER_DIR_PATH_STATE"
 	CREATE_DIR_STATE                       state = "CREATE_DIR_STATE"
-	SELECT_EMPTY_DIR_PATH_STATE            state = "SELECT_EMPTY_DIR_PATH_STATE"
+	SELECT_EMPTY_DIR_PATH_OPTION_STATE     state = "SELECT_EMPTY_DIR_PATH_OPTION_STATE"
 	EMPTYING_DIR_PATH_STATE                state = "EMPTYING_DIR_PATH_STATE"
 	SELECT_PACKAGE_MANAGER_STATE           state = "SELECT_PACKAGE_MANAGER_STATE"
 	DOWNLOADING_NEW_PROJECT_TEMPLATE_STATE state = "DOWNLOADING_NEW_PROJECT_TEMPLATE_STATE"
-	SELECT_INSTALL_PACKAGES_STATE          state = "SELECT_INSTALL_PACKAGES_STATE"
+	SELECT_INSTALL_PACKAGES_OPTION_STATE   state = "SELECT_INSTALL_PACKAGES_OPTION_STATE"
 	INSTALLING_PACKAGES_STATE              state = "INSTALLING_PACKAGES_STATE"
 	FINAL_STATE                            state = "FINAL_STATE"
 )
@@ -145,7 +145,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return enterDirPathUpdate(m, msg)
 	case CREATE_DIR_STATE:
 		return createDirUpdate(m, msg)
-	case SELECT_EMPTY_DIR_PATH_STATE:
+	case SELECT_EMPTY_DIR_PATH_OPTION_STATE:
 		return selectEmptyDirPathOptionUpdate(m, msg)
 	case EMPTYING_DIR_PATH_STATE:
 		return emptyingDirPathUpdate(m, msg)
@@ -153,7 +153,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return selectPackageManagerUpdate(m, msg)
 	case DOWNLOADING_NEW_PROJECT_TEMPLATE_STATE:
 		return downloadingNewProjectTemplateUpdate(m, msg)
-	case SELECT_INSTALL_PACKAGES_STATE:
+	case SELECT_INSTALL_PACKAGES_OPTION_STATE:
 		return selectInstallPackagesOptionUpdate(m, msg)
 	case INSTALLING_PACKAGES_STATE:
 		return installingPackagesUpdate(m, msg)
@@ -175,7 +175,7 @@ func (m Model) View() string {
 		return enterDirPathView(m)
 	case CREATE_DIR_STATE:
 		return createDirView(m)
-	case SELECT_EMPTY_DIR_PATH_STATE:
+	case SELECT_EMPTY_DIR_PATH_OPTION_STATE:
 		return selectEmptyDirPathOptionView(m)
 	case EMPTYING_DIR_PATH_STATE:
 		return emptyingDirPathView(m)
@@ -183,7 +183,7 @@ func (m Model) View() string {
 		return selectPackageManagerView(m)
 	case DOWNLOADING_NEW_PROJECT_TEMPLATE_STATE:
 		return downloadingNewProjectTemplateView(m)
-	case SELECT_INSTALL_PACKAGES_STATE:
+	case SELECT_INSTALL_PACKAGES_OPTION_STATE:
 		return selectInstallPackagesOptionView(m)
 	case INSTALLING_PACKAGES_STATE:
 		return installingPackagesView(m)
@@ -221,7 +221,7 @@ func enterDirPathUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.ctx.dirPathInitStatus == DIR_PATH_INIT_STATUS_EMPTY {
 			m.state = SELECT_PACKAGE_MANAGER_STATE
 		} else if m.ctx.dirPathInitStatus == DIR_PATH_INIT_STATUS_FULL {
-			m.state = SELECT_EMPTY_DIR_PATH_STATE
+			m.state = SELECT_EMPTY_DIR_PATH_OPTION_STATE
 		}
 		return m, uicommon.NextState
 	case getDirPathInitStatusErr:
@@ -442,7 +442,7 @@ func downloadingNewProjectTemplateUpdate(m Model, msg tea.Msg) (tea.Model, tea.C
 			),
 		)
 	case downloadNewProjectTemplateOk:
-		m.state = SELECT_INSTALL_PACKAGES_STATE
+		m.state = SELECT_INSTALL_PACKAGES_OPTION_STATE
 		return m, uicommon.NextState
 	case downloadNewProjectTemplateErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
