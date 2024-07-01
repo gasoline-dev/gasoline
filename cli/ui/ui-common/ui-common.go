@@ -86,12 +86,12 @@ func (e *InputErr) Error() string {
 }
 
 type SelectModel struct {
-	cursor     int
-	selectedId string
-	options    []option
+	Cursor     int
+	SelectedId string
+	Options    []SelectOption
 }
 
-type option struct {
+type SelectOption struct {
 	Id    string
 	Value string
 }
@@ -111,14 +111,14 @@ func (m SelectModel) init() tea.Cmd {
 func (m SelectModel) View() string {
 	s := strings.Builder{}
 
-	for i := 0; i < len(m.options); i++ {
-		if m.cursor == i {
+	for i := 0; i < len(m.Options); i++ {
+		if m.Cursor == i {
 			s.WriteString("(•) ")
 		} else {
 			s.WriteString("( ) ")
 		}
-		s.WriteString(m.options[i].Value)
-		if i < len(m.options)-1 {
+		s.WriteString(m.Options[i].Value)
+		if i < len(m.Options)-1 {
 			s.WriteString("\n")
 		}
 	}
@@ -131,26 +131,26 @@ func (m SelectModel) Update(msg tea.Msg) (SelectModel, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "down", "j":
-			m.cursor++
-			if m.cursor >= len(m.options) {
-				m.cursor = 0
+			m.Cursor++
+			if m.Cursor >= len(m.Options) {
+				m.Cursor = 0
 			}
-			m.selectedId = m.options[m.cursor].Id
+			m.SelectedId = m.Options[m.Cursor].Id
 
 		case "up", "k":
-			m.cursor--
-			if m.cursor < 0 {
-				m.cursor = len(m.options) - 1
+			m.Cursor--
+			if m.Cursor < 0 {
+				m.Cursor = len(m.Options) - 1
 			}
-			m.selectedId = m.options[m.cursor].Id
+			m.SelectedId = m.Options[m.Cursor].Id
 
 		case "tab":
-			if m.cursor == len(m.options)-1 {
-				m.cursor = 0
+			if m.Cursor == len(m.Options)-1 {
+				m.Cursor = 0
 			} else {
-				m.cursor++
+				m.Cursor++
 			}
-			m.selectedId = m.options[m.cursor].Id
+			m.SelectedId = m.Options[m.Cursor].Id
 		}
 	}
 
@@ -158,8 +158,8 @@ func (m SelectModel) Update(msg tea.Msg) (SelectModel, tea.Cmd) {
 }
 
 func (m *SelectModel) Reset() {
-	m.cursor = 0
-	if len(m.options) > 0 {
-		m.selectedId = m.options[0].Id
+	m.Cursor = 0
+	if len(m.Options) > 0 {
+		m.SelectedId = m.Options[0].Id
 	}
 }

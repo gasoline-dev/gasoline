@@ -44,10 +44,10 @@ type ctx struct {
 	dirPathInitStatus             dirPathInitStatus
 	dirPathInput                  textinput.Model
 	dirPathResolved               string
-	createDirInput                selectModel
-	selectEmptyDirPathOptionInput selectModel
-	selectPackageManagerInput     selectModel
-	selectInstallPackagesInput    selectModel
+	createDirInput                uicommon.SelectModel
+	selectEmptyDirPathOptionInput uicommon.SelectModel
+	selectPackageManagerInput     uicommon.SelectModel
+	selectInstallPackagesInput    uicommon.SelectModel
 }
 
 var logsCollection []string
@@ -76,32 +76,32 @@ func InitialModel() Model {
 	dirPathInput.Placeholder = "example"
 	dirPathInput.Focus()
 
-	createDirInput := newSelect()
-	createDirInput.options = []option{
+	createDirInput := uicommon.NewSelect()
+	createDirInput.Options = []uicommon.SelectOption{
 		{Id: "yes", Value: "Yes"},
 		{Id: "back", Value: "Go back (enter directory path)"},
 	}
-	createDirInput.selectedId = createDirInput.options[createDirInput.cursor].Id
+	createDirInput.SelectedId = createDirInput.Options[createDirInput.Cursor].Id
 
-	selectPackageManagerInput := newSelect()
-	selectPackageManagerInput.options = []option{
+	selectPackageManagerInput := uicommon.NewSelect()
+	selectPackageManagerInput.Options = []uicommon.SelectOption{
 		{Id: "npm", Value: "npm"},
 	}
-	selectPackageManagerInput.selectedId = selectPackageManagerInput.options[selectPackageManagerInput.cursor].Id
+	selectPackageManagerInput.SelectedId = selectPackageManagerInput.Options[selectPackageManagerInput.Cursor].Id
 
-	selectEmptyDirPathOptionInput := newSelect()
-	selectEmptyDirPathOptionInput.options = []option{
+	selectEmptyDirPathOptionInput := uicommon.NewSelect()
+	selectEmptyDirPathOptionInput.Options = []uicommon.SelectOption{
 		{Id: "yes", Value: "Yes"},
 		{Id: "back", Value: "Go back (enter directory path)"},
 	}
-	selectEmptyDirPathOptionInput.selectedId = selectEmptyDirPathOptionInput.options[selectEmptyDirPathOptionInput.cursor].Id
+	selectEmptyDirPathOptionInput.SelectedId = selectEmptyDirPathOptionInput.Options[selectEmptyDirPathOptionInput.Cursor].Id
 
-	selectInstallPackagesInput := newSelect()
-	selectInstallPackagesInput.options = []option{
+	selectInstallPackagesInput := uicommon.NewSelect()
+	selectInstallPackagesInput.Options = []uicommon.SelectOption{
 		{Id: "yes", Value: "Yes"},
 		{Id: "no", Value: "No"},
 	}
-	selectInstallPackagesInput.selectedId = selectInstallPackagesInput.options[selectInstallPackagesInput.cursor].Id
+	selectInstallPackagesInput.SelectedId = selectInstallPackagesInput.Options[selectInstallPackagesInput.Cursor].Id
 
 	return Model{
 		state:   ENTER_DIR_PATH_STATE,
@@ -196,81 +196,6 @@ func escView() string {
 	return "Press esc to exit\n\n"
 }
 
-type selectModel struct {
-	cursor     int
-	selectedId string
-	options    []option
-}
-
-type option struct {
-	Id    string
-	Value string
-}
-
-func newSelect() selectModel {
-	return selectModel{}
-}
-
-func (m selectModel) init() tea.Cmd {
-	return nil
-}
-
-func (m selectModel) view() string {
-	s := strings.Builder{}
-
-	for i := 0; i < len(m.options); i++ {
-		if m.cursor == i {
-			s.WriteString("(•) ")
-		} else {
-			s.WriteString("( ) ")
-		}
-		s.WriteString(m.options[i].Value)
-		if i < len(m.options)-1 {
-			s.WriteString("\n")
-		}
-	}
-
-	return s.String()
-}
-
-func (m selectModel) update(msg tea.Msg) (selectModel, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "down", "j":
-			m.cursor++
-			if m.cursor >= len(m.options) {
-				m.cursor = 0
-			}
-			m.selectedId = m.options[m.cursor].Id
-
-		case "up", "k":
-			m.cursor--
-			if m.cursor < 0 {
-				m.cursor = len(m.options) - 1
-			}
-			m.selectedId = m.options[m.cursor].Id
-
-		case "tab":
-			if m.cursor == len(m.options)-1 {
-				m.cursor = 0
-			} else {
-				m.cursor++
-			}
-			m.selectedId = m.options[m.cursor].Id
-		}
-	}
-
-	return m, nil
-}
-
-func (m *selectModel) reset() {
-	m.cursor = 0
-	if len(m.options) > 0 {
-		m.selectedId = m.options[0].Id
-	}
-}
-
 func enterDirPathUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -355,12 +280,12 @@ func createDirUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			if m.ctx.createDirInput.selectedId == "yes" {
+			if m.ctx.createDirInput.SelectedId == "yes" {
 				return m, createDir(m.ctx.dirPathResolved)
-			} else if m.ctx.createDirInput.selectedId == "back" {
+			} else if m.ctx.createDirInput.SelectedId == "back" {
 				m.state = ENTER_DIR_PATH_STATE
 				m.ctx.dirPathInput.Reset()
-				m.ctx.createDirInput.reset()
+				m.ctx.createDirInput.Reset()
 				return m, tea.Batch(uicommon.NextState, m.ctx.dirPathInput.Focus())
 			}
 		}
@@ -373,14 +298,14 @@ func createDirUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	m.ctx.createDirInput, cmd = m.ctx.createDirInput.update(msg)
+	m.ctx.createDirInput, cmd = m.ctx.createDirInput.Update(msg)
 	return m, cmd
 }
 
 func createDirView(m Model) string {
 	s := fmt.Sprintf("> %s does not exist.\n\n", m.ctx.dirPathResolved)
 	s += "Create it?\n\n"
-	s += m.ctx.createDirInput.view()
+	s += m.ctx.createDirInput.View()
 	s += "\n\n"
 	s += escView()
 	return s
@@ -403,7 +328,7 @@ func createDir(dirPath string) tea.Cmd {
 func selectEmptyDirPathOptionView(m Model) string {
 	s := fmt.Sprintf("> %s is not empty.\n\n", m.ctx.dirPathResolved)
 	s += "Empty it?\n\n"
-	s += m.ctx.selectEmptyDirPathOptionInput.view()
+	s += m.ctx.selectEmptyDirPathOptionInput.View()
 	s += "\n\n"
 	s += escView()
 	return s
@@ -414,20 +339,20 @@ func selectEmptyDirPathOptionUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			if m.ctx.selectEmptyDirPathOptionInput.selectedId == "yes" {
+			if m.ctx.selectEmptyDirPathOptionInput.SelectedId == "yes" {
 				m.state = EMPTYING_DIR_PATH_STATE
 				return m, uicommon.NextState
-			} else if m.ctx.selectEmptyDirPathOptionInput.selectedId == "back" {
+			} else if m.ctx.selectEmptyDirPathOptionInput.SelectedId == "back" {
 				m.state = ENTER_DIR_PATH_STATE
 				m.ctx.dirPathInput.Reset()
-				m.ctx.selectEmptyDirPathOptionInput.reset()
+				m.ctx.selectEmptyDirPathOptionInput.Reset()
 				return m, tea.Batch(uicommon.NextState, m.ctx.dirPathInput.Focus())
 			}
 		}
 	}
 
 	var cmd tea.Cmd
-	m.ctx.selectEmptyDirPathOptionInput, cmd = m.ctx.selectEmptyDirPathOptionInput.update(msg)
+	m.ctx.selectEmptyDirPathOptionInput, cmd = m.ctx.selectEmptyDirPathOptionInput.Update(msg)
 	return m, cmd
 }
 
@@ -485,7 +410,7 @@ func selectPackageManagerUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
-	m.ctx.selectPackageManagerInput, cmd = m.ctx.selectPackageManagerInput.update(msg)
+	m.ctx.selectPackageManagerInput, cmd = m.ctx.selectPackageManagerInput.Update(msg)
 	return m, cmd
 }
 
@@ -500,7 +425,7 @@ func selectPackageManagerView(m Model) string {
 	}
 	s += "We're going to download a starter template next.\n\n"
 	s += "Select package manager:\n\n"
-	s += m.ctx.selectPackageManagerInput.view()
+	s += m.ctx.selectPackageManagerInput.View()
 	s += "\n\n"
 	s += escView()
 	return s
@@ -513,7 +438,7 @@ func downloadingNewProjectTemplateUpdate(m Model, msg tea.Msg) (tea.Model, tea.C
 			m.spinner.Tick,
 			downloadNewProjectTemplate(
 				m.ctx.dirPathResolved,
-				m.ctx.selectPackageManagerInput.selectedId,
+				m.ctx.selectPackageManagerInput.SelectedId,
 			),
 		)
 	case downloadNewProjectTemplateOk:
@@ -533,7 +458,7 @@ func downloadingNewProjectTemplateView(m Model) string {
 	return fmt.Sprintf(
 		"%s Downloading %s starter template...\n\n",
 		m.spinner.View(),
-		m.ctx.selectPackageManagerInput.selectedId,
+		m.ctx.selectPackageManagerInput.SelectedId,
 	)
 }
 
@@ -632,10 +557,10 @@ func selectInstallPackagesOptionUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			if m.ctx.selectInstallPackagesInput.selectedId == "yes" {
+			if m.ctx.selectInstallPackagesInput.SelectedId == "yes" {
 				m.state = INSTALLING_PACKAGES_STATE
 				return m, uicommon.NextState
-			} else if m.ctx.selectInstallPackagesInput.selectedId == "no" {
+			} else if m.ctx.selectInstallPackagesInput.SelectedId == "no" {
 				m.state = FINAL_STATE
 				return m, uicommon.NextState
 			}
@@ -643,18 +568,18 @@ func selectInstallPackagesOptionUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd
 	}
 
 	var cmd tea.Cmd
-	m.ctx.selectInstallPackagesInput, cmd = m.ctx.selectInstallPackagesInput.update(msg)
+	m.ctx.selectInstallPackagesInput, cmd = m.ctx.selectInstallPackagesInput.Update(msg)
 	return m, cmd
 }
 
 func selectInstallPackagesOptionView(m Model) string {
 	s := fmt.Sprintf(
 		"> Installed %s starter template to %s.\n\n",
-		m.ctx.selectPackageManagerInput.selectedId,
+		m.ctx.selectPackageManagerInput.SelectedId,
 		m.ctx.dirPathResolved,
 	)
 	s += "Install packages?\n\n"
-	s += m.ctx.selectInstallPackagesInput.view()
+	s += m.ctx.selectInstallPackagesInput.View()
 	s += "\n\n"
 	s += escView()
 	return s
@@ -667,7 +592,7 @@ func installingPackagesUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner.Tick,
 			installPackages(
 				m.ctx.dirPathResolved,
-				m.ctx.selectPackageManagerInput.selectedId,
+				m.ctx.selectPackageManagerInput.SelectedId,
 			),
 		)
 	case installPackagesOk:
