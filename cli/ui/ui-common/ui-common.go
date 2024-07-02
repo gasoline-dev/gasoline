@@ -108,24 +108,6 @@ func (m SelectModel) init() tea.Cmd {
 	return nil
 }
 
-func (m SelectModel) View() string {
-	s := strings.Builder{}
-
-	for i := 0; i < len(m.Options); i++ {
-		if m.Cursor == i {
-			s.WriteString("(•) ")
-		} else {
-			s.WriteString("( ) ")
-		}
-		s.WriteString(m.Options[i].Value)
-		if i < len(m.Options)-1 {
-			s.WriteString("\n")
-		}
-	}
-
-	return s.String()
-}
-
 func (m SelectModel) Update(msg tea.Msg) (SelectModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -155,6 +137,24 @@ func (m SelectModel) Update(msg tea.Msg) (SelectModel, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m SelectModel) View() string {
+	s := strings.Builder{}
+
+	for i := 0; i < len(m.Options); i++ {
+		if m.Cursor == i {
+			s.WriteString("(•) ")
+		} else {
+			s.WriteString("( ) ")
+		}
+		s.WriteString(m.Options[i].Value)
+		if i < len(m.Options)-1 {
+			s.WriteString("\n")
+		}
+	}
+
+	return s.String()
 }
 
 func (m *SelectModel) Reset() {
