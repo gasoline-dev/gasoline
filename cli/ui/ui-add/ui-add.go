@@ -21,14 +21,15 @@ type state string
 
 const (
 	SELECT_TEMPLATE_STATE                 state = "SELECT_TEMPLATE_STATE"
+	ENTER_ENTITY_INFO_STATE               state = "ENTER_ENTITY_INFO_STATE"
 	SELECT_DOWNLOAD_TEMPLATE_OPTION_STATE state = "SELECT_DOWNLOAD_TEMPLATE_OPTION_STATE"
 	DOWNLOADING_TEMPLATE_STATE            state = "DOWNLOADING_TEMPLATE_STATE"
 	FINAL_STATE                           state = "FINAL_STATE"
 )
 
 type ctx struct {
-	selectTemplateList selectTemplateListModel
-	//templateInput                textinput.Model
+	selectTemplateList           selectTemplateListModel
+	selectDownloadTemplateOption uicommon.SelectModel
 	//selectDownloadTemplateOption uicommon.SelectModel
 }
 
@@ -57,6 +58,13 @@ func InitialModel() model {
 	selectTemplateList.Styles.Title = titleStyle
 	selectTemplateList.Styles.PaginationStyle = paginationStyle
 	selectTemplateList.Styles.HelpStyle = helpStyle
+
+	selectDownloadTemplateOption := uicommon.NewSelect()
+	selectDownloadTemplateOption.Options = []uicommon.SelectOption{
+		{Id: "yes", Value: "Yes"},
+		{Id: "back", Value: "Go back (select template)"},
+	}
+	selectDownloadTemplateOption.SelectedId = selectDownloadTemplateOption.Options[selectDownloadTemplateOption.Cursor].Id
 
 	return model{
 		state: SELECT_TEMPLATE_STATE,
@@ -92,6 +100,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case SELECT_TEMPLATE_STATE:
 		return selectTemplateUpdate(m, msg)
+	case ENTER_ENTITY_INFO_STATE:
+		return enterEntityInfoUpdate(m, msg)
 	case SELECT_DOWNLOAD_TEMPLATE_OPTION_STATE:
 		return selectDownloadTemplateOptionUpdate(m, msg)
 	}
@@ -102,6 +112,8 @@ func (m model) View() string {
 	switch m.state {
 	case SELECT_TEMPLATE_STATE:
 		return selectTemplateView(m)
+	case ENTER_ENTITY_INFO_STATE:
+		return enterEntityInfoView(m)
 	case SELECT_DOWNLOAD_TEMPLATE_OPTION_STATE:
 		return selectDownloadTemplateOptionView(m)
 	}
@@ -113,7 +125,8 @@ func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "enter":
-			m.state = SELECT_DOWNLOAD_TEMPLATE_OPTION_STATE
+			m.state = ENTER_ENTITY_INFO_STATE
+			return m, uicommon.NextState
 		}
 	}
 
@@ -126,12 +139,23 @@ func selectTemplateView(m model) string {
 	return m.ctx.selectTemplateList.View()
 }
 
+func enterEntityInfoUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m, nil
+}
+
+func enterEntityInfoView(m model) string {
+	return "Enter entity info"
+}
+
 func selectDownloadTemplateOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
 func selectDownloadTemplateOptionView(m model) string {
-	return fmt.Sprintf("Select download template option: %s", m.ctx.selectTemplateList.SelectedId())
+	s := fmt.Sprintf("%s selected.\n\n", m.ctx.selectTemplateList.SelectedId())
+	s += "Download it?\n\n"
+	s += m.ctx.selectDownloadTemplateOption.View()
+	return s
 }
 
 var (
