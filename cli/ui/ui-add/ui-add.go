@@ -1,18 +1,88 @@
 package uiadd
 
 import (
-	"fmt"
-	uicommon "gas/ui/ui-common"
-	"io"
-	"strings"
-
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
-
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+const (
+	SELECT_TEMPLATE = "SELECT_TEMPLATE"
+)
+
+var ui = make(map[string]uiFns)
+
+type (
+	updateFn func(m model, msg tea.Msg) (tea.Model, tea.Cmd)
+	viewFn   func(m model) string
+)
+
+type uiFns struct {
+	update updateFn
+	view   viewFn
+}
+
+type model struct {
+	state string
+}
+
+func InitialModel() model {
+	return model{state: SELECT_TEMPLATE}
+}
+
+func (m model) Init() tea.Cmd {
+	registerUi(SELECT_TEMPLATE, uiFns{update: selectTemplateUpdate, view: selectTemplateView})
+
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	uiFn, ok := ui[m.state]
+	if !ok {
+		return m, nil
+	}
+	return uiFn.update(m, msg)
+}
+
+func (m model) View() string {
+	uiFn, ok := ui[m.state]
+	if !ok {
+		return "unknown"
+	}
+	return uiFn.view(m)
+}
+
+func registerUi(state string, fns uiFns) {
+	ui[state] = fns
+}
+
+func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m, nil
+}
+
+func selectTemplateView(m model) string {
+	return "Add"
+}
+
+/*
+type model struct{}
+
+func InitialModel() model {
+	return model{}
+}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m, nil
+}
+
+func (m model) View() string {
+	return "Add cmd"
+}
+*/
+
+/*
 type model struct {
 	state state
 	ctx   ctx
@@ -284,3 +354,4 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 
 	fmt.Fprint(w, fn(str))
 }
+*/
