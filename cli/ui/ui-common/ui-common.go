@@ -6,8 +6,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// uiCommon contains a map of UI states and their corresponding
-// update and view functions.
+/*
+uiCommon contains a map of UI states and their corresponding
+update and view functions.
+*/
 type uiCommon struct {
 	Fns map[string]Fns
 }
@@ -22,21 +24,20 @@ type (
 	viewFn   func(m tea.Model) string
 )
 
-// New()
 func New() *uiCommon {
 	return &uiCommon{
 		Fns: make(map[string]Fns),
 	}
 }
 
-// Register() is a helper function for registering UI states
-// and their corresponding update and view functions.
 func (u *uiCommon) Register(state string, fns Fns) {
 	u.Fns[state] = fns
 }
 
-// HandleMsgs() is a helper function for handling messages
-// that are common to all states.
+/*
+HandleMsgs() is a helper function for handling messages
+that are common to all states.
+*/
 func HandleMsgs(msg tea.Msg, state string) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -61,8 +62,8 @@ to the next state.
 
 It's helpful for two reasons: 1) it makes the intended state
 transition explicit to readers of the code, and 2) it gives the
-next state's Update func a tea.Msg to hook into when the Update
-func is first initiated. That hook is important for things like
+next state's Update func a tea.Msg to hook into when that Update
+func is first initiated. The hook is important for things like
 emitting a spinner tea.Cmd on initialization if the state needs
 to process something.
 */
@@ -146,6 +147,8 @@ type SelectOption struct {
 /*
 NewSelect() is derived from:
 https://github.com/charmbracelet/bubbletea/tree/4a9620e7134978771059ff7b481b6c9a8c611ac3/examples/result
+
+It's a simple select UI for choosing between a small list of options.
 */
 func NewSelect() SelectModel {
 	return SelectModel{}

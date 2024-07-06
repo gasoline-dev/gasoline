@@ -1,9 +1,14 @@
 package uiadd
 
 import (
+	"fmt"
 	uicommon "gas/ui/ui-common"
+	"io"
+	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 const (
@@ -13,11 +18,37 @@ const (
 var ui = uicommon.New()
 
 type model struct {
-	state string
+	state              string
+	selectTemplateList selectTemplateListModel
 }
 
 func InitialModel() model {
-	return model{state: SELECT_TEMPLATE}
+	items := []list.Item{
+		item{id: "cloudflare-pages-remix-empty", value: "Cloudflare Pages - Remix - Empty", entityGroup: "web"},
+		item{id: "2", value: "Tomato Soup"},
+		item{id: "3", value: "Hamburgers"},
+		item{id: "4", value: "Cheeseburgers"},
+		item{id: "5", value: "Currywurst"},
+		item{id: "6", value: "Okonomiyaki"},
+		item{id: "7", value: "Pasta"},
+		item{id: "8", value: "Fillet Mignon"},
+		item{id: "9", value: "Caviar"},
+		item{id: "10", value: "Just Wine"},
+	}
+
+	const listWidth = 20
+	const listHeight = 14
+
+	selectTemplateList := newSelectTemplateListModel(items, itemDelegate{}, listWidth, listHeight)
+
+	selectTemplateList.Title = "Select template:"
+	selectTemplateList.SetShowStatusBar(false)
+	selectTemplateList.SetFilteringEnabled(false)
+	selectTemplateList.Styles.Title = titleStyle
+	selectTemplateList.Styles.PaginationStyle = paginationStyle
+	selectTemplateList.Styles.HelpStyle = helpStyle
+
+	return model{state: SELECT_TEMPLATE, selectTemplateList: selectTemplateList}
 }
 
 func (m model) Init() tea.Cmd {
@@ -49,12 +80,120 @@ func (m model) View() string {
 
 func selectTemplateUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	model := m.(model)
-	model.state = SELECT_TEMPLATE
-	return model, nil
+	var cmd tea.Cmd
+	model.selectTemplateList, cmd = model.selectTemplateList.Update(msg)
+	return model, cmd
 }
 
 func selectTemplateView(m tea.Model) string {
-	return "Add"
+	model := m.(model)
+	return model.selectTemplateList.View()
+}
+
+var (
+	titleStyle        = lipgloss.NewStyle().MarginLeft(2)
+	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
+	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
+	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
+	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
+	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4)
+)
+
+type selectTemplateListModel struct {
+	list.Model
+	cursor     int
+	selectedId string
+}
+
+func newSelectTemplateListModel(items []list.Item,
+	delegate list.ItemDelegate,
+	width int,
+	height int) selectTemplateListModel {
+	return selectTemplateListModel{
+		Model:      list.New(items, delegate, width, height),
+		cursor:     0,
+		selectedId: "",
+	}
+}
+
+func (l selectTemplateListModel) init() tea.Cmd {
+	return nil
+}
+
+func (m selectTemplateListModel) Update(msg tea.Msg) (selectTemplateListModel, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "down", "j":
+			m.cursor++
+			if m.cursor >= len(m.Items()) {
+				m.cursor = 0
+			}
+			m.selectedId = m.Items()[m.cursor].(item).id
+
+		case "up", "k":
+			m.cursor--
+			if m.cursor < 0 {
+				m.cursor = len(m.Items()) - 1
+			}
+			m.selectedId = m.Items()[m.cursor].(item).id
+
+		case "tab":
+			if m.cursor == len(m.Items())-1 {
+				m.cursor = 0
+			} else {
+				m.cursor++
+			}
+			m.selectedId = m.Items()[m.cursor].(item).id
+		}
+	}
+
+	var cmd tea.Cmd
+	m.Model, cmd = m.Model.Update(msg)
+	return m, cmd
+}
+
+func (m selectTemplateListModel) View() string {
+	return m.Model.View()
+}
+
+func (l selectTemplateListModel) SelectedId() string {
+	return l.selectedId
+}
+
+func (l selectTemplateListModel) SelectedItem() item {
+	return l.Items()[l.cursor].(item)
+}
+
+type item struct {
+	id          string
+	value       string
+	entityGroup string
+}
+
+func (i item) FilterValue() string { return i.value }
+
+type itemDelegate struct{}
+
+func (d itemDelegate) Height() int                             { return 1 }
+func (d itemDelegate) Spacing() int                            { return 0 }
+func (d itemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	i, ok := listItem.(item)
+	if !ok {
+		return
+	}
+
+	str := string(i.value)
+
+	fn := itemStyle.Render
+	if index == m.Index() {
+		fn = func(s ...string) string {
+			return selectedItemStyle.Render("> " + strings.Join(s, " "))
+		}
+	}
+
+	fmt.Fprint(w, fn(str))
 }
 
 /*
@@ -84,31 +223,6 @@ type ctx struct {
 }
 
 func InitialModel() model {
-	items := []list.Item{
-		item{id: "cloudflare-pages-remix-empty", value: "Cloudflare Pages - Remix - Empty", entityGroup: "web"},
-		item{id: "2", value: "Tomato Soup"},
-		item{id: "3", value: "Hamburgers"},
-		item{id: "4", value: "Cheeseburgers"},
-		item{id: "5", value: "Currywurst"},
-		item{id: "6", value: "Okonomiyaki"},
-		item{id: "7", value: "Pasta"},
-		item{id: "8", value: "Fillet Mignon"},
-		item{id: "9", value: "Caviar"},
-		item{id: "10", value: "Just Wine"},
-	}
-
-	const listWidth = 20
-	const listHeight = 14
-
-	selectTemplateList := newSelectTemplateListModel(items, itemDelegate{}, listWidth, listHeight)
-
-	selectTemplateList.Title = "Select template:"
-	selectTemplateList.SetShowStatusBar(false)
-	selectTemplateList.SetFilteringEnabled(false)
-	selectTemplateList.Styles.Title = titleStyle
-	selectTemplateList.Styles.PaginationStyle = paginationStyle
-	selectTemplateList.Styles.HelpStyle = helpStyle
-
 	selectDownloadTemplateOption := uicommon.NewSelect()
 	selectDownloadTemplateOption.Options = []uicommon.SelectOption{
 		{Id: "yes", Value: "Yes"},
@@ -222,111 +336,5 @@ func selectDownloadTemplateOptionView(m model) string {
 	s += "Download it?\n\n"
 	s += m.ctx.selectDownloadTemplateOption.View()
 	return s
-}
-
-var (
-	titleStyle        = lipgloss.NewStyle().MarginLeft(2)
-	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
-	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
-	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
-	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
-	quitTextStyle     = lipgloss.NewStyle().Margin(1, 0, 2, 4)
-)
-
-type selectTemplateListModel struct {
-	list.Model
-	cursor     int
-	selectedId string
-}
-
-func newSelectTemplateListModel(items []list.Item,
-	delegate list.ItemDelegate,
-	width int,
-	height int) selectTemplateListModel {
-	return selectTemplateListModel{
-		Model:      list.New(items, delegate, width, height),
-		cursor:     0,
-		selectedId: "",
-	}
-}
-
-func (l selectTemplateListModel) init() tea.Cmd {
-	return nil
-}
-
-func (m selectTemplateListModel) Update(msg tea.Msg) (selectTemplateListModel, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "down", "j":
-			m.cursor++
-			if m.cursor >= len(m.Items()) {
-				m.cursor = 0
-			}
-			m.selectedId = m.Items()[m.cursor].(item).id
-
-		case "up", "k":
-			m.cursor--
-			if m.cursor < 0 {
-				m.cursor = len(m.Items()) - 1
-			}
-			m.selectedId = m.Items()[m.cursor].(item).id
-
-		case "tab":
-			if m.cursor == len(m.Items())-1 {
-				m.cursor = 0
-			} else {
-				m.cursor++
-			}
-			m.selectedId = m.Items()[m.cursor].(item).id
-		}
-	}
-
-	var cmd tea.Cmd
-	m.Model, cmd = m.Model.Update(msg)
-	return m, cmd
-}
-
-func (m selectTemplateListModel) View() string {
-	return m.Model.View()
-}
-
-func (l selectTemplateListModel) SelectedId() string {
-	return l.selectedId
-}
-
-func (l selectTemplateListModel) SelectedItem() item {
-	return l.Items()[l.cursor].(item)
-}
-
-type item struct {
-	id          string
-	value       string
-	entityGroup string
-}
-
-func (i item) FilterValue() string { return i.value }
-
-type itemDelegate struct{}
-
-func (d itemDelegate) Height() int                             { return 1 }
-func (d itemDelegate) Spacing() int                            { return 0 }
-func (d itemDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	i, ok := listItem.(item)
-	if !ok {
-		return
-	}
-
-	str := string(i.value)
-
-	fn := itemStyle.Render
-	if index == m.Index() {
-		fn = func(s ...string) string {
-			return selectedItemStyle.Render("> " + strings.Join(s, " "))
-		}
-	}
-
-	fmt.Fprint(w, fn(str))
 }
 */
