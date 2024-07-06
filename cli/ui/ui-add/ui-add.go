@@ -19,16 +19,16 @@ const (
 	SELECT_ENTITY_GROUP_LIST = "SELECT_ENTITY_GROUP_LIST" // TODO: implement
 	ENTER_ENTITY_INPUT       = "ENTER_ENTITY_INPUT"
 	SELECT_ENTITY_LIST       = "SELECT_ENTITY_LIST" // TODO: implement
-	ADDED_TEMPLATE_CONFIRM   = "ADDED_TEMPLATE_CONFIRM"
+	ADDED_TEMPLATE_CONFIRMED = "ADDED_TEMPLATE_CONFIRMED"
 )
 
 var ui = uicommon.New()
 
 type model struct {
-	state                       string
-	selectTemplateList          selectTemplateListModel
-	entityInput                 textinput.Model
-	addedTemplateConfirmOptions uicommon.SelectModel
+	state                         string
+	selectTemplateList            selectTemplateListModel
+	entityInput                   textinput.Model
+	addedTemplateConfirmedOptions uicommon.SelectModel
 }
 
 func InitialModel() model {
@@ -69,23 +69,23 @@ func InitialModel() model {
 	addTemplateConfirmOptions := uicommon.NewSelect()
 	addTemplateConfirmOptions.Options = []uicommon.SelectOption{
 		{Id: "add-another", Value: "Add another"},
-		{Id: "continue", Value: "Continue"},
+		{Id: "pending-downloads", Value: "Continue to pending downloads"},
 		{Id: "undo", Value: "Undo"},
 	}
 	addTemplateConfirmOptions.SelectedId = addTemplateConfirmOptions.Options[addTemplateConfirmOptions.Cursor].Id
 
 	return model{
-		state:                       SELECT_TEMPLATE_LIST,
-		selectTemplateList:          selectTemplateList,
-		entityInput:                 entityInput,
-		addedTemplateConfirmOptions: addTemplateConfirmOptions,
+		state:                         SELECT_TEMPLATE_LIST,
+		selectTemplateList:            selectTemplateList,
+		entityInput:                   entityInput,
+		addedTemplateConfirmedOptions: addTemplateConfirmOptions,
 	}
 }
 
 func (m model) Init() tea.Cmd {
 	ui.Register(SELECT_TEMPLATE_LIST, uicommon.Fns{Update: selectTemplateListUpdate, View: selectTemplateListView})
 	ui.Register(ENTER_ENTITY_INPUT, uicommon.Fns{Update: enterEntityInputUpdate, View: enterEntityInputView})
-	ui.Register(ADDED_TEMPLATE_CONFIRM, uicommon.Fns{Update: addedTemplateConfirmUpdate, View: addedTemplateConfirmView})
+	ui.Register(ADDED_TEMPLATE_CONFIRMED, uicommon.Fns{Update: addedTemplateConfirmedUpdate, View: addedTemplateConfirmedView})
 
 	return nil
 }
@@ -256,7 +256,7 @@ func enterEntityInputUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return model, nil
 			}
-			model.state = ADDED_TEMPLATE_CONFIRM
+			model.state = ADDED_TEMPLATE_CONFIRMED
 			model.selectTemplateList.selectedItem.entity = model.entityInput.Value()
 			if model.selectTemplateList.selectedItem.entityGroup == "web" {
 				model.selectTemplateList.selectedItem.downloadPath = fmt.Sprintf(
@@ -296,18 +296,18 @@ func enterEntityInputView(m tea.Model) string {
 	return s
 }
 
-func addedTemplateConfirmUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func addedTemplateConfirmedUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	model := m.(model)
 
 	var cmd tea.Cmd
-	model.addedTemplateConfirmOptions, cmd = model.addedTemplateConfirmOptions.Update(msg)
+	model.addedTemplateConfirmedOptions, cmd = model.addedTemplateConfirmedOptions.Update(msg)
 	return model, cmd
 }
 
-func addedTemplateConfirmView(m tea.Model) string {
+func addedTemplateConfirmedView(m tea.Model) string {
 	model := m.(model)
 	s := fmt.Sprintf(
-		"Added \"%s\" template.\n\n",
+		"Added \"%s\" template to pending downloads.\n\n",
 		model.selectTemplateList.SelectedItem().value,
 	)
 	s += fmt.Sprintf("Entity group: %s\n", model.selectTemplateList.SelectedItem().entityGroup)
@@ -315,7 +315,7 @@ func addedTemplateConfirmView(m tea.Model) string {
 	s += fmt.Sprintf("Entity type: %s\n", model.selectTemplateList.SelectedItem().entityType)
 	s += fmt.Sprintf("Download path: %s\n\n", model.selectTemplateList.SelectedItem().downloadPath)
 	s += "What next?\n\n"
-	s += fmt.Sprintf("%s\n\n", model.addedTemplateConfirmOptions.View())
+	s += fmt.Sprintf("%s\n\n", model.addedTemplateConfirmedOptions.View())
 	s += uicommon.EscView()
 	return s
 }
