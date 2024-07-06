@@ -127,8 +127,9 @@ var (
 
 type selectTemplateListModel struct {
 	list.Model
-	cursor     int
-	selectedId string
+	cursor       int
+	selectedId   string
+	selectedItem item
 }
 
 func newSelectTemplateListModel(items []list.Item,
@@ -136,9 +137,10 @@ func newSelectTemplateListModel(items []list.Item,
 	width int,
 	height int) selectTemplateListModel {
 	return selectTemplateListModel{
-		Model:      list.New(items, delegate, width, height),
-		cursor:     0,
-		selectedId: "",
+		Model:        list.New(items, delegate, width, height),
+		cursor:       0,
+		selectedId:   "",
+		selectedItem: items[0].(item),
 	}
 }
 
@@ -155,14 +157,14 @@ func (m selectTemplateListModel) Update(msg tea.Msg) (selectTemplateListModel, t
 			if m.cursor >= len(m.Items()) {
 				m.cursor = 0
 			}
-			m.selectedId = m.Items()[m.cursor].(item).id
+			m.selectedItem = m.Items()[m.cursor].(item)
 
 		case "up", "k":
 			m.cursor--
 			if m.cursor < 0 {
 				m.cursor = len(m.Items()) - 1
 			}
-			m.selectedId = m.Items()[m.cursor].(item).id
+			m.selectedItem = m.Items()[m.cursor].(item)
 
 		case "tab":
 			if m.cursor == len(m.Items())-1 {
@@ -170,7 +172,7 @@ func (m selectTemplateListModel) Update(msg tea.Msg) (selectTemplateListModel, t
 			} else {
 				m.cursor++
 			}
-			m.selectedId = m.Items()[m.cursor].(item).id
+			m.selectedItem = m.Items()[m.cursor].(item)
 		}
 	}
 
@@ -183,12 +185,8 @@ func (m selectTemplateListModel) View() string {
 	return m.Model.View()
 }
 
-func (l selectTemplateListModel) SelectedId() string {
-	return l.selectedId
-}
-
 func (l selectTemplateListModel) SelectedItem() item {
-	return l.Items()[l.cursor].(item)
+	return l.selectedItem
 }
 
 type item struct {
