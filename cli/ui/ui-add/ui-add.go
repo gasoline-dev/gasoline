@@ -14,25 +14,33 @@ import (
 )
 
 const (
-	SELECT_TEMPLATE          = "SELECT_TEMPLATE"
+	SELECT_TEMPLATE_LIST     = "SELECT_TEMPLATE_LIST"
 	ENTER_ENTITY_GROUP_INPUT = "ENTER_ENTITY_GROUP_INPUT" // TODO: implement
 	SELECT_ENTITY_GROUP_LIST = "SELECT_ENTITY_GROUP_LIST" // TODO: implement
 	ENTER_ENTITY_INPUT       = "ENTER_ENTITY_INPUT"
 	SELECT_ENTITY_LIST       = "SELECT_ENTITY_LIST" // TODO: implement
-	ADDED_TEMPLATE           = "ADDED_TEMPLATE"
+	ADDED_TEMPLATE_CONFIRM   = "ADDED_TEMPLATE_CONFIRM"
 )
 
 var ui = uicommon.New()
 
 type model struct {
-	state              string
-	selectTemplateList selectTemplateListModel
-	entityInput        textinput.Model
+	state                       string
+	selectTemplateList          selectTemplateListModel
+	entityInput                 textinput.Model
+	addedTemplateConfirmOptions uicommon.SelectModel
 }
 
 func InitialModel() model {
 	items := []list.Item{
-		item{id: "cloudflare-pages-remix-empty", value: "Cloudflare Pages - Remix - Empty", entityGroup: "web"},
+		item{
+			id:           "cloudflare-pages-remix-empty",
+			value:        "Cloudflare Pages - Remix - Empty",
+			entityGroup:  "web",
+			entity:       "",
+			entityType:   "pages",
+			downloadPath: "",
+		},
 		item{id: "2", value: "Tomato Soup"},
 		item{id: "3", value: "Hamburgers"},
 		item{id: "4", value: "Cheeseburgers"},
@@ -58,13 +66,26 @@ func InitialModel() model {
 	entityInput := textinput.New()
 	entityInput.Placeholder = "app, dashboard, landing, etc"
 
-	return model{state: SELECT_TEMPLATE, selectTemplateList: selectTemplateList, entityInput: entityInput}
+	addTemplateConfirmOptions := uicommon.NewSelect()
+	addTemplateConfirmOptions.Options = []uicommon.SelectOption{
+		{Id: "add-another", Value: "Add another"},
+		{Id: "continue", Value: "Continue"},
+		{Id: "undo", Value: "Undo"},
+	}
+	addTemplateConfirmOptions.SelectedId = addTemplateConfirmOptions.Options[addTemplateConfirmOptions.Cursor].Id
+
+	return model{
+		state:                       SELECT_TEMPLATE_LIST,
+		selectTemplateList:          selectTemplateList,
+		entityInput:                 entityInput,
+		addedTemplateConfirmOptions: addTemplateConfirmOptions,
+	}
 }
 
 func (m model) Init() tea.Cmd {
-	ui.Register(SELECT_TEMPLATE, uicommon.Fns{Update: selectTemplateUpdate, View: selectTemplateView})
+	ui.Register(SELECT_TEMPLATE_LIST, uicommon.Fns{Update: selectTemplateListUpdate, View: selectTemplateListView})
 	ui.Register(ENTER_ENTITY_INPUT, uicommon.Fns{Update: enterEntityInputUpdate, View: enterEntityInputView})
-	ui.Register(ADDED_TEMPLATE, uicommon.Fns{Update: addedTemplateUpdate, View: addedTemplateView})
+	ui.Register(ADDED_TEMPLATE_CONFIRM, uicommon.Fns{Update: addedTemplateConfirmUpdate, View: addedTemplateConfirmView})
 
 	return nil
 }
@@ -90,7 +111,7 @@ func (m model) View() string {
 	return uiFn.View(m)
 }
 
-func selectTemplateUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func selectTemplateListUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	model := m.(model)
 
 	switch msg := msg.(type) {
@@ -111,7 +132,7 @@ func selectTemplateUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return model, cmd
 }
 
-func selectTemplateView(m tea.Model) string {
+func selectTemplateListView(m tea.Model) string {
 	model := m.(model)
 	return model.selectTemplateList.View()
 }
@@ -190,9 +211,12 @@ func (l selectTemplateListModel) SelectedItem() item {
 }
 
 type item struct {
-	id          string
-	value       string
-	entityGroup string
+	id           string
+	value        string
+	entityGroup  string
+	entity       string
+	entityType   string
+	downloadPath string
 }
 
 func (i item) FilterValue() string { return i.value }
@@ -232,7 +256,16 @@ func enterEntityInputUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return model, nil
 			}
-			model.state = ADDED_TEMPLATE
+			model.state = ADDED_TEMPLATE_CONFIRM
+			model.selectTemplateList.selectedItem.entity = model.entityInput.Value()
+			if model.selectTemplateList.selectedItem.entityGroup == "web" {
+				model.selectTemplateList.selectedItem.downloadPath = fmt.Sprintf(
+					"./gas/_%s-%s-%s",
+					model.selectTemplateList.selectedItem.entityGroup,
+					model.selectTemplateList.selectedItem.entity,
+					model.selectTemplateList.selectedItem.entityType,
+				)
+			}
 			return model, uicommon.NextState
 		}
 	}
@@ -263,18 +296,26 @@ func enterEntityInputView(m tea.Model) string {
 	return s
 }
 
-func addedTemplateUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func addedTemplateConfirmUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	model := m.(model)
 
-	return model, nil
+	var cmd tea.Cmd
+	model.addedTemplateConfirmOptions, cmd = model.addedTemplateConfirmOptions.Update(msg)
+	return model, cmd
 }
 
-func addedTemplateView(m tea.Model) string {
+func addedTemplateConfirmView(m tea.Model) string {
 	model := m.(model)
 	s := fmt.Sprintf(
-		"Template \"%s\" has been added successfully.\n\n",
+		"Added \"%s\" template.\n\n",
 		model.selectTemplateList.SelectedItem().value,
 	)
-	s += "Press enter to exit.\n\n"
+	s += fmt.Sprintf("Entity group: %s\n", model.selectTemplateList.SelectedItem().entityGroup)
+	s += fmt.Sprintf("Entity: %s\n", model.selectTemplateList.SelectedItem().entity)
+	s += fmt.Sprintf("Entity type: %s\n", model.selectTemplateList.SelectedItem().entityType)
+	s += fmt.Sprintf("Download path: %s\n\n", model.selectTemplateList.SelectedItem().downloadPath)
+	s += "What next?\n\n"
+	s += fmt.Sprintf("%s\n\n", model.addedTemplateConfirmOptions.View())
+	s += uicommon.EscView()
 	return s
 }
