@@ -34,12 +34,12 @@ type model struct {
 func InitialModel() model {
 	items := []list.Item{
 		item{
-			id:           "cloudflare-pages-remix-empty",
-			value:        "Cloudflare Pages - Remix - Empty",
-			entityGroup:  "web",
-			entity:       "",
-			entityType:   "pages",
-			downloadPath: "",
+			id:          "cloudflare-pages-remix-empty",
+			value:       "Cloudflare Pages - Remix - Empty",
+			entityGroup: "web",
+			entity:      "",
+			entityType:  "pages",
+			installPath: "",
 		},
 		item{id: "2", value: "Tomato Soup"},
 		item{id: "3", value: "Hamburgers"},
@@ -69,7 +69,7 @@ func InitialModel() model {
 	addTemplateConfirmOptions := uicommon.NewSelect()
 	addTemplateConfirmOptions.Options = []uicommon.SelectOption{
 		{Id: "add-another", Value: "Add another"},
-		{Id: "pending-downloads", Value: "Continue to pending downloads"},
+		{Id: "pending-installs", Value: "Continue to pending installs"},
 		{Id: "undo", Value: "Undo"},
 	}
 	addTemplateConfirmOptions.SelectedId = addTemplateConfirmOptions.Options[addTemplateConfirmOptions.Cursor].Id
@@ -211,12 +211,12 @@ func (l selectTemplateListModel) SelectedItem() item {
 }
 
 type item struct {
-	id           string
-	value        string
-	entityGroup  string
-	entity       string
-	entityType   string
-	downloadPath string
+	id          string
+	value       string
+	entityGroup string
+	entity      string
+	entityType  string
+	installPath string
 }
 
 func (i item) FilterValue() string { return i.value }
@@ -259,7 +259,7 @@ func enterEntityInputUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			model.state = ADDED_TEMPLATE_CONFIRMED
 			model.selectTemplateList.selectedItem.entity = model.entityInput.Value()
 			if model.selectTemplateList.selectedItem.entityGroup == "web" {
-				model.selectTemplateList.selectedItem.downloadPath = fmt.Sprintf(
+				model.selectTemplateList.selectedItem.installPath = fmt.Sprintf(
 					"./gas/_%s-%s-%s",
 					model.selectTemplateList.selectedItem.entityGroup,
 					model.selectTemplateList.selectedItem.entity,
@@ -307,13 +307,13 @@ func addedTemplateConfirmedUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd)
 func addedTemplateConfirmedView(m tea.Model) string {
 	model := m.(model)
 	s := fmt.Sprintf(
-		"Added \"%s\" template to pending downloads.\n\n",
+		"Added \"%s\" template to pending installs.\n\n",
 		model.selectTemplateList.SelectedItem().value,
 	)
 	s += fmt.Sprintf("Entity group: %s\n", model.selectTemplateList.SelectedItem().entityGroup)
 	s += fmt.Sprintf("Entity: %s\n", model.selectTemplateList.SelectedItem().entity)
 	s += fmt.Sprintf("Entity type: %s\n", model.selectTemplateList.SelectedItem().entityType)
-	s += fmt.Sprintf("Download path: %s\n\n", model.selectTemplateList.SelectedItem().downloadPath)
+	s += fmt.Sprintf("Download path: %s\n\n", model.selectTemplateList.SelectedItem().installPath)
 	s += "What next?\n\n"
 	s += fmt.Sprintf("%s\n\n", model.addedTemplateConfirmedOptions.View())
 	s += uicommon.EscView()
