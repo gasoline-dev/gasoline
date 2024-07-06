@@ -45,8 +45,10 @@ func HandleMsgs(msg tea.Msg, state string) tea.Cmd {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
-			// User shouldn't be able to exit while state is processing
-			if !strings.Contains(state, "ING") {
+			// User shouldn't be able to exit if state is doing IO.
+			if !strings.Contains(state, "DOWNLOADING") &&
+				!strings.Contains(state, "INSTALLING") &&
+				!strings.Contains(state, "PROCESSING") {
 				return tea.Sequence(tea.ClearScreen, tea.Quit)
 			}
 		}

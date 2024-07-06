@@ -20,6 +20,7 @@ const (
 	ENTER_ENTITY_INPUT       = "ENTER_ENTITY_INPUT"
 	SELECT_ENTITY_LIST       = "SELECT_ENTITY_LIST" // TODO: implement
 	ADDED_TEMPLATE_CONFIRMED = "ADDED_TEMPLATE_CONFIRMED"
+	PENDING_INSTALLS         = "PENDING_INSTALLS"
 )
 
 var ui = uicommon.New()
@@ -29,6 +30,7 @@ type model struct {
 	selectTemplateList            selectTemplateListModel
 	entityInput                   textinput.Model
 	addedTemplateConfirmedOptions uicommon.SelectModel
+	pendingInstallsOptions        uicommon.SelectModel
 }
 
 func InitialModel() model {
@@ -68,17 +70,25 @@ func InitialModel() model {
 
 	addTemplateConfirmOptions := uicommon.NewSelect()
 	addTemplateConfirmOptions.Options = []uicommon.SelectOption{
-		{Id: "add-another", Value: "Add another"},
 		{Id: "pending-installs", Value: "Continue to pending installs"},
+		{Id: "add-another", Value: "Add another"},
 		{Id: "undo", Value: "Undo"},
 	}
 	addTemplateConfirmOptions.SelectedId = addTemplateConfirmOptions.Options[addTemplateConfirmOptions.Cursor].Id
+
+	pendingInstallsOptions := uicommon.NewSelect()
+	pendingInstallsOptions.Options = []uicommon.SelectOption{
+		{Id: "install", Value: "Install"},
+		{Id: "cancel", Value: "Cancel"},
+	}
+	pendingInstallsOptions.SelectedId = pendingInstallsOptions.Options[pendingInstallsOptions.Cursor].Id
 
 	return model{
 		state:                         SELECT_TEMPLATE_LIST,
 		selectTemplateList:            selectTemplateList,
 		entityInput:                   entityInput,
 		addedTemplateConfirmedOptions: addTemplateConfirmOptions,
+		pendingInstallsOptions:        pendingInstallsOptions,
 	}
 }
 
@@ -86,6 +96,7 @@ func (m model) Init() tea.Cmd {
 	ui.Register(SELECT_TEMPLATE_LIST, uicommon.Fns{Update: selectTemplateListUpdate, View: selectTemplateListView})
 	ui.Register(ENTER_ENTITY_INPUT, uicommon.Fns{Update: enterEntityInputUpdate, View: enterEntityInputView})
 	ui.Register(ADDED_TEMPLATE_CONFIRMED, uicommon.Fns{Update: addedTemplateConfirmedUpdate, View: addedTemplateConfirmedView})
+	ui.Register(PENDING_INSTALLS, uicommon.Fns{Update: pendingInstallsUpdate, View: pendingInstallsView})
 
 	return nil
 }
@@ -106,7 +117,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	uiFn, ok := ui.Fns[m.state]
 	if !ok {
-		return "unknown"
+		s := fmt.Sprintf("unknown state: %s\n\n", m.state)
+		s += "Verify state, update, and view are registered\n\n"
+		s += uicommon.EscView()
+		return s
 	}
 	return uiFn.View(m)
 }
@@ -184,14 +198,6 @@ func (m selectTemplateListModel) Update(msg tea.Msg) (selectTemplateListModel, t
 			m.cursor--
 			if m.cursor < 0 {
 				m.cursor = len(m.Items()) - 1
-			}
-			m.selectedItem = m.Items()[m.cursor].(item)
-
-		case "tab":
-			if m.cursor == len(m.Items())-1 {
-				m.cursor = 0
-			} else {
-				m.cursor++
 			}
 			m.selectedItem = m.Items()[m.cursor].(item)
 		}
@@ -299,6 +305,16 @@ func enterEntityInputView(m tea.Model) string {
 func addedTemplateConfirmedUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	model := m.(model)
 
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "enter" {
+			if model.addedTemplateConfirmedOptions.SelectedId == "pending-installs" {
+				model.state = PENDING_INSTALLS
+				return model, uicommon.NextState
+			}
+		}
+	}
+
 	var cmd tea.Cmd
 	model.addedTemplateConfirmedOptions, cmd = model.addedTemplateConfirmedOptions.Update(msg)
 	return model, cmd
@@ -316,6 +332,30 @@ func addedTemplateConfirmedView(m tea.Model) string {
 	s += fmt.Sprintf("Download path: %s\n\n", model.selectTemplateList.SelectedItem().installPath)
 	s += "What next?\n\n"
 	s += fmt.Sprintf("%s\n\n", model.addedTemplateConfirmedOptions.View())
+	s += uicommon.EscView()
+	return s
+}
+
+func pendingInstallsUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	model := m.(model)
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "enter" {
+			model.state = PENDING_INSTALLS
+			return model, uicommon.NextState
+		}
+	}
+
+	var cmd tea.Cmd
+	model.pendingInstallsOptions, cmd = model.pendingInstallsOptions.Update(msg)
+	return model, cmd
+}
+
+func pendingInstallsView(m tea.Model) string {
+	model := m.(model)
+	s := "Install templates?\n\n"
+	s += fmt.Sprintf("%s\n\n", model.pendingInstallsOptions.View())
 	s += uicommon.EscView()
 	return s
 }
