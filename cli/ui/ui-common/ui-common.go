@@ -54,6 +54,15 @@ func HandleMsgs(msg tea.Msg, state string) tea.Cmd {
 	return nil
 }
 
+/*
+EscView() is a helper function for displaying a message
+to the user to press esc to exit the program. The esc
+cmd is handled in HandleMsgs().
+*/
+func EscView() string {
+	return "Press esc to exit\n\n"
+}
+
 type NextStateType bool
 
 /*

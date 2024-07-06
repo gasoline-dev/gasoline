@@ -261,6 +261,7 @@ func enterEntityInputView(m tea.Model) string {
 			s += fmt.Sprintf("Error: %v\n\n", model.entityInput.Err)
 		}
 	}
+	s += uicommon.EscView()
 	return s
 }
 
