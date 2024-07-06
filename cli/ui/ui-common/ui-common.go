@@ -6,6 +6,53 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// uiCommon contains a map of UI states and their corresponding
+// update and view functions.
+type uiCommon struct {
+	Fns map[string]Fns
+}
+
+type Fns struct {
+	Update updateFn
+	View   viewFn
+}
+
+type (
+	updateFn func(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd)
+	viewFn   func(m tea.Model) string
+)
+
+// New()
+func New() *uiCommon {
+	return &uiCommon{
+		Fns: make(map[string]Fns),
+	}
+}
+
+// Register() is a helper function for registering UI states
+// and their corresponding update and view functions.
+func (u *uiCommon) Register(state string, fns Fns) {
+	u.Fns[state] = fns
+}
+
+// HandleMsgs() is a helper function for handling messages
+// that are common to all states.
+func HandleMsgs(msg tea.Msg, state string) tea.Cmd {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		return tea.ClearScreen
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc":
+			// User shouldn't be able to exit while state is processing
+			if !strings.Contains(state, "ING") {
+				return tea.Sequence(tea.ClearScreen, tea.Quit)
+			}
+		}
+	}
+	return nil
+}
+
 type NextStateType bool
 
 /*

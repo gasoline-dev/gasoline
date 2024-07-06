@@ -1,6 +1,8 @@
 package uiadd
 
 import (
+	uicommon "gas/ui/ui-common"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -8,17 +10,7 @@ const (
 	SELECT_TEMPLATE = "SELECT_TEMPLATE"
 )
 
-var ui = make(map[string]uiFns)
-
-type (
-	updateFn func(m model, msg tea.Msg) (tea.Model, tea.Cmd)
-	viewFn   func(m model) string
-)
-
-type uiFns struct {
-	update updateFn
-	view   viewFn
-}
+var ui = uicommon.New()
 
 type model struct {
 	state string
@@ -29,58 +21,41 @@ func InitialModel() model {
 }
 
 func (m model) Init() tea.Cmd {
-	registerUi(SELECT_TEMPLATE, uiFns{update: selectTemplateUpdate, view: selectTemplateView})
+	ui.Register(SELECT_TEMPLATE, uicommon.Fns{Update: selectTemplateUpdate, View: selectTemplateView})
 
 	return nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	uiFn, ok := ui[m.state]
+	cmd := uicommon.HandleMsgs(msg, m.state)
+	if cmd != nil {
+		return m, cmd
+	}
+
+	uiFn, ok := ui.Fns[m.state]
 	if !ok {
 		return m, nil
 	}
-	return uiFn.update(m, msg)
+	return uiFn.Update(m, msg)
 }
 
 func (m model) View() string {
-	uiFn, ok := ui[m.state]
+	uiFn, ok := ui.Fns[m.state]
 	if !ok {
 		return "unknown"
 	}
-	return uiFn.view(m)
+	return uiFn.View(m)
 }
 
-func registerUi(state string, fns uiFns) {
-	ui[state] = fns
+func selectTemplateUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	model := m.(model)
+	model.state = SELECT_TEMPLATE
+	return model, nil
 }
 
-func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	return m, nil
-}
-
-func selectTemplateView(m model) string {
+func selectTemplateView(m tea.Model) string {
 	return "Add"
 }
-
-/*
-type model struct{}
-
-func InitialModel() model {
-	return model{}
-}
-
-func (m model) Init() tea.Cmd {
-	return nil
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	return m, nil
-}
-
-func (m model) View() string {
-	return "Add cmd"
-}
-*/
 
 /*
 type model struct {
