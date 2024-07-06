@@ -1,18 +1,25 @@
 package uiadd
 
 import (
+	"errors"
 	"fmt"
 	uicommon "gas/ui/ui-common"
 	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 const (
-	SELECT_TEMPLATE = "SELECT_TEMPLATE"
+	SELECT_TEMPLATE          = "SELECT_TEMPLATE"
+	ENTER_ENTITY_GROUP_INPUT = "ENTER_ENTITY_GROUP_INPUT" // TODO: implement
+	SELECT_ENTITY_GROUP_LIST = "SELECT_ENTITY_GROUP_LIST" // TODO: implement
+	ENTER_ENTITY_INPUT       = "ENTER_ENTITY_INPUT"
+	SELECT_ENTITY_LIST       = "SELECT_ENTITY_LIST" // TODO: implement
+	ADDED_TEMPLATE           = "ADDED_TEMPLATE"
 )
 
 var ui = uicommon.New()
@@ -20,6 +27,7 @@ var ui = uicommon.New()
 type model struct {
 	state              string
 	selectTemplateList selectTemplateListModel
+	entityInput        textinput.Model
 }
 
 func InitialModel() model {
@@ -40,7 +48,6 @@ func InitialModel() model {
 	const listHeight = 14
 
 	selectTemplateList := newSelectTemplateListModel(items, itemDelegate{}, listWidth, listHeight)
-
 	selectTemplateList.Title = "Select template:"
 	selectTemplateList.SetShowStatusBar(false)
 	selectTemplateList.SetFilteringEnabled(false)
@@ -48,11 +55,16 @@ func InitialModel() model {
 	selectTemplateList.Styles.PaginationStyle = paginationStyle
 	selectTemplateList.Styles.HelpStyle = helpStyle
 
-	return model{state: SELECT_TEMPLATE, selectTemplateList: selectTemplateList}
+	entityInput := textinput.New()
+	entityInput.Placeholder = "app, dashboard, landing, etc"
+
+	return model{state: SELECT_TEMPLATE, selectTemplateList: selectTemplateList, entityInput: entityInput}
 }
 
 func (m model) Init() tea.Cmd {
 	ui.Register(SELECT_TEMPLATE, uicommon.Fns{Update: selectTemplateUpdate, View: selectTemplateView})
+	ui.Register(ENTER_ENTITY_INPUT, uicommon.Fns{Update: enterEntityInputUpdate, View: enterEntityInputView})
+	ui.Register(ADDED_TEMPLATE, uicommon.Fns{Update: addedTemplateUpdate, View: addedTemplateView})
 
 	return nil
 }
@@ -80,6 +92,20 @@ func (m model) View() string {
 
 func selectTemplateUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	model := m.(model)
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "enter":
+			if model.selectTemplateList.SelectedItem().entityGroup == "web" {
+				model.state = ENTER_ENTITY_INPUT
+				return model, tea.Sequence(uicommon.NextState, model.entityInput.Focus())
+			}
+			model.state = SELECT_ENTITY_GROUP_LIST
+			return model, uicommon.NextState
+		}
+	}
+
 	var cmd tea.Cmd
 	model.selectTemplateList, cmd = model.selectTemplateList.Update(msg)
 	return model, cmd
@@ -196,145 +222,60 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	fmt.Fprint(w, fn(str))
 }
 
-/*
-type model struct {
-	state state
-	ctx   ctx
-}
+func enterEntityInputUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	model := m.(model)
 
-type state string
-
-const (
-	SELECT_TEMPLATE                 state = "SELECT_TEMPLATE"
-	ENTER_ENTITY_GROUP_INPUT        state = "ENTER_ENTITY_GROUP_INPUT"
-	SELECT_ENTITY_GROUP_LIST        state = "SELECT_ENTITY_GROUP_LIST"
-	ENTER_ENTITY_INPUT              state = "ENTER_ENTITY_INPUT"
-	SELECT_ENTITY_LIST              state = "SELECT_ENTITY_LIST"
-	SELECT_DOWNLOAD_TEMPLATE_OPTION state = "SELECT_DOWNLOAD_TEMPLATE_OPTION"
-	DOWNLOADING_TEMPLATE            state = "DOWNLOADING_TEMPLATE"
-	FINAL                           state = "FINAL"
-)
-
-type ctx struct {
-	selectTemplateList           selectTemplateListModel
-	entityInput                  textinput.Model
-	selectDownloadTemplateOption uicommon.SelectModel
-	//selectDownloadTemplateOption uicommon.SelectModel
-}
-
-func InitialModel() model {
-	selectDownloadTemplateOption := uicommon.NewSelect()
-	selectDownloadTemplateOption.Options = []uicommon.SelectOption{
-		{Id: "yes", Value: "Yes"},
-		{Id: "back", Value: "Go back (select template)"},
-	}
-	selectDownloadTemplateOption.SelectedId = selectDownloadTemplateOption.Options[selectDownloadTemplateOption.Cursor].Id
-
-	entityInput := textinput.New()
-	entityInput.Placeholder = "app, dashboard, landing, etc"
-
-	return model{
-		state: SELECT_TEMPLATE,
-		ctx: ctx{
-			selectTemplateList: selectTemplateList,
-			entityInput:        entityInput,
-		},
-	}
-}
-
-func (m model) Init() tea.Cmd {
-	return textinput.Blink
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		return m, tea.ClearScreen
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc":
-			// User shouldn't be able to exit while state is processing
-			if !strings.Contains(string(m.state), "ING") {
-				return m, tea.Sequence(tea.ClearScreen, tea.Quit)
-			}
-		}
-	case uicommon.FinalStateType:
-		m.state = FINAL
-		if !strings.Contains(string(m.state), "ing") {
-			return m, tea.Quit
-		}
-	}
-
-	switch m.state {
-	case SELECT_TEMPLATE:
-		return selectTemplateUpdate(m, msg)
-	case ENTER_ENTITY_INPUT:
-		return enterEntityInputUpdate(m, msg)
-	case SELECT_DOWNLOAD_TEMPLATE_OPTION:
-		return selectDownloadTemplateOptionUpdate(m, msg)
-	}
-	return m, nil
-}
-
-func (m model) View() string {
-	switch m.state {
-	case SELECT_TEMPLATE:
-		return selectTemplateView(m)
-	case ENTER_ENTITY_INPUT:
-		return enterEntityInputView(m)
-	case SELECT_DOWNLOAD_TEMPLATE_OPTION:
-		return selectDownloadTemplateOptionView(m)
-	}
-	return "Unknown state view"
-}
-
-func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "enter":
-			if m.ctx.selectTemplateList.SelectedItem().entityGroup == "web" {
-				m.state = ENTER_ENTITY_INPUT
-				return m, tea.Sequence(uicommon.NextState, m.ctx.entityInput.Focus())
+		if msg.String() == "enter" {
+			if model.entityInput.Value() == "" {
+				model.entityInput.Err = &uicommon.InputErr{
+					Msg: "Entity is required",
+				}
+				return model, nil
 			}
-			m.state = SELECT_ENTITY_GROUP_LIST
-			return m, uicommon.NextState
+			model.state = ADDED_TEMPLATE
+			return model, uicommon.NextState
 		}
 	}
 
 	var cmd tea.Cmd
-	m.ctx.selectTemplateList, cmd = m.ctx.selectTemplateList.Update(msg)
-	return m, cmd
+	model.entityInput, cmd = model.entityInput.Update(msg)
+	return model, cmd
 }
 
-func selectTemplateView(m model) string {
-	return m.ctx.selectTemplateList.View()
-}
-
-func enterEntityInputUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	m.ctx.entityInput, cmd = m.ctx.entityInput.Update(msg)
-	return m, cmd
-}
-
-func enterEntityInputView(m model) string {
+func enterEntityInputView(m tea.Model) string {
+	model := m.(model)
 	s := fmt.Sprintf(
-		"Selected the \"%s\" template.\n\n",
-		m.ctx.selectTemplateList.SelectedItem().value,
+		"Selected \"%s\" template.\n\n",
+		model.selectTemplateList.SelectedItem().value,
 	)
 	s += "Enter entity:\n\n"
-	s += m.ctx.entityInput.View()
+	s += fmt.Sprintf("%s\n\n", model.entityInput.View())
+	if model.entityInput.Err != nil {
+		var inputErr *uicommon.InputErr
+		switch {
+		case errors.As(model.entityInput.Err, &inputErr):
+			s += fmt.Sprintf("%v\n\n", model.entityInput.Err)
+		default:
+			s += fmt.Sprintf("Error: %v\n\n", model.entityInput.Err)
+		}
+	}
 	return s
 }
 
-func selectDownloadTemplateOptionUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-	return m, nil
+func addedTemplateUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	model := m.(model)
+
+	return model, nil
 }
 
-func selectDownloadTemplateOptionView(m model) string {
-	s := fmt.Sprintf("%s selected.\n\n", m.ctx.selectTemplateList.SelectedId())
-	s += "Download it?\n\n"
-	s += m.ctx.selectDownloadTemplateOption.View()
+func addedTemplateView(m tea.Model) string {
+	model := m.(model)
+	s := fmt.Sprintf(
+		"Template \"%s\" has been added successfully.\n\n",
+		model.selectTemplateList.SelectedItem().value,
+	)
+	s += "Press enter to exit.\n\n"
 	return s
 }
-*/
