@@ -13,17 +13,21 @@ import (
 )
 
 type themeType struct {
-	header lipgloss.Style
+	title     lipgloss.Style
+	titleMeta lipgloss.Style
 }
 
 func theme() *themeType {
 	var t themeType
 
-	t.header = lipgloss.NewStyle().
+	t.title = lipgloss.NewStyle().
 		Background(lipgloss.Color("8")).
 		Width(11).
 		AlignHorizontal(lipgloss.Center).
 		Bold(true).
+		Margin(1, 0, 0, 1)
+
+	t.titleMeta = lipgloss.NewStyle().
 		Margin(1, 0, 0, 1)
 
 	return &t
@@ -114,13 +118,17 @@ func (m model) View() string {
 }
 
 func headerView() string {
-	return theme().header.Render("Gas.dev")
+	return lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		theme().title.Render("Gas.dev"),
+		theme().titleMeta.Render("Add resources - Pending installs (0)"),
+	)
 }
 
 func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		listHeight := msg.Height - theme().header.GetHeight() - theme().header.GetVerticalMargins() - titleStyle.GetVerticalMargins()
+		listHeight := msg.Height - theme().title.GetHeight() - theme().title.GetVerticalMargins() - titleStyle.GetVerticalMargins()
 		m.selectTemplate.list.SetSize(msg.Width, listHeight)
 		return m, tea.ClearScreen
 	case tea.KeyMsg:
@@ -146,7 +154,7 @@ func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func selectTemplateView(m model) string {
 	s := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Left, headerView(), lipgloss.NewStyle().Margin(1, 0, 0, 1).Render("Add resources - Pending installs (0)")),
+		headerView(),
 		m.selectTemplate.list.View(),
 	)
 	return s
@@ -282,7 +290,7 @@ func enterEntityView(m model) string {
 	inputView += m.enterEntity.input.View()
 
 	s := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Left, headerView(), lipgloss.NewStyle().Margin(1, 0, 0, 1).Render("Add resources - Pending installs (0)")),
+		headerView(),
 		inputStyle.Render(inputView),
 	)
 	return s
