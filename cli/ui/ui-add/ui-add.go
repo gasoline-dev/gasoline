@@ -51,8 +51,8 @@ type enterEntity struct {
 func InitialModel() model {
 	templates := []list.Item{
 		item{
-			id:          "cloudflare-pages-remix-empty",
-			value:       "Cloudflare Pages - Remix - Empty",
+			id:          "cloudflare-pages-remix",
+			value:       "Cloudflare Pages - Remix",
 			entityGroup: "web",
 			entity:      "",
 			entityType:  "pages",
