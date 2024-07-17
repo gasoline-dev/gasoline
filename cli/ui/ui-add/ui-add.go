@@ -96,7 +96,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SELECT_TEMPLATE:
 		return selectTemplateUpdate(m, msg)
 	case ENTER_ENTITY:
-		return enterEntityInputUpdate(m, msg)
+		return enterEntityUpdate(m, msg)
 	default:
 		return m, nil
 	}
@@ -107,7 +107,7 @@ func (m model) View() string {
 	case SELECT_TEMPLATE:
 		return selectTemplateView(m)
 	case ENTER_ENTITY:
-		return enterEntityInputView(m)
+		return enterEntityView(m)
 	default:
 		return "Unknown state: " + m.state
 	}
@@ -250,7 +250,7 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	fmt.Fprint(w, fn(str))
 }
 
-func enterEntityInputUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func enterEntityUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -269,7 +269,7 @@ func enterEntityInputUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func enterEntityInputView(m model) string {
+func enterEntityView(m model) string {
 	inputStyle := lipgloss.NewStyle().Margin(1, 0, 0, 1)
 
 	inputView := fmt.Sprintf(
