@@ -223,7 +223,7 @@ func enterDirPathUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.ctx.dirPathInitStatus == DIR_PATH_INIT_STATUS_FULL {
 			m.state = SELECT_EMPTY_DIR_PATH_OPTION_STATE
 		}
-		return m, uicommon.NextState
+		return m, uicommon.Tx
 	case getDirPathInitStatusErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
 		return m, uicommon.FinalState
@@ -286,12 +286,12 @@ func createDirUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = ENTER_DIR_PATH_STATE
 				m.ctx.dirPathInput.Reset()
 				m.ctx.createDirInput.Reset()
-				return m, tea.Batch(uicommon.NextState, m.ctx.dirPathInput.Focus())
+				return m, tea.Batch(uicommon.Tx, m.ctx.dirPathInput.Focus())
 			}
 		}
 	case createDirOk:
 		m.state = SELECT_PACKAGE_MANAGER_STATE
-		return m, uicommon.NextState
+		return m, uicommon.Tx
 	case createDirErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
 		return m, uicommon.FinalState
@@ -341,12 +341,12 @@ func selectEmptyDirPathOptionUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.ctx.selectEmptyDirPathOptionInput.SelectedId == "yes" {
 				m.state = EMPTYING_DIR_PATH_STATE
-				return m, uicommon.NextState
+				return m, uicommon.Tx
 			} else if m.ctx.selectEmptyDirPathOptionInput.SelectedId == "back" {
 				m.state = ENTER_DIR_PATH_STATE
 				m.ctx.dirPathInput.Reset()
 				m.ctx.selectEmptyDirPathOptionInput.Reset()
-				return m, tea.Batch(uicommon.NextState, m.ctx.dirPathInput.Focus())
+				return m, tea.Batch(uicommon.Tx, m.ctx.dirPathInput.Focus())
 			}
 		}
 	}
@@ -363,11 +363,11 @@ func emptyingDirPathView(m Model) string {
 
 func emptyingDirPathUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case uicommon.NextStateType:
+	case uicommon.TxMsg:
 		return m, tea.Batch(m.spinner.Tick, emptyDirPath(m.ctx.dirPathResolved))
 	case emptyDirPathOk:
 		m.state = SELECT_PACKAGE_MANAGER_STATE
-		return m, uicommon.NextState
+		return m, uicommon.Tx
 	case emptyDirPathErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
 		return m, uicommon.FinalState
@@ -405,7 +405,7 @@ func selectPackageManagerUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "enter":
 			m.state = DOWNLOADING_NEW_PROJECT_TEMPLATE_STATE
-			return m, uicommon.NextState
+			return m, uicommon.Tx
 		}
 	}
 
@@ -433,7 +433,7 @@ func selectPackageManagerView(m Model) string {
 
 func downloadingNewProjectTemplateUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
-	case uicommon.NextStateType:
+	case uicommon.TxMsg:
 		return m, tea.Batch(
 			m.spinner.Tick,
 			downloadNewProjectTemplate(
@@ -443,7 +443,7 @@ func downloadingNewProjectTemplateUpdate(m Model, msg tea.Msg) (tea.Model, tea.C
 		)
 	case downloadNewProjectTemplateOk:
 		m.state = SELECT_INSTALL_PACKAGES_OPTION_STATE
-		return m, uicommon.NextState
+		return m, uicommon.Tx
 	case downloadNewProjectTemplateErr:
 		m.Logs = append(m.Logs, fmt.Sprintf("Error: %v", msg))
 		return m, uicommon.FinalState
@@ -559,10 +559,10 @@ func selectInstallPackagesOptionUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd
 		case "enter":
 			if m.ctx.selectInstallPackagesInput.SelectedId == "yes" {
 				m.state = INSTALLING_PACKAGES_STATE
-				return m, uicommon.NextState
+				return m, uicommon.Tx
 			} else if m.ctx.selectInstallPackagesInput.SelectedId == "no" {
 				m.state = FINAL_STATE
-				return m, uicommon.NextState
+				return m, uicommon.Tx
 			}
 		}
 	}
@@ -587,7 +587,7 @@ func selectInstallPackagesOptionView(m Model) string {
 
 func installingPackagesUpdate(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
-	case uicommon.NextStateType:
+	case uicommon.TxMsg:
 		return m, tea.Batch(
 			m.spinner.Tick,
 			installPackages(

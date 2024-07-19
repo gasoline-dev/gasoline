@@ -65,21 +65,23 @@ func EscView() string {
 	return "Press esc to exit\n\n"
 }
 
-type NextStateType bool
+type TxMsg bool
 
 /*
-NextState() is a custom tea.Msg that's used when transitioning
-to the next state.
+Tx() (transmit) is a custom tea.Msg used for transitioning views
+to the next state and/or forcing redraws of views after resizing.
 
-It's helpful for two reasons: 1) it makes the intended state
-transition explicit to readers of the code, and 2) it gives the
-next state's Update func a tea.Msg to hook into when that Update
-func is first initiated. The hook is important for things like
-emitting a spinner tea.Cmd on initialization if the state needs
-to process something.
+It's helpful for three reasons: 1) it makes the intended state
+transition explicit to readers of the code, 2) it gives the next
+state's Update func a tea.Msg to hook into when that Update func
+is first initiated. The hook is important for things like emitting
+a spinner tea.Cmd on initialization if the state needs to process
+something. 3) the root Update func can listen for tea.WindowSizeMsg
+and emit Tx, which the active state Update func will receive, forcing
+a redraw of that state's view.
 */
-func NextState() tea.Msg {
-	return NextStateType(true)
+func Tx() tea.Msg {
+	return TxMsg(true)
 }
 
 type FinalStateType bool

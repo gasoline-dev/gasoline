@@ -6,32 +6,31 @@ import (
 	"io"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-type themeType struct {
-	title     lipgloss.Style
-	titleMeta lipgloss.Style
-}
+var terminalStyle = lipgloss.NewStyle().Padding(1, 1, 1, 1)
 
-func theme() *themeType {
-	var t themeType
+var contentStyle = lipgloss.NewStyle().Margin(0, 0, 0, 1)
 
-	t.title = lipgloss.NewStyle().
-		Background(lipgloss.Color("8")).
-		Width(11).
-		AlignHorizontal(lipgloss.Center).
-		Bold(true).
-		Margin(1, 0, 0, 1)
+var enterEntityHelpShortKeyStyle = lipgloss.NewStyle().Height(1)
 
-	t.titleMeta = lipgloss.NewStyle().
-		Margin(1, 0, 0, 1)
+var pStyle = lipgloss.NewStyle()
 
-	return &t
-}
+var titleStyle = lipgloss.NewStyle().
+	Background(lipgloss.Color("8")).
+	Height(1).
+	Width(11).
+	AlignHorizontal(lipgloss.Center).
+	Bold(true).
+	Margin(0, 1, 1, 0)
+
+var titleMetaStyle = lipgloss.NewStyle().Height(1).Margin(0, 0, 0, 0)
 
 const (
 	SELECT_TEMPLATE = "SELECT_TEMPLATE"
@@ -40,6 +39,8 @@ const (
 
 type model struct {
 	state          string
+	terminalHeight int
+	terminalWidth  int
 	selectTemplate selectTemplate
 	enterEntity    enterEntity
 }
@@ -49,7 +50,9 @@ type selectTemplate struct {
 }
 
 type enterEntity struct {
+	help  help.Model
 	input textinput.Model
+	keys  enterEntityKeyMap
 }
 
 func InitialModel() model {
@@ -77,17 +80,26 @@ func InitialModel() model {
 	selectTemplateList.Title = "Select template:"
 	selectTemplateList.SetShowStatusBar(false)
 	selectTemplateList.SetFilteringEnabled(false)
-	selectTemplateList.Styles.Title = titleStyle
+	selectTemplateList.Styles.Title = listTitleStyle
 	selectTemplateList.Styles.PaginationStyle = paginationStyle
 	selectTemplateList.Styles.HelpStyle = helpStyle
 
 	enterEntityInput := textinput.New()
 	enterEntityInput.Placeholder = "app, dashboard, landing, etc"
 
+	enterEntityHelp := help.New()
+	enterEntityHelp.Styles = help.Styles{
+		ShortKey: enterEntityHelpShortKeyStyle,
+	}
+
 	return model{
 		state:          SELECT_TEMPLATE,
 		selectTemplate: selectTemplate{list: selectTemplateList.Model},
-		enterEntity:    enterEntity{input: enterEntityInput},
+		enterEntity: enterEntity{
+			help:  enterEntityHelp,
+			input: enterEntityInput,
+			keys:  enterEntityKeys,
+		},
 	}
 }
 
@@ -96,6 +108,13 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.terminalHeight = msg.Height
+		m.terminalWidth = msg.Width
+		return m, uicommon.Tx
+	}
+
 	switch m.state {
 	case SELECT_TEMPLATE:
 		return selectTemplateUpdate(m, msg)
@@ -120,16 +139,19 @@ func (m model) View() string {
 func headerView() string {
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
-		theme().title.Render("Gas.dev"),
-		theme().titleMeta.Render("Add resources - Pending installs (0)"),
+		titleStyle.Render("Gas.dev"),
+		titleMetaStyle.Render("Add resources - Pending installs (0)"),
 	)
 }
 
 func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		listHeight := msg.Height - theme().title.GetHeight() - theme().title.GetVerticalMargins() - titleStyle.GetVerticalMargins()
-		m.selectTemplate.list.SetSize(msg.Width, listHeight)
+	case uicommon.TxMsg:
+		listHeight := m.terminalHeight -
+			terminalStyle.GetVerticalPadding() -
+			titleStyle.GetHeight() -
+			titleStyle.GetVerticalMargins()
+		m.selectTemplate.list.SetSize(m.terminalWidth, listHeight)
 		return m, tea.ClearScreen
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -139,11 +161,11 @@ func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			if selectedItem, ok := m.selectTemplate.list.SelectedItem().(item); ok {
 				if selectedItem.entityGroup == "web" {
 					m.state = ENTER_ENTITY
-					return m, tea.Sequence(uicommon.NextState, m.enterEntity.input.Focus())
+					return m, tea.Sequence(uicommon.Tx, m.enterEntity.input.Focus())
 				}
 			}
 			// m.state = SELECT_ENTITY_GROUP
-			return m, uicommon.NextState
+			return m, uicommon.Tx
 		}
 	}
 
@@ -157,15 +179,15 @@ func selectTemplateView(m model) string {
 		headerView(),
 		m.selectTemplate.list.View(),
 	)
-	return s
+	return terminalStyle.Render(s)
 }
 
 var (
-	titleStyle        = lipgloss.NewStyle().MarginTop(1)
+	listTitleStyle    = lipgloss.NewStyle()
 	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
 	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
 	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
-	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4).PaddingBottom(1)
+	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4)
 )
 
 type selectTemplateListModel struct {
@@ -260,6 +282,14 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 
 func enterEntityUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case uicommon.TxMsg:
+		contentHeight := m.terminalHeight -
+			terminalStyle.GetVerticalPadding() -
+			titleStyle.GetHeight() -
+			titleStyle.GetVerticalMargins() -
+			enterEntityHelpShortKeyStyle.GetHeight()
+		contentStyle = contentStyle.Height(contentHeight)
+		return m, tea.ClearScreen
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
@@ -278,8 +308,6 @@ func enterEntityUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func enterEntityView(m model) string {
-	inputStyle := lipgloss.NewStyle().Margin(1, 0, 0, 1)
-
 	inputView := fmt.Sprintf(
 		"Selected \"%s\" template.\n\n",
 		m.selectTemplate.list.SelectedItem().(item).value,
@@ -289,11 +317,41 @@ func enterEntityView(m model) string {
 
 	inputView += m.enterEntity.input.View()
 
+	helpView := m.enterEntity.help.View(m.enterEntity.keys)
+
 	s := lipgloss.JoinVertical(lipgloss.Left,
 		headerView(),
-		inputStyle.Render(inputView),
+		contentStyle.Render(inputView),
+		helpView,
 	)
-	return s
+	return terminalStyle.Render(s)
+}
+
+type enterEntityKeyMap struct {
+	Enter key.Binding
+	Esc   key.Binding
+}
+
+var enterEntityKeys = enterEntityKeyMap{
+	Enter: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "submit"),
+	),
+	Esc: key.NewBinding(
+		key.WithKeys("esc"),
+		key.WithHelp("esc", "cancel"),
+	),
+}
+
+func (k enterEntityKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Enter, k.Esc}
+}
+
+func (k enterEntityKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Enter},
+		{k.Esc},
+	}
 }
 
 /*
