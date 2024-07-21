@@ -10,7 +10,7 @@ import (
 
 type model struct {
 	screen         screen
-	state          state
+	tab            tab
 	terminalHeight int
 	terminalWidth  int
 }
@@ -40,13 +40,13 @@ type screen int
 var screens = uicommon.New[model]()
 
 const (
-	MAIN_SELECT_TEMPLATE state = iota
+	MAIN_SELECT_TEMPLATE tab = iota
 	MAIN_PENDING_INSTALLS
 )
 
-type state = int
+type tab = int
 
-var screenStates = uicommon.New[model]()
+var tabs = uicommon.New[model]()
 
 func InitialModel() model {
 	screens.Register(int(MAIN), uicommon.Fns[model]{
@@ -54,12 +54,12 @@ func InitialModel() model {
 		View:   mainView,
 	})
 
-	screenStates.Register(int(MAIN_SELECT_TEMPLATE), uicommon.Fns[model]{
+	tabs.Register(int(MAIN_SELECT_TEMPLATE), uicommon.Fns[model]{
 		Update: mainSelectTemplateUpdate,
 		View:   mainSelectTemplateView,
 	})
 
-	screenStates.Register(int(MAIN_PENDING_INSTALLS), uicommon.Fns[model]{
+	tabs.Register(int(MAIN_PENDING_INSTALLS), uicommon.Fns[model]{
 		Update: mainPendingInstallsUpdate,
 		View:   mainPendingInstallsView,
 	})
@@ -97,12 +97,12 @@ func (m model) View() string {
 	return screenFn.View(m)
 }
 
-func (m *model) nextState() {
-	m.state = (m.state + 1) % screenStates.Count()
+func (m *model) nextTab() {
+	m.tab = (m.tab + 1) % tabs.Count()
 }
 
-func (m *model) prevState() {
-	m.state = (m.state - 1 + screenStates.Count()) % screenStates.Count()
+func (m *model) prevTab() {
+	m.tab = (m.tab - 1 + tabs.Count()) % tabs.Count()
 }
 
 func mainUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -112,27 +112,27 @@ func mainUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q":
 			return m, tea.Quit
 		case "tab":
-			m.nextState()
+			m.nextTab()
 			return m, nil
 		case "shift+tab":
-			m.prevState()
+			m.prevTab()
 			return m, nil
 		}
 	}
 
-	screenStateFn, ok := screenStates.Fns[int(m.state)]
+	tabFn, ok := tabs.Fns[int(m.tab)]
 	if !ok {
 		return m, nil
 	}
-	return screenStateFn.Update(m, msg)
+	return tabFn.Update(m, msg)
 }
 
 func mainView(m model) string {
-	screenStateFn, ok := screenStates.Fns[int(m.state)]
+	tabFn, ok := tabs.Fns[int(m.tab)]
 	if !ok {
-		return "Unknown screen state"
+		return "Unknown tab"
 	}
-	return screenStateFn.View(m)
+	return tabFn.View(m)
 }
 
 func headerView() string {
@@ -146,11 +146,11 @@ func headerView() string {
 type navLinksType []navLink
 
 type navLink struct {
-	id   state
+	id   tab
 	text string
 }
 
-func navView(currState state) string {
+func navView(t tab) string {
 	navLinks := navLinksType{
 		{id: MAIN_SELECT_TEMPLATE, text: "Templates"},
 		{id: MAIN_PENDING_INSTALLS, text: "Pending installs (0)"},
@@ -159,7 +159,7 @@ func navView(currState state) string {
 	s := ""
 	navLinkCount := len(navLinks)
 	for i, link := range navLinks {
-		if link.id == currState {
+		if link.id == t {
 			s += navLinkActiveStyle.Render(link.text)
 		} else {
 			s += link.text
