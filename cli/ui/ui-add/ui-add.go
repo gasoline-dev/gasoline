@@ -99,21 +99,10 @@ func (m model) View() string {
 
 func (m *model) nextState() {
 	m.state = (m.state + 1) % screenStates.Count()
-
-	// m.screen = screen((int(m.screen) + 1) % screens.Count())
-	/*
-		if m.state == MAIN_SELECT_TEMPLATE {
-			m.state = MAIN_PENDING_INSTALLS
-		} else {
-			m.state = MAIN_SELECT_TEMPLATE
-		}
-	*/
 }
 
 func (m *model) prevState() {
 	m.state = (m.state - 1 + screenStates.Count()) % screenStates.Count()
-
-	//m.screen = screen((int(m.screen) - 1 + screens.Count()) % screens.Count())
 }
 
 func mainUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
