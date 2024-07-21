@@ -10,27 +10,27 @@ import (
 uiCommon contains a map of UI states and their corresponding
 update and view functions.
 */
-type uiCommon struct {
-	Fns map[string]Fns
+type uiCommon[M any] struct {
+	Fns map[int]Fns[M]
 }
 
-type Fns struct {
-	Update updateFn
-	View   viewFn
+type Fns[M any] struct {
+	Update updateFn[M]
+	View   viewFn[M]
 }
 
 type (
-	updateFn func(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd)
-	viewFn   func(m tea.Model) string
+	updateFn[M any] func(m M, msg tea.Msg) (tea.Model, tea.Cmd)
+	viewFn[M any]   func(m M) string
 )
 
-func New() *uiCommon {
-	return &uiCommon{
-		Fns: make(map[string]Fns),
+func New[M any]() *uiCommon[M] {
+	return &uiCommon[M]{
+		Fns: make(map[int]Fns[M]),
 	}
 }
 
-func (u *uiCommon) Register(state string, fns Fns) {
+func (u *uiCommon[M]) Register(state int, fns Fns[M]) {
 	u.Fns[state] = fns
 }
 

@@ -3,22 +3,127 @@ package uiadd
 import (
 	"fmt"
 	uicommon "gas/ui/ui-common"
-	"io"
-	"strings"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
+type model struct {
+	screen         int
+	terminalHeight int
+	terminalWidth  int
+}
+
+var screenStyle = lipgloss.NewStyle().Padding(1, 1, 1, 1)
+
+const (
+	MAIN = iota
+)
+
+var screens = uicommon.New[model]()
+
+const (
+	MAIN_INITIAL = iota
+)
+
+var screenStates = uicommon.New[model]()
+
+func InitialModel() model {
+	screens.Register(int(MAIN), uicommon.Fns[model]{
+		Update: mainScreenUpdate,
+		View:   mainScreenView,
+	})
+
+	screenStates.Register(int(MAIN_INITIAL), uicommon.Fns[model]{
+		Update: mainScreenInitialUpdate,
+		View:   mainScreenInitialView,
+	})
+
+	return model{
+		screen: MAIN,
+	}
+}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+// Root update
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.terminalHeight = msg.Height
+		m.terminalWidth = msg.Width
+		return m, uicommon.Tx
+	}
+
+	screenFn, ok := screens.Fns[int(m.screen)]
+	if !ok {
+		return m, nil
+	}
+	return screenFn.Update(m, msg)
+}
+
+// Root view
+func (m model) View() string {
+	screenFn, ok := screens.Fns[int(m.screen)]
+	if !ok {
+		s := fmt.Sprintf("Unknown screen: %d", m.screen)
+		return s
+	}
+	return screenFn.View(m)
+}
+
+func mainScreenUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "q" {
+			return m, tea.Quit
+		}
+	}
+
+	screenStateFn, ok := screenStates.Fns[int(MAIN_INITIAL)]
+	if !ok {
+		return m, nil
+	}
+	return screenStateFn.Update(m, msg)
+}
+
+func mainScreenInitialUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		// Making sure this bubbles up
+		if msg.String() == "esc" {
+			return m, tea.Quit
+		}
+	}
+
+	return m, nil
+}
+
+func mainScreenInitialView(m model) string {
+	return screenStyle.Render("Main screen initial state (q to quit)")
+}
+
+func mainScreenView(m model) string {
+	screenStateFn, ok := screenStates.Fns[int(MAIN_INITIAL)]
+	if !ok {
+		return "Unknown screen state"
+	}
+	return screenStateFn.View(m)
+}
+
+/*
+const tabCount = 3
+
 var terminalStyle = lipgloss.NewStyle().Padding(1, 1, 1, 1)
 
-var contentStyle = lipgloss.NewStyle().Margin(0, 0, 0, 1)
+var contentStyle = lipgloss.NewStyle().Margin(0, 0, 0, 0)
 
 var enterEntityHelpShortKeyStyle = lipgloss.NewStyle().Height(1)
+
+var navStyle = lipgloss.NewStyle().Height(1).Margin(0, 0, 1, 0)
+var navLinkActiveStyle = lipgloss.NewStyle().Underline(true)
 
 var pStyle = lipgloss.NewStyle()
 
@@ -33,12 +138,15 @@ var titleStyle = lipgloss.NewStyle().
 var titleMetaStyle = lipgloss.NewStyle().Height(1).Margin(0, 0, 0, 0)
 
 const (
-	SELECT_TEMPLATE = "SELECT_TEMPLATE"
-	ENTER_ENTITY    = "ENTER_ENTITY"
+	SELECT_TEMPLATE state = iota
+	ENTER_ENTITY
+	PENDING_INSTALLS
 )
 
+type state int
+
 type model struct {
-	state          string
+	state          state
 	terminalHeight int
 	terminalWidth  int
 	selectTemplate selectTemplate
@@ -81,6 +189,7 @@ func InitialModel() model {
 	selectTemplateList.SetShowStatusBar(false)
 	selectTemplateList.SetFilteringEnabled(false)
 	selectTemplateList.Styles.Title = listTitleStyle
+	selectTemplateList.Styles.TitleBar = lipgloss.NewStyle()
 	selectTemplateList.Styles.PaginationStyle = paginationStyle
 	selectTemplateList.Styles.HelpStyle = helpStyle
 
@@ -113,6 +222,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.terminalHeight = msg.Height
 		m.terminalWidth = msg.Width
 		return m, uicommon.Tx
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "tab":
+			m.nextTab()
+		case "shift+tab":
+			m.prevTab()
+		}
 	}
 
 	switch m.state {
@@ -120,6 +236,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return selectTemplateUpdate(m, msg)
 	case ENTER_ENTITY:
 		return enterEntityUpdate(m, msg)
+	case PENDING_INSTALLS:
+		return pendingInstallsUpdate(m, msg)
 	default:
 		return m, nil
 	}
@@ -131,17 +249,57 @@ func (m model) View() string {
 		return selectTemplateView(m)
 	case ENTER_ENTITY:
 		return enterEntityView(m)
+	case PENDING_INSTALLS:
+		return pendingInstallsView(m)
 	default:
-		return "Unknown state: " + m.state
+		return "Unknown state"
 	}
+}
+
+func (m *model) nextTab() {
+	m.state = (m.state + 1) % tabCount
+}
+
+func (m *model) prevTab() {
+	m.state = (m.state - 1 + tabCount) % tabCount
 }
 
 func headerView() string {
 	return lipgloss.JoinHorizontal(
 		lipgloss.Left,
 		titleStyle.Render("Gas.dev"),
-		titleMetaStyle.Render("Add resources - Pending installs (0)"),
+		titleMetaStyle.Render("Add resources"),
 	)
+}
+
+type navLinksType []navLink
+
+type navLink struct {
+	id   state
+	text string
+}
+
+func navView(currState state) string {
+	navLinks := navLinksType{
+		{id: SELECT_TEMPLATE, text: "Templates"},
+		{id: PENDING_INSTALLS, text: "Pending installs (0)"},
+	}
+
+	s := ""
+	navLinkCount := len(navLinks)
+	for i, link := range navLinks {
+		if link.id == currState {
+			s += navLinkActiveStyle.Render(link.text)
+		} else {
+			s += link.text
+		}
+
+		if i < navLinkCount-1 {
+			s += " • "
+		}
+	}
+
+	return navStyle.Render(s)
 }
 
 func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -150,7 +308,9 @@ func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		listHeight := m.terminalHeight -
 			terminalStyle.GetVerticalPadding() -
 			titleStyle.GetHeight() -
-			titleStyle.GetVerticalMargins()
+			titleStyle.GetVerticalMargins() -
+			navStyle.GetHeight() -
+			navStyle.GetVerticalMargins()
 		m.selectTemplate.list.SetSize(m.terminalWidth, listHeight)
 		return m, tea.ClearScreen
 	case tea.KeyMsg:
@@ -177,17 +337,18 @@ func selectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 func selectTemplateView(m model) string {
 	s := lipgloss.JoinVertical(lipgloss.Left,
 		headerView(),
+		navView(m.state),
 		m.selectTemplate.list.View(),
 	)
 	return terminalStyle.Render(s)
 }
 
 var (
-	listTitleStyle    = lipgloss.NewStyle()
+	listTitleStyle    = lipgloss.NewStyle().Margin(0, 0, 0, 0).Padding(0, 0, 0, 0)
 	itemStyle         = lipgloss.NewStyle().PaddingLeft(4)
 	selectedItemStyle = lipgloss.NewStyle().PaddingLeft(2).Foreground(lipgloss.Color("170"))
 	paginationStyle   = list.DefaultStyles().PaginationStyle.PaddingLeft(4)
-	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(4)
+	helpStyle         = list.DefaultStyles().HelpStyle.PaddingLeft(0)
 )
 
 type selectTemplateListModel struct {
@@ -295,10 +456,8 @@ func enterEntityUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			return m, tea.Sequence(tea.ClearScreen, tea.Quit)
 		case "enter":
-			/*
-				model.state = ADDED_TEMPLATE_CONFIRMED
-				return model, uicommon.NextState
-			*/
+				//model.state = ADDED_TEMPLATE_CONFIRMED
+				//return model, uicommon.NextState
 		}
 	}
 
@@ -354,7 +513,15 @@ func (k enterEntityKeyMap) FullHelp() [][]key.Binding {
 	}
 }
 
-/*
+func pendingInstallsUpdate(m tea.Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m, nil
+}
+
+func pendingInstallsView(m tea.Model) string {
+	return "Pending installs"
+}
+
+
 const (
 	SELECT_TEMPLATE_LIST     = "SELECT_TEMPLATE_LIST"
 	ENTER_ENTITY_GROUP_INPUT = "ENTER_ENTITY_GROUP_INPUT" // TODO: implement
