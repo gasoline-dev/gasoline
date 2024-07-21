@@ -34,6 +34,10 @@ func (u *uiCommon[M]) Register(state int, fns Fns[M]) {
 	u.Fns[state] = fns
 }
 
+func (u *uiCommon[M]) Count() int {
+	return len(u.Fns)
+}
+
 /*
 HandleMsgs() is a helper function for handling messages
 that are common to all states.

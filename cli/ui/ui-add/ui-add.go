@@ -9,34 +9,59 @@ import (
 )
 
 type model struct {
-	screen         int
+	screen         screen
+	state          state
 	terminalHeight int
 	terminalWidth  int
 }
 
+var navStyle = lipgloss.NewStyle().Height(1).Margin(0, 0, 1, 0)
+
+var navLinkActiveStyle = lipgloss.NewStyle().Underline(true)
+
 var screenStyle = lipgloss.NewStyle().Padding(1, 1, 1, 1)
 
+var titleStyle = lipgloss.NewStyle().
+	Background(lipgloss.Color("8")).
+	Height(1).
+	Width(11).
+	AlignHorizontal(lipgloss.Center).
+	Bold(true).
+	Margin(0, 1, 1, 0)
+
+var titleMetaStyle = lipgloss.NewStyle().Height(1).Margin(0, 0, 0, 0)
+
 const (
-	MAIN = iota
+	MAIN screen = iota
 )
+
+type screen int
 
 var screens = uicommon.New[model]()
 
 const (
-	MAIN_INITIAL = iota
+	MAIN_SELECT_TEMPLATE state = iota
+	MAIN_PENDING_INSTALLS
 )
+
+type state = int
 
 var screenStates = uicommon.New[model]()
 
 func InitialModel() model {
 	screens.Register(int(MAIN), uicommon.Fns[model]{
-		Update: mainScreenUpdate,
-		View:   mainScreenView,
+		Update: mainUpdate,
+		View:   mainView,
 	})
 
-	screenStates.Register(int(MAIN_INITIAL), uicommon.Fns[model]{
-		Update: mainScreenInitialUpdate,
-		View:   mainScreenInitialView,
+	screenStates.Register(int(MAIN_SELECT_TEMPLATE), uicommon.Fns[model]{
+		Update: mainSelectTemplateUpdate,
+		View:   mainSelectTemplateView,
+	})
+
+	screenStates.Register(int(MAIN_PENDING_INSTALLS), uicommon.Fns[model]{
+		Update: mainPendingInstallsUpdate,
+		View:   mainPendingInstallsView,
 	})
 
 	return model{
@@ -48,7 +73,6 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
-// Root update
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -64,7 +88,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return screenFn.Update(m, msg)
 }
 
-// Root view
 func (m model) View() string {
 	screenFn, ok := screens.Fns[int(m.screen)]
 	if !ok {
@@ -74,22 +97,94 @@ func (m model) View() string {
 	return screenFn.View(m)
 }
 
-func mainScreenUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *model) nextState() {
+	m.state = (m.state + 1) % screenStates.Count()
+
+	// m.screen = screen((int(m.screen) + 1) % screens.Count())
+	/*
+		if m.state == MAIN_SELECT_TEMPLATE {
+			m.state = MAIN_PENDING_INSTALLS
+		} else {
+			m.state = MAIN_SELECT_TEMPLATE
+		}
+	*/
+}
+
+func (m *model) prevState() {
+	m.state = (m.state - 1 + screenStates.Count()) % screenStates.Count()
+
+	//m.screen = screen((int(m.screen) - 1 + screens.Count()) % screens.Count())
+}
+
+func mainUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if msg.String() == "q" {
+		switch msg.String() {
+		case "q":
 			return m, tea.Quit
+		case "tab":
+			m.nextState()
+			return m, nil
+		case "shift+tab":
+			m.prevState()
+			return m, nil
 		}
 	}
 
-	screenStateFn, ok := screenStates.Fns[int(MAIN_INITIAL)]
+	screenStateFn, ok := screenStates.Fns[int(m.state)]
 	if !ok {
 		return m, nil
 	}
 	return screenStateFn.Update(m, msg)
 }
 
-func mainScreenInitialUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+func mainView(m model) string {
+	screenStateFn, ok := screenStates.Fns[int(m.state)]
+	if !ok {
+		return "Unknown screen state"
+	}
+	return screenStateFn.View(m)
+}
+
+func headerView() string {
+	return lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		titleStyle.Render("Gas.dev"),
+		titleMetaStyle.Render("Add resources"),
+	)
+}
+
+type navLinksType []navLink
+
+type navLink struct {
+	id   state
+	text string
+}
+
+func navView(currState state) string {
+	navLinks := navLinksType{
+		{id: MAIN_SELECT_TEMPLATE, text: "Templates"},
+		{id: MAIN_PENDING_INSTALLS, text: "Pending installs (0)"},
+	}
+
+	s := ""
+	navLinkCount := len(navLinks)
+	for i, link := range navLinks {
+		if link.id == currState {
+			s += navLinkActiveStyle.Render(link.text)
+		} else {
+			s += link.text
+		}
+
+		if i < navLinkCount-1 {
+			s += " • "
+		}
+	}
+
+	return navStyle.Render(s)
+}
+
+func mainSelectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Making sure this bubbles up
@@ -101,16 +196,28 @@ func mainScreenInitialUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func mainScreenInitialView(m model) string {
-	return screenStyle.Render("Main screen initial state (q to quit)")
+func mainSelectTemplateView(m model) string {
+	s := lipgloss.JoinVertical(
+		lipgloss.Left,
+		headerView(),
+		navView(MAIN_SELECT_TEMPLATE),
+		fmt.Sprintf("Select template (q to quit) %d", m.screen),
+	)
+	return screenStyle.Render(s)
 }
 
-func mainScreenView(m model) string {
-	screenStateFn, ok := screenStates.Fns[int(MAIN_INITIAL)]
-	if !ok {
-		return "Unknown screen state"
-	}
-	return screenStateFn.View(m)
+func mainPendingInstallsUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	return m, nil
+}
+
+func mainPendingInstallsView(m model) string {
+	s := lipgloss.JoinVertical(
+		lipgloss.Left,
+		headerView(),
+		navView(MAIN_PENDING_INSTALLS),
+		"Pending installs (q to quit)",
+	)
+	return screenStyle.Render(s)
 }
 
 /*
