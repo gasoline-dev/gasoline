@@ -2,17 +2,80 @@ package uiadd
 
 import (
 	"fmt"
-	uicommon "gas/ui/ui-common"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
+type errMsg error
+
+type model struct {
+	textarea textarea.Model
+	err      error
+}
+
+func InitialModel() model {
+	ti := textarea.New()
+	ti.Placeholder = "Once upon a time..."
+	ti.Focus()
+
+	return model{
+		textarea: ti,
+		err:      nil,
+	}
+}
+
+func (m model) Init() tea.Cmd {
+	return textarea.Blink
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyEsc:
+			if m.textarea.Focused() {
+				m.textarea.Blur()
+			}
+		case tea.KeyCtrlC:
+			return m, tea.Quit
+		default:
+			if !m.textarea.Focused() {
+				cmd = m.textarea.Focus()
+				cmds = append(cmds, cmd)
+			}
+		}
+
+	// We handle errors just like any other message
+	case errMsg:
+		m.err = msg
+		return m, nil
+	}
+
+	m.textarea, cmd = m.textarea.Update(msg)
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
+}
+
+func (m model) View() string {
+	return fmt.Sprintf(
+		"Tell me a story.\n\n%s\n\n%s",
+		m.textarea.View(),
+		"(ctrl+c to quit)",
+	) + "\n\n"
+}
+
+/*
 type model struct {
 	screen         screen
 	tab            tab
 	terminalHeight int
 	terminalWidth  int
+	showModal      bool
+	modal          modalModel
 }
 
 var navStyle = lipgloss.NewStyle().Height(1).Margin(0, 0, 1, 0)
@@ -65,7 +128,12 @@ func InitialModel() model {
 	})
 
 	return model{
-		screen: MAIN,
+		screen:    MAIN,
+		showModal: true,
+		modal: modalModel{
+			title:   "Example Modal",
+			content: "This is a modal overlay.\nPress 'm' to close.",
+		},
 	}
 }
 
@@ -79,6 +147,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.terminalHeight = msg.Height
 		m.terminalWidth = msg.Width
 		return m, uicommon.Tx
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "m":
+			// Toggle modal visibility
+			m.showModal = !m.showModal
+			return m, nil
+		case "q":
+			return m, tea.Quit
+		case "tab":
+			m.nextTab()
+			return m, nil
+		case "shift+tab":
+			m.prevTab()
+			return m, nil
+		}
 	}
 
 	screenFn, ok := screens.Fns[int(m.screen)]
@@ -89,12 +172,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	screenFn, ok := screens.Fns[int(m.screen)]
-	if !ok {
-		s := fmt.Sprintf("Unknown screen: %d", m.screen)
-		return s
+	// Get the main content
+	content := m.getMainContent()
+
+	// If modal is visible, overlay it on top of the main content
+	if m.showModal {
+		return lipgloss.Place(
+			m.terminalWidth,
+			m.terminalHeight,
+			lipgloss.Center,
+			lipgloss.Center,
+			m.modal.View(),
+			lipgloss.WithWhitespaceChars("!"),
+			lipgloss.WithWhitespaceForeground(lipgloss.Color("240")),
+		)
 	}
-	return screenFn.View(m)
+
+	return content
+}
+
+func (m model) getMainContent() string {
+	tabFn, ok := tabs.Fns[int(m.tab)]
+	if !ok {
+		return "Unknown tab"
+	}
+	return tabFn.View(m)
 }
 
 func (m *model) nextTab() {
@@ -185,11 +287,53 @@ func mainSelectTemplateUpdate(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+var asciiArtStyle = lipgloss.NewStyle().
+	Margin(1, 0, 1, 0)
+
+func colorize(text, color string) string {
+	return fmt.Sprintf("\x1b[%sm%s\x1b[0m", color, text)
+}
+
 func mainSelectTemplateView(m model) string {
+	asciiArt := `
+		:..,
+            ~,   &~!------!~!!
+             ~ !~~~~      *~~!~!
+             !~~~~~~~~~~~~~......
+           ;;~~~---------~~~=!~~~~
+           !:~~~~------!-~~!:~~--~
+           !:~~~----~--~-~~!:!  ,;
+           !:~~~---------~~~;!  ,;
+           !:~~~--!--~-----~;~  ,;
+           ~;~~-----------~~!~~~!~
+           ~;~~~------------!~~~~~
+           !:!~~------------~~~~~
+            ~----------------*
+`
+
+	lines := strings.Split(asciiArt, "\n")
+	coloredLines := make([]string, len(lines))
+
+	for i, line := range lines {
+		switch {
+		case i < 4:
+			coloredLines[i] = colorize(line, "37") // Red
+		case i < 7:
+			coloredLines[i] = colorize(line, "91") // Light Red
+		case i < 10:
+			coloredLines[i] = colorize(line, "31") // Yellow
+		default:
+			coloredLines[i] = colorize(line, "38;5;208") // Orange
+		}
+	}
+
+	gradientAsciiArt := strings.Join(coloredLines, "\n")
+
 	s := lipgloss.JoinVertical(
 		lipgloss.Left,
 		headerView(),
 		navView(MAIN_SELECT_TEMPLATE),
+		asciiArtStyle.Render(gradientAsciiArt),
 		fmt.Sprintf("Select template (q to quit) %d", m.screen),
 	)
 	return screenStyle.Render(s)
@@ -208,6 +352,31 @@ func mainPendingInstallsView(m model) string {
 	)
 	return screenStyle.Render(s)
 }
+
+// Modal component
+var modalStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(lipgloss.Color("62")).
+	Padding(1, 0).
+	Width(60).
+	Height(10)
+
+type modalModel struct {
+	title   string
+	content string
+}
+
+func (m modalModel) View() string {
+	return modalStyle.Render(
+		lipgloss.JoinVertical(
+			lipgloss.Center,
+			lipgloss.NewStyle().Bold(true).Render(m.title),
+			"",
+			m.content,
+		),
+	)
+}
+*/
 
 /*
 const tabCount = 3

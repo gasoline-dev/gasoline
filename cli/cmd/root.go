@@ -10,10 +10,56 @@ import (
 	"github.com/spf13/viper"
 )
 
+const customHelpTemplate = `{{with (or .Long .Short)}}{{. | trimTrailingWhitespaces}}
+
+{{end}}CLI:
+  {{.UseLine}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
+
+Aliases:
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+Examples:
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}
+
+Available Commands:{{range .Commands}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+Global Flags:
+{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
+
+Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`
+
 var (
 	configFile string
 	rootCmd    = &cobra.Command{
-		Use: "gas",
+		Use:   "gas",
+		Short: "gas is a CLI tool for managing your project",
+		Long: `gas is a Command Line Interface (CLI) tool for managing your project.
+It provides various commands to help you with project setup and management.
+
+Custom Help:
+  Environment Variables:
+    CLOUDFLARE_ACCOUNT_ID  Your Cloudflare account ID
+    CLOUDFLARE_API_TOKEN   Your Cloudflare API token
+
+  Configuration:
+    A config file named gas.config.json is required in the project root.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			// If no subcommand is provided, run the 'add' command
+			if len(args) == 0 {
+				addCmd.Run(cmd, args)
+			} else {
+				cmd.Usage()
+			}
+		},
 	}
 )
 
@@ -26,6 +72,8 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
+
+	rootCmd.SetHelpTemplate(customHelpTemplate)
 
 	rootCmd.PersistentFlags().StringVar(&configFile, "config", "", "config file (default is ./gas.config.json)")
 
@@ -46,7 +94,8 @@ func initConfig() {
 		viper.AddConfigPath(".")
 	}
 
-	if os.Args[1] != "create" {
+	// Check if there are any arguments and if the first one is not "create"
+	if len(os.Args) > 1 && os.Args[1] != "create" {
 		err := viper.ReadInConfig()
 		if err != nil {
 			fmt.Printf("Error: unable to read config file\n%s\n", err)
